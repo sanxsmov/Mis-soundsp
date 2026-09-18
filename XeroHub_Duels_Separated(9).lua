@@ -2,7 +2,7 @@
 
 local SoundCatalogCore = {
     TARGET_SOUND_ID = "10209603",
-    CATALOG_URL = "https://github.com/sanxsmov/Mis-soundsp/blob/main/sounds/holyshit-female.mp3",
+    CATALOG_URL = "https://github.com/sanxsmov/Mis-soundsp/tree/814697752be460c105a661bb04c080fb8b924d7c/sounds",
     CACHE_FOLDER = "XeroHub/SoundsV2",
 }
 
