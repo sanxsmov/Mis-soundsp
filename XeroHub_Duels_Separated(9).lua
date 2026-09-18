@@ -1117,10 +1117,10 @@ end
 local function fallbackCatalog()
     return SoundCatalogCore.parseCatalog({
         {
-            name = "monsterkill-famale.mp3",
+            name = "holyshit-female.mp3",
             type = "file",
-            sha = "71b5c8985cc3a027536ff4ff3fa6f95ecb1d609a     ",
-            download_url = "https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/sounds/monsterkill-famale.mp3",
+            sha = "674d3a85092fe12c0118dcee6234d9391b29b7     ",
+            download_url = "https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/sounds/holyshit-female.mp3",
         },
     })
 end
