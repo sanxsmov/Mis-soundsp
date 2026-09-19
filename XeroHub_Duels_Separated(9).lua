@@ -2,7 +2,7 @@
 
 local SoundCatalogCore = {
     TARGET_SOUND_ID = "10209603",
-    CATALOG_URL = "https://api.github.com/repos/sanxsmov/Mis-soundsp/git/blobs/674d3a585092fe12c0118dceee6234d9391b29b7",
+    CATALOG_URL = "https://api.github.com/repos/sanxsmov/Mis-soundsp/contents/sounds",
     CACHE_FOLDER = "XeroHub/SoundsV2",
 }
 
