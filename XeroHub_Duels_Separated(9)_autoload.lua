@@ -16929,6 +16929,67 @@ local configDropdown = Tabs.Config:Dropdown({
     end
 })
 
+-- ==========================================
+-- AUTOLOAD DE CONFIGURACIÓN
+-- Permite elegir qué configuración se carga automáticamente al iniciar.
+-- ==========================================
+local AUTOLOAD_SETTINGS_FILE = "XeroHub_Autoload_Config.json"
+local autoloadEnabled = false
+local autoloadConfigName = "Ninguna"
+
+local function loadAutoloadSettings()
+    if not (isfile and isfile(AUTOLOAD_SETTINGS_FILE) and readfile) then return end
+    local ok, data = pcall(function()
+        return HttpService:JSONDecode(readfile(AUTOLOAD_SETTINGS_FILE))
+    end)
+    if ok and type(data) == "table" then
+        autoloadEnabled = data.Enabled == true
+        autoloadConfigName = tostring(data.ConfigName or "Ninguna")
+    end
+end
+
+local function saveAutoloadSettings()
+    if not writefile then return false end
+    local ok, encoded = pcall(function()
+        return HttpService:JSONEncode({
+            Enabled = autoloadEnabled,
+            ConfigName = autoloadConfigName
+        })
+    end)
+    if not ok then return false end
+    return pcall(writefile, AUTOLOAD_SETTINGS_FILE, encoded)
+end
+
+loadAutoloadSettings()
+
+local autoloadToggle = Tabs.Config:Toggle({
+    Title = "Autoload de Configuración",
+    Desc = "Carga automáticamente la configuración elegida al iniciar XeroHub.",
+    Value = autoloadEnabled,
+    Callback = function(Value)
+        autoloadEnabled = Value == true
+        saveAutoloadSettings()
+        if autoloadEnabled then
+            showBottomMessage("Autoload activado.")
+        else
+            showBottomMessage("Autoload desactivado.")
+        end
+    end
+})
+
+local autoloadDropdown = Tabs.Config:Dropdown({
+    Title = "Configuración para Autoload",
+    Values = availableConfigs,
+    Value = autoloadConfigName,
+    Callback = function(Value)
+        autoloadConfigName = tostring(Value or "Ninguna")
+        saveAutoloadSettings()
+        if autoloadConfigName ~= "Ninguna" then
+            showBottomMessage("Autoload: " .. autoloadConfigName)
+        end
+    end
+})
+
 function refreshConfigs()
     local list = {}
     local seen = {}
@@ -16959,6 +17020,16 @@ function refreshConfigs()
         if selectedConfig == "Ninguna" or not table.find(list, selectedConfig) then
             configDropdown:Select(list[1])
             selectedConfig = list[1]
+        end
+
+        -- El dropdown de Autoload usa exactamente las mismas configuraciones.
+        autoloadDropdown:Refresh(list)
+        if autoloadConfigName ~= "Ninguna" and table.find(list, autoloadConfigName) then
+            autoloadDropdown:Select(autoloadConfigName)
+        else
+            autoloadConfigName = "Ninguna"
+            autoloadDropdown:Select("Ninguna")
+            saveAutoloadSettings()
         end
     end)
 end
@@ -17259,31 +17330,31 @@ Tabs.Config:Button({ Title = " Cargar Configuración", Callback = function()
     XeroApplyConfigFile(path, selectedConfig)
 end})
 
--- XERO AUTOLOAD · lumer.json
--- Descarga y aplica la configuración remota sin ejecutar XeroHub de nuevo.
+-- XERO AUTOLOAD
+-- Carga automáticamente la configuración elegida en el menú de Configuración.
 task.spawn(function()
     task.wait(1.5)
 
-    local AUTOLOAD_CONFIG_URL = "https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/lumer.json"
-    local ok, body = pcall(function()
-        return game:HttpGet(AUTOLOAD_CONFIG_URL)
-    end)
-
-    if not ok or type(body) ~= "string" or body == "" then
-        warn("[Xero Autoload] No se pudo descargar lumer.json")
+    if not autoloadEnabled then
         return
     end
 
-    local decodedOk, decoded = pcall(function()
-        return HttpService:JSONDecode(body)
-    end)
-
-    if not decodedOk or type(decoded) ~= "table" then
-        warn("[Xero Autoload] lumer.json no es un JSON válido")
+    if autoloadConfigName == "Ninguna" or autoloadConfigName == "" then
+        warn("[Xero Autoload] No hay una configuración seleccionada.")
         return
     end
 
-    XeroApplyDecodedConfig(decoded, tostring(decoded.ConfigName or "lumer"))
+    local path = configPaths[autoloadConfigName]
+        or (configFolder .. "/" .. autoloadConfigName .. ".json")
+
+    if not (isfile and isfile(path)) then
+        warn("[Xero Autoload] No se encontró la configuración: " .. tostring(autoloadConfigName))
+        return
+    end
+
+    if XeroApplyConfigFile(path, autoloadConfigName) then
+        showBottomMessage("Autoload: " .. tostring(autoloadConfigName) .. " cargada.")
+    end
 end)
 
 -- Cargar la lista al iniciar el script
