@@ -16920,28 +16920,22 @@ local selectedConfig = "Ninguna"
 local customConfigName = ""
 local configPaths = {}
 
-local configDropdown = Tabs.Config:Dropdown({
-    Title = "Seleccionar Configuración",
-    Values = availableConfigs,
-    Value = "Ninguna",
-    Callback = function(Value)
-        selectedConfig = Value
-    end
-})
-
--- ==========================================
--- AUTOLOAD DE CONFIGURACION
+local -- ==========================================
+-- CONFIGURACION Y AUTO LOAD
+-- Una sola lista: la configuración seleccionada
+-- es también la que usará Auto Load.
 -- ==========================================
 local AUTOLOAD_SETTINGS_FILE = "XeroHub_Autoload_Config.json"
 local autoloadEnabled = false
 local autoloadConfigName = "Ninguna"
-local autoloadDropdown
 
 local function loadAutoloadSettings()
     if not (isfile and isfile(AUTOLOAD_SETTINGS_FILE) and readfile) then return end
+
     local ok, data = pcall(function()
         return HttpService:JSONDecode(readfile(AUTOLOAD_SETTINGS_FILE))
     end)
+
     if ok and type(data) == "table" then
         autoloadEnabled = data.Enabled == true
         autoloadConfigName = tostring(data.ConfigName or "Ninguna")
@@ -16950,32 +16944,42 @@ end
 
 local function saveAutoloadSettings()
     if not writefile then return false end
+
     local ok, encoded = pcall(function()
         return HttpService:JSONEncode({
             Enabled = autoloadEnabled,
             ConfigName = autoloadConfigName
         })
     end)
+
     if not ok then return false end
-    local okWrite = pcall(writefile, AUTOLOAD_SETTINGS_FILE, encoded)
-    return okWrite
+    return pcall(writefile, AUTOLOAD_SETTINGS_FILE, encoded)
 end
 
 loadAutoloadSettings()
 
-autoloadDropdown = Tabs.Config:Dropdown({
-    Title = "Configuración para Autoload",
+-- La configuración guardada para Auto Load será la misma que se muestra
+-- en "Seleccionar Configuración".
+if autoloadConfigName ~= "" and autoloadConfigName ~= "Ninguna" then
+    selectedConfig = autoloadConfigName
+end
+
+configDropdown = Tabs.Config:Dropdown({
+    Title = "Seleccionar Configuración",
     Values = availableConfigs,
-    Value = autoloadConfigName,
+    Value = selectedConfig or "Ninguna",
     Callback = function(Value)
-        autoloadConfigName = tostring(Value or "Ninguna")
+        selectedConfig = tostring(Value or "Ninguna")
+
+        -- La única selección sirve también para Auto Load.
+        autoloadConfigName = selectedConfig
         saveAutoloadSettings()
     end
 })
 
 Tabs.Config:Toggle({
-    Title = "Autoload de Configuración",
-    Desc = "Carga automáticamente la configuración elegida al iniciar XeroHub.",
+    Title = "Auto Load Config",
+    Desc = "Carga automáticamente la configuración seleccionada al ejecutar XeroHub.",
     Value = autoloadEnabled,
     Callback = function(Value)
         autoloadEnabled = Value == true
@@ -17018,15 +17022,14 @@ function refreshConfigs()
             selectedConfig = list[1]
         end
 
-        if autoloadDropdown then
-            autoloadDropdown:Refresh(list)
-            if autoloadConfigName ~= "Ninguna" and table.find(list, autoloadConfigName) then
-                autoloadDropdown:Select(autoloadConfigName)
-            else
-                autoloadConfigName = "Ninguna"
-                autoloadDropdown:Select("Ninguna")
-                saveAutoloadSettings()
-            end
+        -- La misma lista alimenta "Seleccionar Configuración".
+        -- Si había una config guardada para Auto Load, la seleccionamos aquí.
+        if autoloadConfigName ~= "Ninguna"
+            and table.find(list, autoloadConfigName) then
+            selectedConfig = autoloadConfigName
+            pcall(function()
+                configDropdown:Select(autoloadConfigName)
+            end)
         end
     end)
 end
@@ -17124,18 +17127,12 @@ Tabs.Config:Button({ Title = "Guardar Configuración", Callback = function()
             if writeOk then
                 showBottomMessage(" Guardado como: " .. finalName)
 
-                -- Actualizar la lista después de terminar el guardado.
-                -- task.defer evita que el refresco ocurra dentro del callback
-                -- de Guardar y garantiza que Autoload reciba la lista nueva.
                 task.defer(function()
                     pcall(function()
                         refreshConfigs()
-                        if autoloadDropdown and table.find(availableConfigs, finalName) then
-                            autoloadDropdown:Refresh(availableConfigs)
-                            autoloadDropdown:Select(finalName)
-                        end
-                    end)
-                    pcall(function()
+                        selectedConfig = finalName
+                        autoloadConfigName = finalName
+                        saveAutoloadSettings()
                         configDropdown:Select(finalName)
                     end)
                 end)
@@ -17330,7 +17327,8 @@ local function loadSelectedConfig()
 end
 
 Tabs.Config:Button({ Title = " Cargar Configuración", Callback = loadSelectedConfig })
--- Cargar la lista al iniciar el script
+-- Cargar la lista al iniciar el script.
+-- Auto Load usa exactamente la configuración seleccionada en la única lista.
 task.spawn(function()
     task.wait(1)
     refreshConfigs()
@@ -17338,7 +17336,11 @@ task.spawn(function()
     if autoloadEnabled and autoloadConfigName ~= "Ninguna" and autoloadConfigName ~= "" then
         if table.find(availableConfigs, autoloadConfigName) then
             selectedConfig = autoloadConfigName
-            pcall(function() configDropdown:Select(autoloadConfigName) end)
+
+            pcall(function()
+                configDropdown:Select(autoloadConfigName)
+            end)
+
             task.wait(0.25)
             loadSelectedConfig()
         else
