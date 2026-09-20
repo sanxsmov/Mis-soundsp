@@ -17117,10 +17117,31 @@ Tabs.Config:Button({ Title = "Guardar Configuración", Callback = function()
     if writefile then 
         local sEncode, encodedData = pcall(function() return HttpService:JSONEncode(configData) end)
         if sEncode then
-            pcall(function() writefile(path, encodedData) end) 
-            showBottomMessage(" Guardado como: " .. finalName) 
-            refreshConfigs()
-            pcall(function() configDropdown:Select(finalName) end)
+            local writeOk = pcall(function()
+                writefile(path, encodedData)
+            end)
+
+            if writeOk then
+                showBottomMessage(" Guardado como: " .. finalName)
+
+                -- Actualizar la lista después de terminar el guardado.
+                -- task.defer evita que el refresco ocurra dentro del callback
+                -- de Guardar y garantiza que Autoload reciba la lista nueva.
+                task.defer(function()
+                    pcall(function()
+                        refreshConfigs()
+                        if autoloadDropdown and table.find(availableConfigs, finalName) then
+                            autoloadDropdown:Refresh(availableConfigs)
+                            autoloadDropdown:Select(finalName)
+                        end
+                    end)
+                    pcall(function()
+                        configDropdown:Select(finalName)
+                    end)
+                end)
+            else
+                showBottomMessage(" Error: no se pudo guardar la configuración.")
+            end
         else
             showBottomMessage(" Error interno al procesar los datos.")
         end
