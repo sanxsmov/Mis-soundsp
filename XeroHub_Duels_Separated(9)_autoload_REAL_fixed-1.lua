@@ -16920,7 +16920,7 @@ local selectedConfig = "Ninguna"
 local customConfigName = ""
 local configPaths = {}
 
-local -- ==========================================
+-- ==========================================
 -- CONFIGURACION Y AUTO LOAD
 -- Una sola lista: la configuración seleccionada
 -- es también la que usará Auto Load.
@@ -17171,7 +17171,7 @@ local function loadSelectedConfig()
             -- Toggles
              if decoded.Toggles then
                 -- 🔥 NUEVOS AGREGADOS CARGA:
-                if decoded.Toggles["Auto Shoot"] ~= nil then autoShootEnabled = decoded.Toggles["Auto Shoot"] secureLoadToggle(UIElements.TogAutoShoot, autoShootEnabled) end
+                if decoded.Toggles["Auto Shoot"] ~= nil then autoShootEnabled = decoded.Toggles["Auto Shoot"]; secureLoadToggle(UIElements.TogAutoShoot, autoShootEnabled) end
                 -- 🔥 AQUÍ CARGAS EL CUCHILLO (Y actualizas el toggle visual)
                 if decoded.Toggles["AutoShoot Cuchillo"] ~= nil then 
                     autoShootCuchilloEnabled = decoded.Toggles["AutoShoot Cuchillo"] 
@@ -17193,12 +17193,12 @@ local function loadSelectedConfig()
                     secureLoadToggle(UIElements.TogSilentAimCuchillo, silentAimCuchilloEnabled) 
                 end
 
-                if decoded.Toggles["Silent Aim (FOV)"] ~= nil then silentAimFovEnabled = decoded.Toggles["Silent Aim (FOV)"] secureLoadToggle(UIElements.TogSilentAimFOV, silentAimFovEnabled) end
+                if decoded.Toggles["Silent Aim (FOV)"] ~= nil then silentAimFovEnabled = decoded.Toggles["Silent Aim (FOV)"]; secureLoadToggle(UIElements.TogSilentAimFOV, silentAimFovEnabled) end
 
-                if decoded.Toggles["Mostrar Círculo FOV"] ~= nil then fovVisiblePreference = decoded.Toggles["Mostrar Círculo FOV"] secureLoadToggle(UIElements.TogShowFOV, fovVisiblePreference) end
-                if decoded.Toggles["ESP Lineas"] ~= nil then espLinesEnabled = decoded.Toggles["ESP Lineas"] secureLoadToggle(UIElements.TogEspLines, espLinesEnabled) end
-                if decoded.Toggles["ESP Box 2D"] ~= nil then espSettings.Box = decoded.Toggles["ESP Box 2D"] secureLoadToggle(UIElements.TogEspBox, espSettings.Box) end
-                if decoded.Toggles["ESP Barra Vida"] ~= nil then espSettings.HealthBar = decoded.Toggles["ESP Barra Vida"] secureLoadToggle(UIElements.TogEspHealth, espSettings.HealthBar) end
+                if decoded.Toggles["Mostrar Círculo FOV"] ~= nil then fovVisiblePreference = decoded.Toggles["Mostrar Círculo FOV"]; secureLoadToggle(UIElements.TogShowFOV, fovVisiblePreference) end
+                if decoded.Toggles["ESP Lineas"] ~= nil then espLinesEnabled = decoded.Toggles["ESP Lineas"]; secureLoadToggle(UIElements.TogEspLines, espLinesEnabled) end
+                if decoded.Toggles["ESP Box 2D"] ~= nil then espSettings.Box = decoded.Toggles["ESP Box 2D"]; secureLoadToggle(UIElements.TogEspBox, espSettings.Box) end
+                if decoded.Toggles["ESP Barra Vida"] ~= nil then espSettings.HealthBar = decoded.Toggles["ESP Barra Vida"]; secureLoadToggle(UIElements.TogEspHealth, espSettings.HealthBar) end
                 
                 -- Botones Flotantes (Usando Set() para que se actulice el toggle visual)
                 if decoded.Toggles["Btn Flotante AutoShoot"] ~= nil then secureLoadToggle(UIElements.ToggleAsBtn, decoded.Toggles["Btn Flotante AutoShoot"]) end
@@ -17206,23 +17206,23 @@ local function loadSelectedConfig()
                 if decoded.Toggles["Btn Flotante Fantasma"] ~= nil then secureLoadToggle(UIElements.ToggleGhost, decoded.Toggles["Btn Flotante Fantasma"]) end
 
                 -- EXISTENTES CARGA:
-                if decoded.Toggles["Aumentar Hitbox"] ~= nil then hitboxEnabled = decoded.Toggles["Aumentar Hitbox"] secureLoadToggle(UIElements.TogHitbox, hitboxEnabled) end
-                if decoded.Toggles["Hitbox Invisible"] ~= nil then hitboxInvisible = decoded.Toggles["Hitbox Invisible"] secureLoadToggle(UIElements.TogHbInv, hitboxInvisible) end
-                if decoded.Toggles["ESP Jugadores"] ~= nil then espEnabled = decoded.Toggles["ESP Jugadores"] secureLoadToggle(UIElements.TogEsp, espEnabled) end
-                if decoded.Toggles["Mostrar Resplandor (Glow)"] ~= nil then espSettings.Glow = decoded.Toggles["Mostrar Resplandor (Glow)"] secureLoadToggle(UIElements.TogEspGl, espSettings.Glow) end
-                if decoded.Toggles["Mostrar Nombre"] ~= nil then espSettings.Name = decoded.Toggles["Mostrar Nombre"] secureLoadToggle(UIElements.TogEspNm, espSettings.Name) end
-                if decoded.Toggles["Mostrar Distancia"] ~= nil then espSettings.Distance = decoded.Toggles["Mostrar Distancia"] secureLoadToggle(UIElements.TogEspDs, espSettings.Distance) end
-                if decoded.Toggles["Ocultar mi Nombre (Local)"] ~= nil then hideNameEnabled = decoded.Toggles["Ocultar mi Nombre (Local)"] secureLoadToggle(UIElements.TogHideName, hideNameEnabled) end
-                if decoded.Toggles["FPS Boost"] ~= nil then fpsBoostEnabled = decoded.Toggles["FPS Boost"] secureLoadToggle(UIElements.ToggleFPS, fpsBoostEnabled) end
+                if decoded.Toggles["Aumentar Hitbox"] ~= nil then hitboxEnabled = decoded.Toggles["Aumentar Hitbox"]; secureLoadToggle(UIElements.TogHitbox, hitboxEnabled) end
+                if decoded.Toggles["Hitbox Invisible"] ~= nil then hitboxInvisible = decoded.Toggles["Hitbox Invisible"]; secureLoadToggle(UIElements.TogHbInv, hitboxInvisible) end
+                if decoded.Toggles["ESP Jugadores"] ~= nil then espEnabled = decoded.Toggles["ESP Jugadores"]; secureLoadToggle(UIElements.TogEsp, espEnabled) end
+                if decoded.Toggles["Mostrar Resplandor (Glow)"] ~= nil then espSettings.Glow = decoded.Toggles["Mostrar Resplandor (Glow)"]; secureLoadToggle(UIElements.TogEspGl, espSettings.Glow) end
+                if decoded.Toggles["Mostrar Nombre"] ~= nil then espSettings.Name = decoded.Toggles["Mostrar Nombre"]; secureLoadToggle(UIElements.TogEspNm, espSettings.Name) end
+                if decoded.Toggles["Mostrar Distancia"] ~= nil then espSettings.Distance = decoded.Toggles["Mostrar Distancia"]; secureLoadToggle(UIElements.TogEspDs, espSettings.Distance) end
+                if decoded.Toggles["Ocultar mi Nombre (Local)"] ~= nil then hideNameEnabled = decoded.Toggles["Ocultar mi Nombre (Local)"]; secureLoadToggle(UIElements.TogHideName, hideNameEnabled) end
+                if decoded.Toggles["FPS Boost"] ~= nil then fpsBoostEnabled = decoded.Toggles["FPS Boost"]; secureLoadToggle(UIElements.ToggleFPS, fpsBoostEnabled) end
             end
             
             -- Sliders
             if decoded.Sliders then 
-                if decoded.Sliders["Transparencia Hitbox"] ~= nil then hitboxTransparency = decoded.Sliders["Transparencia Hitbox"] secureLoadToggle(UIElements.SliHitboxTrans, hitboxTransparency) end
-                if decoded.Sliders["Tamaño del FOV"] ~= nil then fovRadius = decoded.Sliders["Tamaño del FOV"] secureLoadToggle(UIElements.SliFOVSize, fovRadius) end
-                if decoded.Sliders["Tamaño de Hitbox"] ~= nil then hitboxSize = decoded.Sliders["Tamaño de Hitbox"] secureLoadToggle(UIElements.SliHitbox, hitboxSize) end
-                if decoded.Sliders["Delay Equipar Macro"] ~= nil then macroEquipDelay = decoded.Sliders["Delay Equipar Macro"] secureLoadToggle(UIElements.SliMacroEquip, macroEquipDelay) end
-                if decoded.Sliders["Delay Disparo Macro"] ~= nil then macroShootDelay = decoded.Sliders["Delay Disparo Macro"] secureLoadToggle(UIElements.SliMacroShoot, macroShootDelay) end
+                if decoded.Sliders["Transparencia Hitbox"] ~= nil then hitboxTransparency = decoded.Sliders["Transparencia Hitbox"]; secureLoadToggle(UIElements.SliHitboxTrans, hitboxTransparency) end
+                if decoded.Sliders["Tamaño del FOV"] ~= nil then fovRadius = decoded.Sliders["Tamaño del FOV"]; secureLoadToggle(UIElements.SliFOVSize, fovRadius) end
+                if decoded.Sliders["Tamaño de Hitbox"] ~= nil then hitboxSize = decoded.Sliders["Tamaño de Hitbox"]; secureLoadToggle(UIElements.SliHitbox, hitboxSize) end
+                if decoded.Sliders["Delay Equipar Macro"] ~= nil then macroEquipDelay = decoded.Sliders["Delay Equipar Macro"]; secureLoadToggle(UIElements.SliMacroEquip, macroEquipDelay) end
+                if decoded.Sliders["Delay Disparo Macro"] ~= nil then macroShootDelay = decoded.Sliders["Delay Disparo Macro"]; secureLoadToggle(UIElements.SliMacroShoot, macroShootDelay) end
             end
         
             
@@ -17230,11 +17230,11 @@ local function loadSelectedConfig()
             if decoded.Colors then
                 if decoded.Colors["Color de Hitbox"] then
                     local cHitbox = Color3.new(decoded.Colors["Color de Hitbox"].R, decoded.Colors["Color de Hitbox"].G, decoded.Colors["Color de Hitbox"].B)
-                    hitboxColor = cHitbox secureLoadToggle(UIElements.ColHitbox, cHitbox) 
+                    hitboxColor = cHitbox; secureLoadToggle(UIElements.ColHitbox, cHitbox) 
                 end
                 if decoded.Colors["Color del ESP"] then
                     local cEsp = Color3.new(decoded.Colors["Color del ESP"].R, decoded.Colors["Color del ESP"].G, decoded.Colors["Color del ESP"].B)
-                    espColor = cEsp secureLoadToggle(UIElements.ColEsp, cEsp) 
+                    espColor = cEsp; secureLoadToggle(UIElements.ColEsp, cEsp) 
                 end
             end
             
