@@ -10011,7 +10011,7 @@ function runtime.GetAppearanceStudioBaseModel()
     return nil
 end
 
-local function applyAppearanceStudioBodyLayers(model)
+function applyAppearanceStudioBodyLayers(model)
     if not model then return end
 
     runtime.ApplyFaceLayer(model)
@@ -10064,7 +10064,7 @@ local function applyAppearanceStudioBodyLayers(model)
     end
 end
 
-local function scaleAppearanceStudioAccessory(key, accessory)
+function scaleAppearanceStudioAccessory(key, accessory)
     local state = runtime.GetAppearanceOffset(key)
     local scale = math.clamp(tonumber(state.Scale) or 1, 0.25, 3)
     if math.abs(scale - 1) < 0.0001 then return end
@@ -10083,7 +10083,7 @@ local function scaleAppearanceStudioAccessory(key, accessory)
     end
 end
 
-local function addAppearanceStudioAccessory(model, key)
+function addAppearanceStudioAccessory(model, key)
     local template = runtime.GetAppearanceTemplate(key)
     local humanoid = model and model:FindFirstChildOfClass("Humanoid")
     if not template or not humanoid then return end
@@ -11154,7 +11154,7 @@ for _, category in ipairs(runtime.AppearanceCategories) do
     end
 end
 
-local restoreAppearanceButton = Tabs.Apariencia:Button({
+restoreAppearanceButton = Tabs.Apariencia:Button({
     Title = "Restaurar apariencia completa",
     Desc = "Restaura tu avatar base y quita Headless, Korblox, caras, HideHair y todos los limiteds aplicados por XeroHub.",
     Callback = function()
@@ -11175,7 +11175,7 @@ placeAppearanceElement(restoreAppearanceButton, nextAppearanceOrder())
 runtime.RefreshAppearanceControls()
 
 
-local aimHookState = runtimeEnv.__ILUNX_AIM_HOOK_STATE
+aimHookState = runtimeEnv.__ILUNX_AIM_HOOK_STATE
 if not aimHookState then
     aimHookState = {Target = nil, Mouse = mouse, Owner = runtime}
     runtimeEnv.__ILUNX_AIM_HOOK_STATE = aimHookState
@@ -11229,8 +11229,8 @@ runtime.AimState = aimHookState
 -- ==========================================
 -- MEMORIA DEL ESP (OBLIGATORIO ANTES DEL HILO)
 -- ==========================================
-local activeESPs = {} 
-local MAX_ESP_DISTANCE = 1500 
+activeESPs = {} 
+MAX_ESP_DISTANCE = 1500 
 
 function cleanESP(targetPlayer)
     if activeESPs[targetPlayer] then
@@ -11240,7 +11240,7 @@ function cleanESP(targetPlayer)
     end
 end
 
-local function hideESP(targetPlayer)
+function hideESP(targetPlayer)
     local espObj = activeESPs[targetPlayer]
     if not espObj then return end
     if espObj.Highlight and espObj.Highlight.Enabled then espObj.Highlight.Enabled = false end
@@ -11255,7 +11255,7 @@ end
 -- ==========================================
 
 -- Agrupamos todo en UNA SOLA tabla para no rebasar el límite de 200 locales de Lua
-local mState = {
+mState = {
     tHB = 0, tESP = 0, tAS = 0, tSA = 0,
     hbAct = false, espAct = false, asAct = false, saAct = false,
     espHex = "#FFFFFF", lastEspColor = espColor,
@@ -11276,7 +11276,7 @@ mState.pHB.FilterType = Enum.RaycastFilterType.Exclude
 mState.pAS.FilterType = Enum.RaycastFilterType.Exclude
 mState.pSA.FilterType = Enum.RaycastFilterType.Exclude
 
-local function getCharCore(char)
+function getCharCore(char)
     if not char then return nil end
     local core = mState.charCore[char]
     if core and core.Humanoid and core.Humanoid.Parent == char and core.HRP and core.HRP.Parent == char then
@@ -11296,7 +11296,7 @@ local function getCharCore(char)
     return core
 end
 
-local function enemigoEnLobby(enemyChar, enemyHrp)
+function enemigoEnLobby(enemyChar, enemyHrp)
     if enemyChar:FindFirstChildOfClass("ForceField") then return true end
     local core = enemyHrp and nil or getCharCore(enemyChar)
     local eHrp = enemyHrp or (core and core.HRP)
@@ -11311,8 +11311,8 @@ end
 
 
 -- Variables en caché fuera del Heartbeat
-local enLobby = false
-local timerLobby = 0
+enLobby = false
+timerLobby = 0
 
 runtime.Track(RunService.Heartbeat:Connect(function(deltaTime)
     -- XERO_PERF_IDLE_HEARTBEAT: con las cuatro familias apagadas no hacemos
@@ -11856,7 +11856,7 @@ UIElements.TogSilentAimCuchillo = Tabs.Aim:Toggle({
 -- ==========================================
 -- KEYBIND PARA SILENT AIM (SOLO PC)
 -- ==========================================
-local silentAimKey = nil
+silentAimKey = nil
 Tabs.Aim:Section({Title = "Selección y controles"})
 Tabs.Aim:Input({
     Title = "Tecla para Activar/Desactivar Silent Aim",
@@ -11979,21 +11979,21 @@ Tabs.KillAll:Section({
     Title = "Kill all Cuchillo"
 })
 
-local KillRunService = game:GetService("RunService")
+KillRunService = game:GetService("RunService")
 
-local killAllEnabled = false
-local killAllBaseCFrame = nil
-local killAllIdleFree = false
-local killAllBaseCharacter = nil
+killAllEnabled = false
+killAllBaseCFrame = nil
+killAllIdleFree = false
+killAllBaseCharacter = nil
 
-local killAllResting = false
-local killAllRestCharacter = nil
+killAllResting = false
+killAllRestCharacter = nil
 
-local killAllWasSafe = false
-local killAllRejectingToggle = false
+killAllWasSafe = false
+killAllRejectingToggle = false
 
 KILL_RANGE = 600
-local KILL_RANGE_SQ = KILL_RANGE * KILL_RANGE
+KILL_RANGE_SQ = KILL_RANGE * KILL_RANGE
 
 
 -- ==========================================
@@ -12009,30 +12009,30 @@ ATTACK_Y_OFFSET = -2.55
 
 -- Ahora tenemos margen de sobra para seguir
 -- a enemigos que estén corriendo o saltando.
-local ARRIVAL_TIMEOUT = 1.20
+ARRIVAL_TIMEOUT = 1.20
 
 -- Más estricto que antes.
 -- Antes: 6 / 7 studs.
-local HRP_READY_DISTANCE = 5.0
-local HANDLE_READY_DISTANCE = 4.8
+HRP_READY_DISTANCE = 5.0
+HANDLE_READY_DISTANCE = 4.8
 
 -- Antes era 0.035.
 -- Ahora debe existir contacto REAL visible.
-local HANDLE_STABLE_TIME = 0.05
+HANDLE_STABLE_TIME = 0.05
 
 -- Después de confirmar llegada seguimos
 -- pegados un poco más ANTES de atacar.
-local PRE_HIT_HOLD_TIME = 0.03
+PRE_HIT_HOLD_TIME = 0.03
 
 -- Máximo esperando la muerte después
 -- del único cuchillazo.
-local KILL_CONFIRM_TIME = 1.15
+KILL_CONFIRM_TIME = 1.15
 
 -- Reintentar después si el golpe no mató.
-local FAILED_RETRY_DELAY = 0.10
+FAILED_RETRY_DELAY = 0.10
 
 
-local failedTargets = {}
+failedTargets = {}
 
 
 -- ==========================================
@@ -12142,7 +12142,7 @@ end
 -- PROTECCIÓN
 -- ==========================================
 
-local PROTECTION_ATTRIBUTES = {
+PROTECTION_ATTRIBUTES = {
     "Invulnerable",
     "Protected",
     "SpawnProtected",
@@ -12151,7 +12151,7 @@ local PROTECTION_ATTRIBUTES = {
     "DamageProtected"
 }
 
-local PROTECTION_VALUES = {
+PROTECTION_VALUES = {
     "Invulnerable",
     "Protected",
     "SpawnProtected",
@@ -12160,7 +12160,7 @@ local PROTECTION_VALUES = {
 }
 
 
-local function tieneProteccionKillAll(char)
+function tieneProteccionKillAll(char)
     if not char or not char.Parent then
         return true
     end
@@ -12221,7 +12221,7 @@ end
 -- VULNERABILIDAD REAL
 -- ==========================================
 
-local function estaVulnerableKillAll(
+function estaVulnerableKillAll(
     char,
     targetPlayer
 )
@@ -12284,7 +12284,7 @@ end
 -- ESPERAR VULNERABILIDAD
 -- ==========================================
 
-local function esperarVulnerabilidadKillAll(
+function esperarVulnerabilidadKillAll(
     char,
     targetPlayer
 )
@@ -12356,7 +12356,7 @@ end
 -- CUCHILLO
 -- ==========================================
 
-local KNIFE_WORDS = {
+KNIFE_WORDS = {
     "knife",
     "cuchillo",
     "blade",
@@ -12365,7 +12365,7 @@ local KNIFE_WORDS = {
 }
 
 
-local function esCuchilloKillAll(tool)
+function esCuchilloKillAll(tool)
     if not tool
         or not tool:IsA(
             "Tool"
@@ -12427,7 +12427,7 @@ end
 -- EQUIPAR CUCHILLO
 -- ==========================================
 
-local function obtenerCuchilloKillAll(
+function obtenerCuchilloKillAll(
     char,
     hum
 )
@@ -12539,7 +12539,7 @@ end
 -- HANDLE
 -- ==========================================
 
-local function obtenerHandleKillAll(
+function obtenerHandleKillAll(
     arma
 )
     if not arma then
@@ -12585,7 +12585,7 @@ end
 -- PARTE OBJETIVO
 -- ==========================================
 
-local function obtenerParteObjetivoKillAll(
+function obtenerParteObjetivoKillAll(
     char
 )
     if not char then
@@ -12631,7 +12631,7 @@ end
 -- CFRAME ATAQUE
 -- ==========================================
 
-local function obtenerAttackCFKillAll(
+function obtenerAttackCFKillAll(
     enemyHrp
 )
     if not enemyHrp
@@ -12661,7 +12661,7 @@ end
 -- Se llama JUSTO antes de atacar.
 -- ==========================================
 
-local function liberarReposoKillAll(
+function liberarReposoKillAll(
     hum,
     hrp
 )
@@ -12705,7 +12705,7 @@ end
 -- puede caminar, saltar, etc.
 -- ==========================================
 
-local function liberarMovimientoKillAll(
+function liberarMovimientoKillAll(
     myHum,
     myHrp
 )
@@ -12760,7 +12760,7 @@ end
 -- 20 veces por segundo.
 -- ==========================================
 
-local function reposarEnBaseKillAll(
+function reposarEnBaseKillAll(
     myChar,
     myHum,
     myHrp
@@ -12845,7 +12845,7 @@ end
 -- COMPROBAR CONTACTO REAL
 -- ==========================================
 
-local function contactoRealKillAll(
+function contactoRealKillAll(
     myHrp,
     arma,
     enemyChar
@@ -12923,7 +12923,7 @@ end
 -- caminar / correr / saltar.
 -- ==========================================
 
-local function seguirObjetivoKillAll(
+function seguirObjetivoKillAll(
     myChar,
     myHrp,
     enemyHrp
@@ -12972,7 +12972,7 @@ end
 -- TRACKING CADA HEARTBEAT.
 -- ==========================================
 
-local function esperarContactoKillAll(
+function esperarContactoKillAll(
     myChar,
     myHrp,
     arma,
@@ -13083,7 +13083,7 @@ end
 -- TODO el tiempo.
 -- ==========================================
 
-local function holdAntesGolpeKillAll(
+function holdAntesGolpeKillAll(
     myChar,
     myHrp,
     arma,
@@ -13168,7 +13168,7 @@ end
 -- pero NO volvemos a activar el cuchillo.
 -- ==========================================
 
-local function esperarMuerteKillAll(
+function esperarMuerteKillAll(
     myChar,
     myHrp,
     targetPlayer,
@@ -13278,7 +13278,7 @@ end
 -- ATAQUE SINGLE HIT
 -- ==========================================
 
-local function atacarUnaVezKillAll(
+function atacarUnaVezKillAll(
     targetPlayer,
     myChar,
     myHum,
@@ -14282,9 +14282,9 @@ UIElements.SliHitboxTrans = Tabs.Aim:Slider({
 -- ==========================================
 
 
-local spoofLoop = nil
-local isWorkspaceLooping = false
-local originalData = setmetatable({}, {__mode = "k"})
+spoofLoop = nil
+isWorkspaceLooping = false
+originalData = setmetatable({}, {__mode = "k"})
 
 function safeReplace(str, find, replace) local safeFind = find:gsub("[%-%^%$%(%)%%%.%[%]%*%+%?]", "%%%1") return (str:gsub(safeFind, replace)) end
 function processText(v, myName, myDisp)
@@ -14326,7 +14326,7 @@ function processText(v, myName, myDisp)
         end
     end
 end
-local visualConnections = {} -- 🚀 Nueva tabla para guardar eventos
+visualConnections = {} -- 🚀 Nueva tabla para guardar eventos
 
 function updateSystem()
     local myName = player.Name 
@@ -14482,24 +14482,24 @@ UIElements.TogEspLines = Tabs.Vis:Toggle({
 -- ==========================================
 -- DIBUJADO EN PANTALLA 2D (FOV, Tracers, Box y Vida) - UN SOLO RENDER
 -- ==========================================
-local FOVCircle = runtime.TrackDrawing(Drawing.new("Circle"))
+FOVCircle = runtime.TrackDrawing(Drawing.new("Circle"))
 FOVCircle.Filled = false
 FOVCircle.Color = Color3.fromRGB(255, 255, 255)
 FOVCircle.Visible = false
 FOVCircle.Thickness = 1.7
 FOVCircle.NumSides = 64
 
-local tracerLines = {}
-local tracersLimpios = true
-local tracerAccumulator = 0
-local TRACER_INTERVAL = 1 / 30
-local MAX_ESP_DISTANCE_SQ = MAX_ESP_DISTANCE * MAX_ESP_DISTANCE
-local cachedViewportX, cachedViewportY = -1, -1
-local centroVector = Vector2_new(0, 0)
-local tracerOrigin = Vector2_new(0, 0)
-local fovIdleColor = Color3_fromRGB(255, 255, 255)
-local fovTargetColor = Color3_fromRGB(0, 255, 0)
-local esp2dClean = true
+tracerLines = {}
+tracersLimpios = true
+tracerAccumulator = 0
+TRACER_INTERVAL = 1 / 30
+MAX_ESP_DISTANCE_SQ = MAX_ESP_DISTANCE * MAX_ESP_DISTANCE
+cachedViewportX, cachedViewportY = -1, -1
+centroVector = Vector2_new(0, 0)
+tracerOrigin = Vector2_new(0, 0)
+fovIdleColor = Color3_fromRGB(255, 255, 255)
+fovTargetColor = Color3_fromRGB(0, 255, 0)
+esp2dClean = true
 runtime.ESP2D = {}
 
 function runtime.HideESP2DEntry(entry)
@@ -14547,7 +14547,7 @@ function runtime.GetESP2DEntry(p)
     return entry
 end
 
-local function hideTracersOnce()
+function hideTracersOnce()
     if tracersLimpios then return end
     for _, tLine in pairs(tracerLines) do
         if tLine.Visible then tLine.Visible = false end
@@ -14730,8 +14730,8 @@ end))
 -- ==========================================
 
 
-local bg, bv
-local Controls
+bg, bv = nil, nil
+Controls = nil
 
 -- FIX: Lo cargamos en segundo plano para que NUNCA congele la interfaz
 task.spawn(function()
@@ -14751,7 +14751,7 @@ end)
 -- ==========================================
 _G.EditFloatingButtons = true -- Lo dejamos en true para que puedas moverlo libremente con tu makeDraggable actual
 _G.FloatingButtonsShape = "Rectángulo"
-local floatingButtonsList = {}
+floatingButtonsList = {}
 
 function createFloatingBtn(name, startPos, internalId)
     local btn = Instance.new("TextButton")
@@ -14848,7 +14848,7 @@ Tabs.Mov:Section({Title = "Modo Fantasma y Salto"})
 -- ==========================================
 -- 1. SALTO INFINITO
 -- ==========================================
-local infJumpConnection = nil
+infJumpConnection = nil
 UIElements.TogInfJump = Tabs.Mov:Toggle({
     Title = "Salto Infinito",
     Desc = "Mantener presionado para saltar infinitamente.",
@@ -14874,10 +14874,10 @@ UIElements.TogInfJump = Tabs.Mov:Toggle({
 -- ==========================================
 -- 2. MODO FANTASMA (FLICKER + ANTI-RESPAWN BUG)
 -- ==========================================
-local loopHeartbeat = nil
-local isHidden = false
-local offsetDistance = 5000 -- Distancia estable: evita el error de precisión que aparece a 100k studs.
-local ghostEnabled = false
+loopHeartbeat = nil
+isHidden = false
+offsetDistance = 5000 -- Distancia estable: evita el error de precisión que aparece a 100k studs.
+ghostEnabled = false
 runtime.GhostOriginalTransparency = setmetatable({}, {__mode = "k"})
 
 function runtime.RestoreGhostTransparency(char)
@@ -15027,7 +15027,7 @@ end))
 -- ==========================================
 
 -- Botón Auto Shoot (Normal)
-local asBtn, getAsClick, asStroke = createFloatingBtn("AutoShoot: OFF", UDim2.new(0.8, -150, 0.35, 0), "BtnAutoShoot")
+asBtn, getAsClick, asStroke = createFloatingBtn("AutoShoot: OFF", UDim2.new(0.8, -150, 0.35, 0), "BtnAutoShoot")
 
 asBtn.MouseButton1Click:Connect(function() 
     if not getAsClick() then return end 
@@ -15049,7 +15049,7 @@ asBtn.MouseButton1Click:Connect(function()
 end)
 
 -- Botón Silent Aim (Pistola)
-local saBtn, getSaClick, saStroke = createFloatingBtn("Silent Aim: OFF", UDim2.new(0.8, -150, 0.45, 0), "BtnSilentAim")
+saBtn, getSaClick, saStroke = createFloatingBtn("Silent Aim: OFF", UDim2.new(0.8, -150, 0.45, 0), "BtnSilentAim")
 
 saBtn.MouseButton1Click:Connect(function() 
     if not getSaClick() then return end 
@@ -15119,17 +15119,17 @@ end))
 -- iLunXHub graphics presets | AlexDev
 -- Event-driven: no render loops, only one active mode and one sky.
 do
-local Lighting = game:GetService("Lighting")
-local terrain = workspace:FindFirstChildOfClass("Terrain")
-local modes = {callbacks = {}, controls = {}, active = nil, snapshot = nil, effects = {}, intensity = 0.75, syncing = false}
-local lightProperties = {"Brightness", "ClockTime", "Ambient", "OutdoorAmbient", "ColorShift_Top", "ColorShift_Bottom", "FogColor", "FogStart", "FogEnd", "ExposureCompensation", "ShadowSoftness", "GlobalShadows", "GeographicLatitude", "EnvironmentSpecularScale", "EnvironmentDiffuseScale"}
-local waterProperties = {"WaterWaveSize", "WaterWaveSpeed", "WaterReflectance", "WaterTransparency", "WaterColor"}
-local function copyProperties(object, names)
+Lighting = game:GetService("Lighting")
+terrain = workspace:FindFirstChildOfClass("Terrain")
+modes = {callbacks = {}, controls = {}, active = nil, snapshot = nil, effects = {}, intensity = 0.75, syncing = false}
+lightProperties = {"Brightness", "ClockTime", "Ambient", "OutdoorAmbient", "ColorShift_Top", "ColorShift_Bottom", "FogColor", "FogStart", "FogEnd", "ExposureCompensation", "ShadowSoftness", "GlobalShadows", "GeographicLatitude", "EnvironmentSpecularScale", "EnvironmentDiffuseScale"}
+waterProperties = {"WaterWaveSize", "WaterWaveSpeed", "WaterReflectance", "WaterTransparency", "WaterColor"}
+function copyProperties(object, names)
     local result = {}
     if object then for _, name in ipairs(names) do result[name] = object[name] end end
     return result
 end
-local function restoreProperties(object, values)
+function restoreProperties(object, values)
     if object then for name, value in pairs(values) do pcall(function() object[name] = value end) end end
 end
 function modes.capture(skyOnly)
@@ -15210,7 +15210,7 @@ function modes.restore()
         end
     end
 end
-local function addEffect(className, properties)
+function addEffect(className, properties)
     local object = Instance.new(className)
     table.insert(modes.effects, object)
     object.Name = "iLunXGraphics_" .. className
@@ -15218,12 +15218,12 @@ local function addEffect(className, properties)
     object.Parent = Lighting
     return object
 end
-local rgb = Color3.fromRGB
+rgb = Color3.fromRGB
 -- Face order: back, down, front, left, right, up.
-local SKY_FACE_KEYS = {"bk", "dn", "ft", "lf", "rt", "up"}
-local SKY_PROPERTIES = {"SkyboxBk","SkyboxDn","SkyboxFt","SkyboxLf","SkyboxRt","SkyboxUp"}
+SKY_FACE_KEYS = {"bk", "dn", "ft", "lf", "rt", "up"}
+SKY_PROPERTIES = {"SkyboxBk","SkyboxDn","SkyboxFt","SkyboxLf","SkyboxRt","SkyboxUp"}
 
-local skies = {
+skies = {
     Custom = {"92427017914292","92427017914292","92427017914292","92427017914292","92427017914292","92427017914292"},
 }
 
@@ -15242,17 +15242,17 @@ modes.presets = {
 -- No necesita subir las imágenes a Roblox. Los archivos se cachean
 -- localmente y se registran con getcustomasset/getsynasset.
 -- ============================================================
-local skyEnv = (getgenv and getgenv()) or _G
-local SKYBOX_REPO_BASE = tostring(
+skyEnv = (getgenv and getgenv()) or _G
+SKYBOX_REPO_BASE = tostring(
     skyEnv.XERO_SKYBOX_BASE_URL
     or "https://raw.githubusercontent.com/OnyxDevv/Onyx-web/refs/heads/main/skyboxes"
 ):gsub("/+$", "")
 
-local customAsset = getcustomasset
+customAsset = getcustomasset
     or getsynasset
     or (syn and (syn.getcustomasset or syn.getsynasset))
 
-local function skyHttpGet(url)
+function skyHttpGet(url)
     local req = (syn and syn.request) or (http and http.request) or http_request or request
     if req then
         local ok, response = pcall(function()
@@ -15277,7 +15277,7 @@ local function skyHttpGet(url)
     return nil
 end
 
-local function ensureSkyFolder(path)
+function ensureSkyFolder(path)
     if not makefolder then return end
     local current = ""
     for part in string.gmatch(path, "[^/]+") do
@@ -15288,7 +15288,7 @@ local function ensureSkyFolder(path)
     end
 end
 
-local function safeRepoToken(value)
+function safeRepoToken(value)
     value = tostring(value or "")
     if value:match("^[%w%._%-]+$") then return value end
     return nil
@@ -15553,9 +15553,9 @@ end
 
 Tabs.Graficos:Section({Title = "Modos Visuales (Elige solo uno)"})
 
-local shaderEffects = {}
-local tokyowamiEffects = {}
-local nightEffects = {}
+shaderEffects = {}
+tokyowamiEffects = {}
+nightEffects = {}
 local pinkEffects = {}
 local nightActivo = false
 local pinkActivo = false
