@@ -17007,6 +17007,9 @@ function refreshConfigs()
         end)
     end
     if #list == 0 then table.insert(list, "Ninguna") end
+
+    -- Sincroniza la lista interna para que Autoload pueda encontrar la config.
+    availableConfigs = list
     
     pcall(function()
         configDropdown:Refresh(list)
