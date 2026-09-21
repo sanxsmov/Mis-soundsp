@@ -3305,47 +3305,49 @@ local function setKnifeL2Block(enabled)
 end
 
 
--- Trigger Bot: dispara inmediatamente cuando el centro de la pantalla
--- está apuntando a un personaje enemigo. No usa task.wait ni delay propio.
-local function isTriggerEnemy(model)
-    if not model or not model:IsA("Model") then return false end
 
-    local humanoid = model:FindFirstChildOfClass("Humanoid")
-    if not humanoid or humanoid.Health <= 0 then return false end
+-- Trigger Bot
+-- Solo dispara cuando el píxel exacto del centro de la pantalla
+-- pertenece a una parte de un personaje enemigo.
+local triggerBotEnabled = false
+local triggerBotConnection = nil
 
-    local localCharacter = LocalPlayer.Character
-    if model == localCharacter then return false end
-
-    local player = Players:GetPlayerFromCharacter(model)
-    if player and player == LocalPlayer then return false end
-
-    return true
-end
-
-local function triggerBotFire()
-    local character = LocalPlayer.Character
-    if not character then return end
-
+local function getTriggerTarget()
     local camera = workspace.CurrentCamera
-    if not camera then return end
+    local character = LocalPlayer.Character
+    if not camera or not character then return nil end
 
-    -- Solo el píxel exacto del centro de la pantalla.
     local viewport = camera.ViewportSize
     local centerX = viewport.X * 0.5
     local centerY = viewport.Y * 0.5
-    local ray = camera:ViewportPointToRay(centerX, centerY)
 
+    local ray = camera:ViewportPointToRay(centerX, centerY)
     local params = RaycastParams.new()
     params.FilterType = Enum.RaycastFilterType.Exclude
     params.FilterDescendantsInstances = {character}
     params.IgnoreWater = true
 
-    local result = workspace:Raycast(ray.Origin, ray.Direction * 1000, params)
-    if not result then return end
+    local hit = workspace:Raycast(ray.Origin, ray.Direction * 1000, params)
+    if not hit or not hit.Instance then return nil end
 
-    -- Solo dispara si el impacto exacto pertenece a un enemigo.
-    local model = result.Instance:FindFirstAncestorOfClass("Model")
-    if not isTriggerEnemy(model) then return end
+    local model = hit.Instance:FindFirstAncestorOfClass("Model")
+    if not model or model == character then return nil end
+
+    local humanoid = model:FindFirstChildOfClass("Humanoid")
+    if not humanoid or humanoid.Health <= 0 then return nil end
+
+    local targetPlayer = Players:GetPlayerFromCharacter(model)
+    if targetPlayer and targetPlayer == LocalPlayer then return nil end
+
+    return model
+end
+
+local function triggerBotFire()
+    local target = getTriggerTarget()
+    if not target then return end
+
+    local character = LocalPlayer.Character
+    if not character then return end
 
     local tool = character:FindFirstChildOfClass("Tool")
     if not tool then return end
@@ -3374,8 +3376,7 @@ end
 
 UIElements.TogTriggerBot = Tabs.Aim:Toggle({
     Title = "Activar Trigger Bot",
-    -- Trigger Bot independiente: R2 sigue reservado para la macro Gun.
-    Desc = "Independiente de R2; dispara al apuntar al enemigo.",
+    Desc = "Dispara solo con el centro exacto de la mira sobre un enemigo.",
     Callback = function(v)
         setTriggerBot(v)
     end
