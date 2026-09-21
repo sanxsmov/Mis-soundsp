@@ -117,6 +117,7 @@ local DUELS_BIMO_PLACE_ID = 116817810725116
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local ContextActionService = game:GetService("ContextActionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local MarketplaceService = game:GetService("MarketplaceService")
 local HttpService = game:GetService("HttpService")
@@ -3273,10 +3274,40 @@ UIElements.SliMacroShoot = Tabs.Aim:Slider({
 })
 
 Tabs.Aim:Section({Title = "Macro (Cuchillo)"})
+local knifeL2ActionName = "XeroHub_KnifeMacro_L2_Block"
+local knifeL2BlockBound = false
+
+local function setKnifeL2Block(enabled)
+    if enabled and not knifeL2BlockBound then
+        local ok = pcall(function()
+            ContextActionService:BindActionAtPriority(
+                knifeL2ActionName,
+                function()
+                    -- Consume L2 para que el juego no lo use para
+                    -- alternar Shift Lock mientras la macro está activa.
+                    return Enum.ContextActionResult.Sink
+                end,
+                false,
+                3000,
+                Enum.KeyCode.ButtonL2
+            )
+        end)
+        knifeL2BlockBound = ok
+    elseif not enabled and knifeL2BlockBound then
+        pcall(function()
+            ContextActionService:UnbindAction(knifeL2ActionName)
+        end)
+        knifeL2BlockBound = false
+    end
+end
+
 UIElements.TogKnifeMacro = Tabs.Aim:Toggle({
     Title = "Activar Macro Cuchillo (L2)",
     Desc = "Un toque de L2 equipa y lanza el cuchillo.",
-    Callback = function(v) knifeMacroEnabled = v == true end
+    Callback = function(v)
+        knifeMacroEnabled = v == true
+        setKnifeL2Block(knifeMacroEnabled)
+    end
 })
 
 UIElements.SliKnifeEquip = Tabs.Aim:Slider({
@@ -3340,34 +3371,30 @@ runtime.Track(UserInputService.InputBegan:Connect(function(input, gameProcessed)
         humanoid:EquipTool(knife)
         task.wait(knifeEquipDelay)
 
-        -- L2 = Throw. Pulsación + liberación; nunca se mantiene L2.
-        local sentInput = false
-        local vimOk, vim = pcall(function()
-            return game:GetService("VirtualInputManager")
-        end)
+        -- No simulamos otro ButtonL2:
+        -- eso era lo que podía hacer que el juego desactivara Shift Lock.
+        -- Primero usamos el objeto Throw si el juego lo expone.
+        local throwTriggered = false
+        local throwObj = knife:FindFirstChild("Throw", true)
 
-        if vimOk and vim then
-            sentInput = pcall(function()
-                vim:SendKeyEvent(true, Enum.KeyCode.ButtonL2, false, game)
-                task.wait(0.04)
-                vim:SendKeyEvent(false, Enum.KeyCode.ButtonL2, false, game)
-            end)
+        if throwObj then
+            if throwObj:IsA("RemoteEvent") then
+                throwTriggered = pcall(function() throwObj:FireServer() end)
+            elseif throwObj:IsA("RemoteFunction") then
+                throwTriggered = pcall(function() throwObj:InvokeServer() end)
+            elseif throwObj:IsA("BindableEvent") then
+                throwTriggered = pcall(function() throwObj:Fire() end)
+            elseif throwObj:IsA("BindableFunction") then
+                throwTriggered = pcall(function() throwObj:Invoke() end)
+            end
         end
 
-        -- Fallback para juegos que exponen Throw como objeto.
-        if not sentInput then
-            local throwObj = knife:FindFirstChild("Throw", true)
-            if throwObj then
-                if throwObj:IsA("RemoteEvent") then
-                    pcall(function() throwObj:FireServer() end)
-                elseif throwObj:IsA("RemoteFunction") then
-                    pcall(function() throwObj:InvokeServer() end)
-                elseif throwObj:IsA("BindableEvent") then
-                    pcall(function() throwObj:Fire() end)
-                elseif throwObj:IsA("BindableFunction") then
-                    pcall(function() throwObj:Invoke() end)
-                end
-            end
+        -- Si no existe un Throw utilizable, usamos la activación normal
+        -- de la Tool, sin generar una pulsación virtual de L2.
+        if not throwTriggered then
+            pcall(function()
+                knife:Activate()
+            end)
         end
 
         task.wait(knifeThrowDelay)
