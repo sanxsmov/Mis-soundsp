@@ -3475,34 +3475,23 @@ runtime.Track(UserInputService.InputBegan:Connect(function(input, gameProcessed)
             return
         end
 
+        -- Equipar y esperar a que Roblox confirme que el Tool ya está en el personaje.
         humanoid:EquipTool(knife)
-        task.wait(knifeEquipDelay)
+        local equipDeadline = os.clock() + math.max(knifeEquipDelay, 0.05)
+        repeat
+            task.wait()
+        until knife.Parent == character or os.clock() >= equipDeadline
 
-        -- No simulamos otro ButtonL2:
-        -- eso era lo que podía hacer que el juego desactivara Shift Lock.
-        -- Primero usamos el objeto Throw si el juego lo expone.
-        local throwTriggered = false
-        local throwObj = knife:FindFirstChild("Throw", true)
+        -- Un pequeño margen después de que el Tool entra al personaje ayuda a que
+        -- KnifeClient/LocalScripts terminen de inicializarse antes del lanzamiento.
+        task.wait(math.max(0, knifeEquipDelay))
 
-        if throwObj then
-            if throwObj:IsA("RemoteEvent") then
-                throwTriggered = pcall(function() throwObj:FireServer() end)
-            elseif throwObj:IsA("RemoteFunction") then
-                throwTriggered = pcall(function() throwObj:InvokeServer() end)
-            elseif throwObj:IsA("BindableEvent") then
-                throwTriggered = pcall(function() throwObj:Fire() end)
-            elseif throwObj:IsA("BindableFunction") then
-                throwTriggered = pcall(function() throwObj:Invoke() end)
-            end
-        end
-
-        -- Si no existe un Throw utilizable, usamos la activación normal
-        -- de la Tool, sin generar una pulsación virtual de L2.
-        if not throwTriggered then
-            pcall(function()
-                knife:Activate()
-            end)
-        end
+        -- Usamos la activación normal de la Tool. Esto deja que el propio
+        -- KnifeClient ejecute la secuencia correcta de lanzamiento y sus argumentos,
+        -- en vez de llamar a Throw:FireServer() sin los datos que el juego pueda exigir.
+        pcall(function()
+            knife:Activate()
+        end)
 
         task.wait(knifeThrowDelay)
         pcall(function()
