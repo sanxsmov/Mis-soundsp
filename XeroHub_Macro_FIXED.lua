@@ -3247,6 +3247,9 @@ local macroShootDelay = 0.10
 
 -- Macro de cuchillo independiente de la pistola
 local knifeMacroEnabled = false
+local triggerBotEnabled = false
+local triggerBotConnection = nil
+
 local knifeEquipDelay = 0.10
 local knifeThrowDelay = 0.10
 
@@ -3300,6 +3303,79 @@ local function setKnifeL2Block(enabled)
         knifeL2BlockBound = false
     end
 end
+
+
+-- Trigger Bot: dispara inmediatamente cuando el centro de la pantalla
+-- está apuntando a un personaje enemigo. No usa task.wait ni delay propio.
+local function isTriggerEnemy(model)
+    if not model or not model:IsA("Model") then return false end
+
+    local humanoid = model:FindFirstChildOfClass("Humanoid")
+    if not humanoid or humanoid.Health <= 0 then return false end
+
+    local localCharacter = LocalPlayer.Character
+    if model == localCharacter then return false end
+
+    local player = Players:GetPlayerFromCharacter(model)
+    if player and player == LocalPlayer then return false end
+
+    return true
+end
+
+local function triggerBotFire()
+    local character = LocalPlayer.Character
+    if not character then return end
+
+    local camera = workspace.CurrentCamera
+    if not camera then return end
+
+    local origin = camera.CFrame.Position
+    local direction = camera.CFrame.LookVector * 1000
+
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = {character}
+    params.IgnoreWater = true
+
+    local result = workspace:Raycast(origin, direction, params)
+    if not result then return end
+
+    local model = result.Instance:FindFirstAncestorOfClass("Model")
+    if not isTriggerEnemy(model) then return end
+
+    local tool = character:FindFirstChildOfClass("Tool")
+    if not tool then return end
+
+    pcall(function()
+        tool:Activate()
+    end)
+end
+
+local function setTriggerBot(enabled)
+    triggerBotEnabled = enabled == true
+
+    if triggerBotConnection then
+        triggerBotConnection:Disconnect()
+        triggerBotConnection = nil
+    end
+
+    if triggerBotEnabled then
+        triggerBotConnection = RunService.RenderStepped:Connect(function()
+            if triggerBotEnabled then
+                triggerBotFire()
+            end
+        end)
+    end
+end
+
+UIElements.TogTriggerBot = Tabs.Aim:Toggle({
+    Title = "Activar Trigger Bot",
+    -- Trigger Bot independiente: R2 sigue reservado para la macro Gun.
+    Desc = "Independiente de R2; dispara al apuntar al enemigo.",
+    Callback = function(v)
+        setTriggerBot(v)
+    end
+})
 
 UIElements.TogKnifeMacro = Tabs.Aim:Toggle({
     Title = "Activar Macro Cuchillo (L2)",
@@ -17286,6 +17362,7 @@ Tabs.Config:Button({ Title = "Guardar Configuración", Callback = function()
             ["Ocultar mi Nombre (Local)"] = hideNameEnabled, 
             ["FPS Boost"] = fpsBoostEnabled,
             ["Activar Macro"] = macroActivo,
+            ["Activar Trigger Bot"] = triggerBotEnabled,
             ["Macro Cuchillo (L2)"] = knifeMacroEnabled
         },
         Sliders = { 
