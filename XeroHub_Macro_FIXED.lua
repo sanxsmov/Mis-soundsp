@@ -3329,17 +3329,21 @@ local function triggerBotFire()
     local camera = workspace.CurrentCamera
     if not camera then return end
 
-    local origin = camera.CFrame.Position
-    local direction = camera.CFrame.LookVector * 1000
+    -- Solo el píxel exacto del centro de la pantalla.
+    local viewport = camera.ViewportSize
+    local centerX = viewport.X * 0.5
+    local centerY = viewport.Y * 0.5
+    local ray = camera:ViewportPointToRay(centerX, centerY)
 
     local params = RaycastParams.new()
     params.FilterType = Enum.RaycastFilterType.Exclude
     params.FilterDescendantsInstances = {character}
     params.IgnoreWater = true
 
-    local result = workspace:Raycast(origin, direction, params)
+    local result = workspace:Raycast(ray.Origin, ray.Direction * 1000, params)
     if not result then return end
 
+    -- Solo dispara si el impacto exacto pertenece a un enemigo.
     local model = result.Instance:FindFirstAncestorOfClass("Model")
     if not isTriggerEnemy(model) then return end
 
