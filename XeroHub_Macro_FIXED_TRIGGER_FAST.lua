@@ -114,6 +114,111 @@ local MMV_PLACE_ID = 74369636333825
 local MMV2_PLACE_ID = 74369636333825
 local DUELS_BIMO_PLACE_ID = 116817810725116
 
+
+-- ==========================================
+-- AUTO-SAVE / AUTO-LOAD ÚLTIMA CONFIG
+-- ==========================================
+local AUTO_CONFIG_FILE = "XeroHub_LastConfig.json"
+local AUTO_SAVE_DELAY = 0.35
+local autoSaveReady = false
+local autoSaveQueued = false
+
+local function autoCanFile()
+    return type(writefile) == "function"
+       and type(readfile) == "function"
+       and type(isfile) == "function"
+end
+
+local function autoEncode(data)
+    local ok, result = pcall(function()
+        return game:GetService("HttpService"):JSONEncode(data)
+    end)
+    return ok and result or nil
+end
+
+local function autoDecode(raw)
+    local ok, result = pcall(function()
+        return game:GetService("HttpService"):JSONDecode(raw)
+    end)
+    return ok and result or nil
+end
+
+local function saveLastConfig()
+    if not autoSaveReady or not autoCanFile() then return end
+
+    local data = {
+        Toggles = {
+            ["Activar Macro"] = macroActivo,
+            ["Macro Cuchillo (L2)"] = knifeMacroEnabled,
+            ["Trigger"] = triggerEnabled,
+        },
+        Values = {
+            ["Delay Equipar Macro"] = macroEquipDelay,
+            ["Delay Disparo Macro"] = macroShootDelay,
+            ["Delay Equipar Cuchillo"] = knifeEquipDelay,
+            ["Delay Lanzamiento Cuchillo"] = knifeThrowDelay,
+        },
+        PistolSkin = selectedPistolSkin,
+    }
+
+    local encoded = autoEncode(data)
+    if encoded then
+        pcall(writefile, AUTO_CONFIG_FILE, encoded)
+    end
+end
+
+local function queueLastConfigSave()
+    if not autoSaveReady or autoSaveQueued then return end
+    autoSaveQueued = true
+    task.delay(AUTO_SAVE_DELAY, function()
+        autoSaveQueued = false
+        saveLastConfig()
+    end)
+end
+
+local function loadLastConfig()
+    if not autoCanFile() or not isfile(AUTO_CONFIG_FILE) then return false end
+
+    local ok, raw = pcall(readfile, AUTO_CONFIG_FILE)
+    if not ok or type(raw) ~= "string" or raw == "" then return false end
+
+    local data = autoDecode(raw)
+    if type(data) ~= "table" then return false end
+
+    if type(data.Toggles) == "table" then
+        if data.Toggles["Activar Macro"] ~= nil then
+            macroActivo = data.Toggles["Activar Macro"] == true
+        end
+        if data.Toggles["Macro Cuchillo (L2)"] ~= nil then
+            knifeMacroEnabled = data.Toggles["Macro Cuchillo (L2)"] == true
+        end
+        if data.Toggles["Trigger"] ~= nil then
+            triggerEnabled = data.Toggles["Trigger"] == true
+        end
+    end
+
+    if type(data.Values) == "table" then
+        if type(data.Values["Delay Equipar Macro"]) == "number" then
+            macroEquipDelay = data.Values["Delay Equipar Macro"]
+        end
+        if type(data.Values["Delay Disparo Macro"]) == "number" then
+            macroShootDelay = data.Values["Delay Disparo Macro"]
+        end
+        if type(data.Values["Delay Equipar Cuchillo"]) == "number" then
+            knifeEquipDelay = data.Values["Delay Equipar Cuchillo"]
+        end
+        if type(data.Values["Delay Lanzamiento Cuchillo"]) == "number" then
+            knifeThrowDelay = data.Values["Delay Lanzamiento Cuchillo"]
+        end
+    end
+
+    if type(data.PistolSkin) == "string" and data.PistolSkin ~= "" then
+        selectedPistolSkin = data.PistolSkin
+    end
+
+    return true
+end
+
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -169,6 +274,94 @@ local ZONAS_SEGURAS = {
 }
 
 local player = Players.LocalPlayer
+
+-- ==========================================
+-- SKINS DE PISTOLA - GitHub
+-- ==========================================
+local PISTOL_SKINS = {
+    ["Floral"] = "https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/textures/pistola_floral.png",
+    ["Haunted"] = "https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/textures/pistola_haunted.png",
+    ["Blanco/Negro"] = "https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/textures/pistola_blanco_negro.png"
+}
+
+local selectedPistolSkin = "Floral"
+
+local function getSkinAsset(url, name)
+    if type(getcustomasset) == "function" then
+        local folder = "XeroHub_Skins"
+        pcall(function()
+            if type(isfolder) == "function" and not isfolder(folder) and type(makefolder) == "function" then
+                makefolder(folder)
+            end
+        end)
+
+        local path = folder .. "/" .. name .. ".png"
+
+        local exists = false
+        pcall(function()
+            exists = type(isfile) == "function" and isfile(path)
+        end)
+
+        if not exists then
+            local ok, data = pcall(function()
+                return game:HttpGet(url)
+            end)
+            if not ok or type(data) ~= "string" then return nil end
+            local saved = pcall(writefile, path, data)
+            if not saved then return nil end
+        end
+
+        local ok, asset = pcall(getcustomasset, path)
+        if ok then return asset end
+    end
+
+    if type(getsynasset) == "function" then
+        return nil
+    end
+
+    if type(getasset) == "function" then
+        local ok, asset = pcall(getasset, url)
+        if ok then return asset end
+    end
+
+    return nil
+end
+
+local function applyPistolSkin(tool, skinName)
+    if not tool or not tool:IsA("Tool") then return false end
+    local url = PISTOL_SKINS[skinName]
+    if not url then return false end
+
+    local asset = getSkinAsset(url, skinName)
+    if not asset then return false end
+
+    local changed = false
+    for _, obj in ipairs(tool:GetDescendants()) do
+        if obj:IsA("Texture") or obj:IsA("Decal") then
+            pcall(function()
+                obj.Texture = asset
+                changed = true
+            end)
+        elseif obj:IsA("MeshPart") then
+            -- MeshPart no siempre usa TextureID; se intenta cuando está disponible.
+            pcall(function()
+                obj.TextureID = asset
+                changed = true
+            end)
+        end
+    end
+
+    return changed
+end
+
+local function applySelectedPistolSkin()
+    local char = player.Character
+    local tool = char and char:FindFirstChildOfClass("Tool")
+    if not tool then return false end
+    return applyPistolSkin(tool, selectedPistolSkin)
+end
+
+
 while not player do
     task.wait()
     player = Players.LocalPlayer
@@ -17787,3 +17980,117 @@ startupSplashState.Finish()
 runtime.NotificationsReady = true
 -- XERO_FULL_GENERAL_OPTIMIZATION_2026_09_13
 -- XERO_GENERAL_OPTIMIZATION_2026_09_14
+
+
+
+-- ==========================================
+-- PRUEBA DE SOPORTE DE ASSETS
+-- ==========================================
+pcall(function()
+    Tabs.Config:Section({Title = "Compatibilidad de Skins"})
+
+    UIElements.TestSkinSupport = Tabs.Config:Button({
+        Title = "Probar soporte de skins",
+        Desc = "Comprueba automáticamente las funciones de Delta.",
+        Callback = function()
+            local custom = type(getcustomasset) == "function"
+            local syn = type(getsynasset) == "function"
+            local asset = type(getasset) == "function"
+
+            local compatible = custom or syn or asset
+
+            local detalle
+            if compatible then
+                local cual = {}
+                if custom then table.insert(cual, "getcustomasset") end
+                if syn then table.insert(cual, "getsynasset") end
+                if asset then table.insert(cual, "getasset") end
+                detalle = "Compatible: " .. table.concat(cual, ", ")
+            else
+                detalle = "No compatible: no se encontró una función de asset."
+            end
+
+            -- Intenta usar el sistema de notificaciones existente.
+            local mostrado = pcall(function()
+                showBottomMessage(detalle)
+            end)
+
+            if not mostrado and type(setclipboard) == "function" then
+                pcall(setclipboard, detalle)
+            end
+        end
+    })
+end)
+
+
+-- ==========================================
+-- SELECTOR DE SKIN DE PISTOLA
+-- ==========================================
+pcall(function()
+    Tabs.Config:Section({Title = "Skin Pistola"})
+
+    UIElements.PistolSkin = Tabs.Config:Dropdown({
+        Title = "Skin de Pistola",
+        Values = {"Floral", "Haunted", "Blanco/Negro"},
+        Value = selectedPistolSkin,
+        Callback = function(value)
+            selectedPistolSkin = value
+            task.defer(function()
+                applySelectedPistolSkin()
+            end)
+        end
+    })
+
+    UIElements.ApplyPistolSkin = Tabs.Config:Button({
+        Title = "Aplicar Skin",
+        Desc = "Aplica la textura seleccionada a la pistola equipada.",
+        Callback = function()
+            applySelectedPistolSkin()
+        end
+    })
+end)
+
+
+
+-- Auto-save watcher: guarda automáticamente cambios en opciones y skin.
+task.spawn(function()
+    local lastState = ""
+    while task.wait(0.50) do
+        local state = table.concat({
+            tostring(macroActivo),
+            tostring(knifeMacroEnabled),
+            tostring(triggerEnabled),
+            tostring(macroEquipDelay),
+            tostring(macroShootDelay),
+            tostring(knifeEquipDelay),
+            tostring(knifeThrowDelay),
+            tostring(selectedPistolSkin),
+        }, "|")
+
+        if state ~= lastState then
+            lastState = state
+            queueLastConfigSave()
+        end
+    end
+end)
+
+-- Restaura la última configuración al iniciar.
+task.defer(function()
+    task.wait(0.25)
+    loadLastConfig()
+    autoSaveReady = true
+
+    pcall(function()
+        if UIElements and UIElements.TogMacro then UIElements.TogMacro:Set(macroActivo) end
+        if UIElements and UIElements.TogKnifeMacro then UIElements.TogKnifeMacro:Set(knifeMacroEnabled) end
+        if UIElements and UIElements.TogTrigger then UIElements.TogTrigger:Set(triggerEnabled) end
+    end)
+
+    pcall(function()
+        if UIElements and UIElements.DropPistolSkin and selectedPistolSkin then
+            UIElements.DropPistolSkin:Set(selectedPistolSkin)
+        end
+    end)
+
+    saveLastConfig()
+end)
