@@ -310,17 +310,16 @@ local PISTOL_SKINS = {
 local selectedPistolSkin = "Floral"
 
 local function getSkinAsset(url, name)
-    -- Delta reports getcustomasset, so the GitHub image must first be
-    -- downloaded to a local executor file and then converted to an asset.
-    if type(writefile) ~= "function" or type(isfile) ~= "function" then
-        return nil
+    -- getcustomasset necesita un archivo local, no una URL HTTP.
+    if type(writefile) ~= "function" or type(isfile) ~= "function"
+        or type(getcustomasset) ~= "function" then
+        return nil, "getcustomasset/writefile/isfile no disponible"
     end
 
     local folder = "XeroHub_Skins"
 
     pcall(function()
-        if type(isfolder) == "function"
-            and not isfolder(folder)
+        if type(isfolder) == "function" and not isfolder(folder)
             and type(makefolder) == "function" then
             makefolder(folder)
         end
@@ -330,17 +329,15 @@ local function getSkinAsset(url, name)
     local path = folder .. "/" .. safeName .. ".png"
 
     local exists = false
-    pcall(function()
-        exists = isfile(path)
-    end)
+    pcall(function() exists = isfile(path) end)
 
     if not exists then
         local ok, data = pcall(function()
             return game:HttpGet(url)
         end)
 
-        if not ok or type(data) ~= "string" or #data < 16 then
-            return nil
+        if not ok or type(data) ~= "string" or #data < 32 then
+            return nil, "No se pudo descargar: " .. tostring(url)
         end
 
         local okWrite = pcall(function()
@@ -348,96 +345,106 @@ local function getSkinAsset(url, name)
         end)
 
         if not okWrite then
-            return nil
+            return nil, "No se pudo escribir " .. path
         end
     end
 
-    if type(getcustomasset) == "function" then
-        local ok, asset = pcall(function()
-            return getcustomasset(path)
-        end)
+    local ok, asset = pcall(function()
+        return getcustomasset(path)
+    end)
 
-        if ok and asset then
-            return asset
-        end
+    if ok and asset then
+        return asset, path
     end
 
-    -- Fallbacks, without passing the GitHub URL directly to asset functions.
-    if type(getsynasset) == "function" then
-        local ok, asset = pcall(function()
-            return getsynasset(path)
-        end)
+    return nil, "getcustomasset no pudo convertir " .. path
+end
 
-        if ok and asset then
-            return asset
-        end
-    end
-
-    if type(getasset) == "function" then
-        local ok, asset = pcall(function()
-            return getasset(path)
-        end)
-
-        if ok and asset then
-            return asset
-        end
-    end
-
-    return nil
+local function trySetTextureProperty(obj, propertyName, asset)
+    local ok = pcall(function()
+        obj[propertyName] = asset
+    end)
+    return ok
 end
 
 local function applyPistolSkin(tool, skinName)
     if not tool or not tool:IsA("Tool") then
-        return false, 0
+        return false, 0, "No hay una Tool equipada."
     end
 
     local url = PISTOL_SKINS[skinName]
     if not url then
-        return false, 0
+        return false, 0, "Skin desconocida: " .. tostring(skinName)
     end
 
-    local asset = getSkinAsset(url, skinName)
+    local asset, assetInfo = getSkinAsset(url, skinName)
     if not asset then
-        return false, 0
+        return false, 0, assetInfo or "No se pudo crear el asset."
     end
 
-    local changedCount = 0
+    local changed = 0
+    local inspected = 0
+    local touched = {}
 
     for _, obj in ipairs(tool:GetDescendants()) do
+        inspected = inspected + 1
+        local ok = false
+
+        -- Texturas/decals clásicos.
         if obj:IsA("Texture") or obj:IsA("Decal") then
-            local ok = pcall(function()
-                obj.Texture = asset
-            end)
-            if ok then
-                changedCount = changedCount + 1
-            end
+            ok = trySetTextureProperty(obj, "Texture", asset)
 
+        -- MeshPart.
         elseif obj:IsA("MeshPart") then
-            local ok = pcall(function()
-                obj.TextureID = asset
-            end)
-            if ok then
-                changedCount = changedCount + 1
-            end
+            ok = trySetTextureProperty(obj, "TextureID", asset)
 
+        -- SpecialMesh.
         elseif obj:IsA("SpecialMesh") then
-            local ok = pcall(function()
-                obj.TextureId = asset
-            end)
-            if ok then
-                changedCount = changedCount + 1
-            end
+            ok = trySetTextureProperty(obj, "TextureId", asset)
+
+        -- Algunos modelos usan SurfaceAppearance.
+        elseif obj:IsA("SurfaceAppearance") then
+            ok = trySetTextureProperty(obj, "ColorMap", asset)
+        end
+
+        if ok then
+            changed = changed + 1
+            table.insert(touched, obj:GetFullName())
         end
     end
 
-    return changedCount > 0, changedCount
+    if changed == 0 then
+        return false, 0,
+            "No se encontró Texture, Decal, MeshPart, SpecialMesh o SurfaceAppearance modificable."
+    end
+
+    return true, changed,
+        "Asset: " .. tostring(assetInfo) ..
+        " | Revisados: " .. tostring(inspected)
+end
+
+local function findEquippedPistol()
+    local character = player.Character
+    if not character then return nil end
+
+    local equipped = character:FindFirstChildOfClass("Tool")
+    if not equipped then return nil end
+
+    -- Si el juego tiene una herramienta claramente identificada como pistola,
+    -- la usamos. Si no, usamos la Tool equipada.
+    local lower = equipped.Name:lower()
+    if lower:find("pistol") or lower:find("gun") or lower:find("revolver")
+        or lower:find("weapon") then
+        return equipped
+    end
+
+    return equipped
 end
 
 local function applySelectedPistolSkin()
-    local char = player.Character
-    local tool = char and char:FindFirstChildOfClass("Tool")
+    local tool = findEquippedPistol()
     if not tool then
-        return false, 0
+        return false, 0, "Equipa la pistola primero."
     end
     return applyPistolSkin(tool, selectedPistolSkin)
 end
