@@ -116,6 +116,21 @@ local DUELS_BIMO_PLACE_ID = 116817810725116
 
 
 -- ==========================================
+-- ESTADO COMPARTIDO PARA AUTO-SAVE
+-- ==========================================
+-- Estas variables deben existir ANTES de declarar las funciones de auto-save.
+-- Si se declaran después, Lua las trata como locales distintas y el auto-save
+-- termina leyendo/escribiendo valores incorrectos.
+local macroActivo = false
+local macroEquipDelay = 0.04
+local macroShootDelay = 0.10
+local knifeMacroEnabled = false
+local triggerBotEnabled = false
+local knifeEquipDelay = 0.10
+local knifeThrowDelay = 0.10
+local selectedPistolSkin = "Floral"
+
+-- ==========================================
 -- AUTO-SAVE / AUTO-LOAD REAL
 -- ==========================================
 -- Esta copia es independiente del selector "Auto Load Config".
@@ -149,7 +164,7 @@ end
 
 local function buildAutoConfig()
     return {
-        Version = 2,
+        Version = 3,
         Toggles = {
             ["Activar Macro"] = macroActivo == true,
             ["Macro Cuchillo (L2)"] = knifeMacroEnabled == true,
@@ -186,6 +201,13 @@ local function queueAutoConfigSave()
         autoSaveQueued = false
         saveAutoConfig()
     end)
+end
+
+local function markAutoConfigChanged()
+    -- Un pequeño debounce evita escribir el archivo en cada tick del control.
+    if autoSaveReady then
+        queueAutoConfigSave()
+    end
 end
 
 local function loadAutoConfig()
@@ -234,7 +256,7 @@ local function loadAutoConfig()
         end
     end
 
-    if type(data.PistolSkin) == "string" and data.PistolSkin ~= "" then
+    if type(data.PistolSkin) == "string" and (data.PistolSkin == "Floral" or data.PistolSkin == "Haunted" or data.PistolSkin == "Blanco/Negro") then
         selectedPistolSkin = data.PistolSkin
     end
 
@@ -302,22 +324,33 @@ local player = Players.LocalPlayer
 -- SKINS DE PISTOLA - GitHub
 -- ==========================================
 local PISTOL_SKINS = {
-    ["Floral"] = "https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/textures/pistola_floral.png",
-    ["Haunted"] = "https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/textures/pistola_haunted.png",
-    ["Blanco/Negro"] = "https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/textures/pistola_blanco_negro.png"
+    ["Floral"] = {
+        url = "https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/textures/pistola_floral.png",
+        ext = "png"
+    },
+    ["Haunted"] = {
+        url = "https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/textures/1989.jpg",
+        ext = "jpg"
+    },
+    ["Blanco/Negro"] = {
+        url = "https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/textures/pistola_chiquita_en_negro_.png",
+        ext = "png"
+    }
 }
 
-local selectedPistolSkin = "Floral"
 
-local function getSkinAsset(url, name)
-    -- getcustomasset necesita un archivo local, no una URL HTTP.
+local function getSkinAsset(skinInfo, name)
+    if type(skinInfo) ~= "table" or type(skinInfo.url) ~= "string" then
+        return nil, "Ruta de skin inválida"
+    end
+
     if type(writefile) ~= "function" or type(isfile) ~= "function"
         or type(getcustomasset) ~= "function" then
         return nil, "getcustomasset/writefile/isfile no disponible"
     end
 
-    local folder = "XeroHub_Skins"
-
+    -- Carpeta nueva para no reutilizar archivos dañados o de versiones anteriores.
+    local folder = "XeroHub_Skins_V4"
     pcall(function()
         if type(isfolder) == "function" and not isfolder(folder)
             and type(makefolder) == "function" then
@@ -325,19 +358,32 @@ local function getSkinAsset(url, name)
         end
     end)
 
+    local ext = tostring(skinInfo.ext or "png"):lower()
+    if ext ~= "png" and ext ~= "jpg" and ext ~= "jpeg" then
+        ext = "png"
+    end
+
     local safeName = tostring(name):gsub("[^%w_%-]", "_")
-    local path = folder .. "/" .. safeName .. ".png"
+    local path = folder .. "/" .. safeName .. "." .. ext
 
     local exists = false
     pcall(function() exists = isfile(path) end)
 
     if not exists then
         local ok, data = pcall(function()
-            return game:HttpGet(url)
+            return game:HttpGet(skinInfo.url)
         end)
 
-        if not ok or type(data) ~= "string" or #data < 32 then
-            return nil, "No se pudo descargar: " .. tostring(url)
+        if not ok or type(data) ~= "string" or #data < 64 then
+            return nil, "No se pudo descargar: " .. tostring(skinInfo.url)
+        end
+
+        -- Evita guardar una página HTML/404 como si fuera una imagen.
+        local lower = data:sub(1, 80):lower()
+        if lower:find("404: not found", 1, true)
+            or lower:find("<html", 1, true)
+            or lower:find("<!doctype", 1, true) then
+            return nil, "GitHub devolvió un archivo inválido: " .. tostring(skinInfo.url)
         end
 
         local okWrite = pcall(function()
@@ -353,13 +399,12 @@ local function getSkinAsset(url, name)
         return getcustomasset(path)
     end)
 
-    if ok and asset then
+    if ok and type(asset) == "string" and asset ~= "" then
         return asset, path
     end
 
     return nil, "getcustomasset no pudo convertir " .. path
 end
-
 local function trySetTextureProperty(obj, propertyName, asset)
     local ok = pcall(function()
         obj[propertyName] = asset
@@ -372,12 +417,12 @@ local function applyPistolSkin(tool, skinName)
         return false, 0, "No hay una Tool equipada."
     end
 
-    local url = PISTOL_SKINS[skinName]
-    if not url then
+    local skinInfo = PISTOL_SKINS[skinName]
+    if not skinInfo then
         return false, 0, "Skin desconocida: " .. tostring(skinName)
     end
 
-    local asset, assetInfo = getSkinAsset(url, skinName)
+    local asset, assetInfo = getSkinAsset(skinInfo, skinName)
     if not asset then
         return false, 0, assetInfo or "No se pudo crear el asset."
     end
@@ -3522,23 +3567,14 @@ runtime.Track(Players.PlayerRemoving:Connect(function(p)
     end
 end))
 
-local macroActivo = false
-local macroEquipDelay = 0.04
-local macroShootDelay = 0.10
-
 -- Macro de cuchillo independiente de la pistola
-local knifeMacroEnabled = false
-local triggerBotEnabled = false
 local triggerBotConnection = nil
-
-local knifeEquipDelay = 0.10
-local knifeThrowDelay = 0.10
 
 Tabs.Aim:Section({Title = "Macro (Pistola)"})
 UIElements.TogMacro = Tabs.Aim:Toggle({
     Title = "Activar Macro", 
     Desc = "Dispara con un solo toque.",
-    Callback = function(s) macroActivo = s end
+    Callback = function(s) macroActivo = s == true; markAutoConfigChanged() end
 })
 
 UIElements.SliMacroEquip = Tabs.Aim:Slider({
@@ -3546,7 +3582,7 @@ UIElements.SliMacroEquip = Tabs.Aim:Slider({
     Desc = "Sube esto si la pistola no alcanza a salir. (Segundos)",
     Step = 0.01,
     Value = {Min = 0.01, Max = 0.50, Default = 0.04},
-    Callback = function(v) macroEquipDelay = v end
+    Callback = function(v) macroEquipDelay = tonumber(v) or macroEquipDelay; markAutoConfigChanged() end
 })
 
 UIElements.SliMacroShoot = Tabs.Aim:Slider({
@@ -3554,7 +3590,7 @@ UIElements.SliMacroShoot = Tabs.Aim:Slider({
     Desc = "Sube esto si el tiro no cuenta daño. (Segundos)",
     Step = 0.01,
     Value = {Min = 0.05, Max = 0.80, Default = 0.10},
-    Callback = function(v) macroShootDelay = v end
+    Callback = function(v) macroShootDelay = tonumber(v) or macroShootDelay; markAutoConfigChanged() end
 })
 
 Tabs.Aim:Section({Title = "Macro (Cuchillo)"})
@@ -3591,7 +3627,6 @@ end
 -- Dispara automáticamente en cuanto un jugador enemigo cruza
 -- exactamente el centro de la mira. Se evalúa en RenderStepped
 -- para minimizar la latencia y no depende del clic del usuario.
-local triggerBotEnabled = false
 local triggerBotConnection = nil
 local triggerLastTarget = nil
 local triggerLastFire = 0
@@ -3686,6 +3721,7 @@ UIElements.TogTriggerBot = Tabs.Aim:Toggle({
     Desc = "Dispara solo con el centro exacto de la mira sobre un enemigo.",
     Callback = function(v)
         setTriggerBot(v)
+        markAutoConfigChanged()
     end
 })
 
@@ -3695,6 +3731,7 @@ UIElements.TogKnifeMacro = Tabs.Aim:Toggle({
     Callback = function(v)
         knifeMacroEnabled = v == true
         setKnifeL2Block(knifeMacroEnabled)
+        markAutoConfigChanged()
     end
 })
 
@@ -3703,7 +3740,7 @@ UIElements.SliKnifeEquip = Tabs.Aim:Slider({
     Desc = "Tiempo antes de lanzar. (Segundos)",
     Step = 0.01,
     Value = {Min = 0.01, Max = 0.50, Default = 0.10},
-    Callback = function(v) knifeEquipDelay = v end
+    Callback = function(v) knifeEquipDelay = tonumber(v) or knifeEquipDelay; markAutoConfigChanged() end
 })
 
 UIElements.SliKnifeThrow = Tabs.Aim:Slider({
@@ -3711,7 +3748,7 @@ UIElements.SliKnifeThrow = Tabs.Aim:Slider({
     Desc = "Tiempo después del lanzamiento. (Segundos)",
     Step = 0.01,
     Value = {Min = 0.01, Max = 0.50, Default = 0.10},
-    Callback = function(v) knifeThrowDelay = v end
+    Callback = function(v) knifeThrowDelay = tonumber(v) or knifeThrowDelay; markAutoConfigChanged() end
 })
 
 -- L2 se usa como un solo toque. La macro no exige mantener el botón.
@@ -18123,6 +18160,7 @@ pcall(function()
         Value = selectedPistolSkin,
         Callback = function(value)
             selectedPistolSkin = value
+            markAutoConfigChanged()
             task.defer(function()
                 applySelectedPistolSkin()
             end)
