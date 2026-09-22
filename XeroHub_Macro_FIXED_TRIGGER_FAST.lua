@@ -116,12 +116,16 @@ local DUELS_BIMO_PLACE_ID = 116817810725116
 
 
 -- ==========================================
--- AUTO-SAVE / AUTO-LOAD ÚLTIMA CONFIG
+-- AUTO-SAVE / AUTO-LOAD REAL
 -- ==========================================
-local AUTO_CONFIG_FILE = "XeroHub_LastConfig.json"
-local AUTO_SAVE_DELAY = 0.35
+-- Esta copia es independiente del selector "Auto Load Config".
+-- Guarda una configuración completa en un archivo fijo y la restaura
+-- DESPUÉS de que todos los controles/UI hayan sido creados.
+local AUTO_CONFIG_FILE = "XeroHub_AutoConfig.json"
+local AUTO_SAVE_DELAY = 0.60
 local autoSaveReady = false
 local autoSaveQueued = false
+local autoConfigLoaded = false
 
 local function autoCanFile()
     return type(writefile) == "function"
@@ -129,60 +133,78 @@ local function autoCanFile()
        and type(isfile) == "function"
 end
 
-local function autoEncode(data)
+local function autoJsonEncode(data)
     local ok, result = pcall(function()
         return game:GetService("HttpService"):JSONEncode(data)
     end)
     return ok and result or nil
 end
 
-local function autoDecode(raw)
+local function autoJsonDecode(raw)
     local ok, result = pcall(function()
         return game:GetService("HttpService"):JSONDecode(raw)
     end)
     return ok and result or nil
 end
 
-local function saveLastConfig()
-    if not autoSaveReady or not autoCanFile() then return end
-
-    local data = {
+local function buildAutoConfig()
+    return {
+        Version = 2,
         Toggles = {
-            ["Activar Macro"] = macroActivo,
-            ["Macro Cuchillo (L2)"] = knifeMacroEnabled,
-            ["Trigger"] = triggerEnabled,
+            ["Activar Macro"] = macroActivo == true,
+            ["Macro Cuchillo (L2)"] = knifeMacroEnabled == true,
+            ["Trigger Bot"] = triggerBotEnabled == true,
         },
-        Values = {
-            ["Delay Equipar Macro"] = macroEquipDelay,
-            ["Delay Disparo Macro"] = macroShootDelay,
-            ["Delay Equipar Cuchillo"] = knifeEquipDelay,
-            ["Delay Lanzamiento Cuchillo"] = knifeThrowDelay,
+        Sliders = {
+            ["Delay Equipar Macro"] = tonumber(macroEquipDelay) or 0,
+            ["Delay Disparo Macro"] = tonumber(macroShootDelay) or 0,
+            ["Delay Equipar Cuchillo"] = tonumber(knifeEquipDelay) or 0,
+            ["Delay Lanzamiento Cuchillo"] = tonumber(knifeThrowDelay) or 0,
         },
-        PistolSkin = selectedPistolSkin,
+        PistolSkin = tostring(selectedPistolSkin or "Floral"),
     }
-
-    local encoded = autoEncode(data)
-    if encoded then
-        pcall(writefile, AUTO_CONFIG_FILE, encoded)
-    end
 end
 
-local function queueLastConfigSave()
+local function saveAutoConfig()
+    if not autoSaveReady or not autoCanFile() then return false end
+
+    local encoded = autoJsonEncode(buildAutoConfig())
+    if not encoded then return false end
+
+    local ok = pcall(function()
+        writefile(AUTO_CONFIG_FILE, encoded)
+    end)
+
+    return ok
+end
+
+local function queueAutoConfigSave()
     if not autoSaveReady or autoSaveQueued then return end
+
     autoSaveQueued = true
     task.delay(AUTO_SAVE_DELAY, function()
         autoSaveQueued = false
-        saveLastConfig()
+        saveAutoConfig()
     end)
 end
 
-local function loadLastConfig()
-    if not autoCanFile() or not isfile(AUTO_CONFIG_FILE) then return false end
+local function loadAutoConfig()
+    if not autoCanFile() then return false end
 
-    local ok, raw = pcall(readfile, AUTO_CONFIG_FILE)
-    if not ok or type(raw) ~= "string" or raw == "" then return false end
+    local exists = false
+    pcall(function()
+        exists = isfile(AUTO_CONFIG_FILE)
+    end)
+    if not exists then return false end
 
-    local data = autoDecode(raw)
+    local okRead, raw = pcall(function()
+        return readfile(AUTO_CONFIG_FILE)
+    end)
+    if not okRead or type(raw) ~= "string" or raw == "" then
+        return false
+    end
+
+    local data = autoJsonDecode(raw)
     if type(data) ~= "table" then return false end
 
     if type(data.Toggles) == "table" then
@@ -192,23 +214,23 @@ local function loadLastConfig()
         if data.Toggles["Macro Cuchillo (L2)"] ~= nil then
             knifeMacroEnabled = data.Toggles["Macro Cuchillo (L2)"] == true
         end
-        if data.Toggles["Trigger"] ~= nil then
-            triggerEnabled = data.Toggles["Trigger"] == true
+        if data.Toggles["Trigger Bot"] ~= nil then
+            triggerBotEnabled = data.Toggles["Trigger Bot"] == true
         end
     end
 
-    if type(data.Values) == "table" then
-        if type(data.Values["Delay Equipar Macro"]) == "number" then
-            macroEquipDelay = data.Values["Delay Equipar Macro"]
+    if type(data.Sliders) == "table" then
+        if type(data.Sliders["Delay Equipar Macro"]) == "number" then
+            macroEquipDelay = data.Sliders["Delay Equipar Macro"]
         end
-        if type(data.Values["Delay Disparo Macro"]) == "number" then
-            macroShootDelay = data.Values["Delay Disparo Macro"]
+        if type(data.Sliders["Delay Disparo Macro"]) == "number" then
+            macroShootDelay = data.Sliders["Delay Disparo Macro"]
         end
-        if type(data.Values["Delay Equipar Cuchillo"]) == "number" then
-            knifeEquipDelay = data.Values["Delay Equipar Cuchillo"]
+        if type(data.Sliders["Delay Equipar Cuchillo"]) == "number" then
+            knifeEquipDelay = data.Sliders["Delay Equipar Cuchillo"]
         end
-        if type(data.Values["Delay Lanzamiento Cuchillo"]) == "number" then
-            knifeThrowDelay = data.Values["Delay Lanzamiento Cuchillo"]
+        if type(data.Sliders["Delay Lanzamiento Cuchillo"]) == "number" then
+            knifeThrowDelay = data.Sliders["Delay Lanzamiento Cuchillo"]
         end
     end
 
@@ -216,6 +238,7 @@ local function loadLastConfig()
         selectedPistolSkin = data.PistolSkin
     end
 
+    autoConfigLoaded = true
     return true
 end
 
@@ -287,77 +310,135 @@ local PISTOL_SKINS = {
 local selectedPistolSkin = "Floral"
 
 local function getSkinAsset(url, name)
-    if type(getcustomasset) == "function" then
-        local folder = "XeroHub_Skins"
-        pcall(function()
-            if type(isfolder) == "function" and not isfolder(folder) and type(makefolder) == "function" then
-                makefolder(folder)
-            end
-        end)
-
-        local path = folder .. "/" .. name .. ".png"
-
-        local exists = false
-        pcall(function()
-            exists = type(isfile) == "function" and isfile(path)
-        end)
-
-        if not exists then
-            local ok, data = pcall(function()
-                return game:HttpGet(url)
-            end)
-            if not ok or type(data) ~= "string" then return nil end
-            local saved = pcall(writefile, path, data)
-            if not saved then return nil end
-        end
-
-        local ok, asset = pcall(getcustomasset, path)
-        if ok then return asset end
-    end
-
-    if type(getsynasset) == "function" then
+    -- Delta reports getcustomasset, so the GitHub image must first be
+    -- downloaded to a local executor file and then converted to an asset.
+    if type(writefile) ~= "function" or type(isfile) ~= "function" then
         return nil
     end
 
+    local folder = "XeroHub_Skins"
+
+    pcall(function()
+        if type(isfolder) == "function"
+            and not isfolder(folder)
+            and type(makefolder) == "function" then
+            makefolder(folder)
+        end
+    end)
+
+    local safeName = tostring(name):gsub("[^%w_%-]", "_")
+    local path = folder .. "/" .. safeName .. ".png"
+
+    local exists = false
+    pcall(function()
+        exists = isfile(path)
+    end)
+
+    if not exists then
+        local ok, data = pcall(function()
+            return game:HttpGet(url)
+        end)
+
+        if not ok or type(data) ~= "string" or #data < 16 then
+            return nil
+        end
+
+        local okWrite = pcall(function()
+            writefile(path, data)
+        end)
+
+        if not okWrite then
+            return nil
+        end
+    end
+
+    if type(getcustomasset) == "function" then
+        local ok, asset = pcall(function()
+            return getcustomasset(path)
+        end)
+
+        if ok and asset then
+            return asset
+        end
+    end
+
+    -- Fallbacks, without passing the GitHub URL directly to asset functions.
+    if type(getsynasset) == "function" then
+        local ok, asset = pcall(function()
+            return getsynasset(path)
+        end)
+
+        if ok and asset then
+            return asset
+        end
+    end
+
     if type(getasset) == "function" then
-        local ok, asset = pcall(getasset, url)
-        if ok then return asset end
+        local ok, asset = pcall(function()
+            return getasset(path)
+        end)
+
+        if ok and asset then
+            return asset
+        end
     end
 
     return nil
 end
 
 local function applyPistolSkin(tool, skinName)
-    if not tool or not tool:IsA("Tool") then return false end
+    if not tool or not tool:IsA("Tool") then
+        return false, 0
+    end
+
     local url = PISTOL_SKINS[skinName]
-    if not url then return false end
+    if not url then
+        return false, 0
+    end
 
     local asset = getSkinAsset(url, skinName)
-    if not asset then return false end
+    if not asset then
+        return false, 0
+    end
 
-    local changed = false
+    local changedCount = 0
+
     for _, obj in ipairs(tool:GetDescendants()) do
         if obj:IsA("Texture") or obj:IsA("Decal") then
-            pcall(function()
+            local ok = pcall(function()
                 obj.Texture = asset
-                changed = true
             end)
+            if ok then
+                changedCount = changedCount + 1
+            end
+
         elseif obj:IsA("MeshPart") then
-            -- MeshPart no siempre usa TextureID; se intenta cuando está disponible.
-            pcall(function()
+            local ok = pcall(function()
                 obj.TextureID = asset
-                changed = true
             end)
+            if ok then
+                changedCount = changedCount + 1
+            end
+
+        elseif obj:IsA("SpecialMesh") then
+            local ok = pcall(function()
+                obj.TextureId = asset
+            end)
+            if ok then
+                changedCount = changedCount + 1
+            end
         end
     end
 
-    return changed
+    return changedCount > 0, changedCount
 end
 
 local function applySelectedPistolSkin()
     local char = player.Character
     local tool = char and char:FindFirstChildOfClass("Tool")
-    if not tool then return false end
+    if not tool then
+        return false, 0
+    end
     return applyPistolSkin(tool, selectedPistolSkin)
 end
 
@@ -18052,45 +18133,86 @@ end)
 
 
 
--- Auto-save watcher: guarda automáticamente cambios en opciones y skin.
+-- ==========================================
+-- AUTO-SAVE / AUTO-LOAD FINAL
+-- ==========================================
+-- Importante: primero se construye toda la UI, luego se restaura.
+-- Así WindUI no vuelve a poner los valores por defecto después del load.
 task.spawn(function()
-    local lastState = ""
-    while task.wait(0.50) do
-        local state = table.concat({
-            tostring(macroActivo),
-            tostring(knifeMacroEnabled),
-            tostring(triggerEnabled),
-            tostring(macroEquipDelay),
-            tostring(macroShootDelay),
-            tostring(knifeEquipDelay),
-            tostring(knifeThrowDelay),
-            tostring(selectedPistolSkin),
-        }, "|")
+    task.wait(1.0)
 
-        if state ~= lastState then
-            lastState = state
-            queueLastConfigSave()
+    local loaded = false
+    pcall(function()
+        loaded = loadAutoConfig()
+    end)
+
+    -- Aplicar el estado restaurado al UI, sin depender de callbacks.
+    pcall(function()
+        if UIElements.TogMacro then
+            UIElements.TogMacro:Set(macroActivo)
+        end
+        if UIElements.TogKnifeMacro then
+            UIElements.TogKnifeMacro:Set(knifeMacroEnabled)
+        end
+        if UIElements.TogTriggerBot then
+            UIElements.TogTriggerBot:Set(triggerBotEnabled)
+        end
+        if UIElements.SliMacroEquip then
+            UIElements.SliMacroEquip:Set(macroEquipDelay)
+        end
+        if UIElements.SliMacroShoot then
+            UIElements.SliMacroShoot:Set(macroShootDelay)
+        end
+        if UIElements.SliKnifeEquip then
+            UIElements.SliKnifeEquip:Set(knifeEquipDelay)
+        end
+        if UIElements.SliKnifeThrow then
+            UIElements.SliKnifeThrow:Set(knifeThrowDelay)
+        end
+        if UIElements.PistolSkin then
+            UIElements.PistolSkin:Set(selectedPistolSkin)
+        end
+    end)
+
+    -- Reactivar lógica que depende del estado del toggle.
+    pcall(function()
+        setKnifeL2Block(knifeMacroEnabled)
+    end)
+    pcall(function()
+        setTriggerBot(triggerBotEnabled)
+    end)
+
+    -- Marca el sistema como listo SOLO después de cargar.
+    autoSaveReady = true
+
+    -- Si no había archivo, crea uno inicial con los valores actuales.
+    if not loaded then
+        saveAutoConfig()
+    end
+end)
+
+-- Guarda cualquier cambio realizado desde la UI.
+task.spawn(function()
+    local lastState = nil
+
+    while task.wait(0.50) do
+        if autoSaveReady then
+            local state = table.concat({
+                tostring(macroActivo),
+                tostring(knifeMacroEnabled),
+                tostring(triggerBotEnabled),
+                tostring(macroEquipDelay),
+                tostring(macroShootDelay),
+                tostring(knifeEquipDelay),
+                tostring(knifeThrowDelay),
+                tostring(selectedPistolSkin),
+            }, "|")
+
+            if state ~= lastState then
+                lastState = state
+                queueAutoConfigSave()
+            end
         end
     end
 end)
 
--- Restaura la última configuración al iniciar.
-task.defer(function()
-    task.wait(0.25)
-    loadLastConfig()
-    autoSaveReady = true
-
-    pcall(function()
-        if UIElements and UIElements.TogMacro then UIElements.TogMacro:Set(macroActivo) end
-        if UIElements and UIElements.TogKnifeMacro then UIElements.TogKnifeMacro:Set(knifeMacroEnabled) end
-        if UIElements and UIElements.TogTrigger then UIElements.TogTrigger:Set(triggerEnabled) end
-    end)
-
-    pcall(function()
-        if UIElements and UIElements.DropPistolSkin and selectedPistolSkin then
-            UIElements.DropPistolSkin:Set(selectedPistolSkin)
-        end
-    end)
-
-    saveLastConfig()
-end)
