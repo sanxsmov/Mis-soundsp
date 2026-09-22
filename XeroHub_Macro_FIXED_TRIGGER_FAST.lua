@@ -143,9 +143,10 @@ local autoSaveQueued = false
 local autoConfigLoaded = false
 
 local function autoCanFile()
+    -- Para guardar sólo necesitamos writefile.
+    -- Para cargar usamos readfile y no dependemos de isfile.
     return type(writefile) == "function"
        and type(readfile) == "function"
-       and type(isfile) == "function"
 end
 
 local function autoJsonEncode(data)
@@ -213,12 +214,8 @@ end
 local function loadAutoConfig()
     if not autoCanFile() then return false end
 
-    local exists = false
-    pcall(function()
-        exists = isfile(AUTO_CONFIG_FILE)
-    end)
-    if not exists then return false end
-
+    -- No dependemos de isfile: algunos ejecutores exponen readfile/writefile
+    -- pero no isfile. Un readfile fallido simplemente significa que aún no existe.
     local okRead, raw = pcall(function()
         return readfile(AUTO_CONFIG_FILE)
     end)
@@ -344,13 +341,12 @@ local function getSkinAsset(skinInfo, name)
         return nil, "Ruta de skin inválida"
     end
 
-    if type(writefile) ~= "function" or type(isfile) ~= "function"
+    if type(writefile) ~= "function"
         or type(getcustomasset) ~= "function" then
-        return nil, "getcustomasset/writefile/isfile no disponible"
+        return nil, "Falta writefile o getcustomasset"
     end
 
-    -- Carpeta nueva para no reutilizar archivos dañados o de versiones anteriores.
-    local folder = "XeroHub_Skins_V4"
+    local folder = "XeroHub_Skins_V5"
     pcall(function()
         if type(isfolder) == "function" and not isfolder(folder)
             and type(makefolder) == "function" then
@@ -366,30 +362,79 @@ local function getSkinAsset(skinInfo, name)
     local safeName = tostring(name):gsub("[^%w_%-]", "_")
     local path = folder .. "/" .. safeName .. "." .. ext
 
-    local exists = false
-    pcall(function() exists = isfile(path) end)
-
-    if not exists then
-        local ok, data = pcall(function()
-            return game:HttpGet(skinInfo.url)
-        end)
-
-        if not ok or type(data) ~= "string" or #data < 64 then
-            return nil, "No se pudo descargar: " .. tostring(skinInfo.url)
+    local function validImageData(data)
+        if type(data) ~= "string" or #data < 64 then
+            return false
         end
 
-        -- Evita guardar una página HTML/404 como si fuera una imagen.
-        local lower = data:sub(1, 80):lower()
-        if lower:find("404: not found", 1, true)
-            or lower:find("<html", 1, true)
-            or lower:find("<!doctype", 1, true) then
-            return nil, "GitHub devolvió un archivo inválido: " .. tostring(skinInfo.url)
+        local b1, b2, b3, b4 = data:byte(1, 4)
+        local isPNG = b1 == 137 and b2 == 80 and b3 == 78 and b4 == 71
+        local isJPG = b1 == 255 and b2 == 216 and b3 == 255
+        return isPNG or isJPG
+    end
+
+    local function readCached()
+        if type(readfile) ~= "function" then return nil end
+        local ok, data = pcall(function()
+            return readfile(path)
+        end)
+        if ok and validImageData(data) then
+            return data
+        end
+        return nil
+    end
+
+    -- Si hay una copia dañada, la eliminamos y descargamos de nuevo.
+    local cached = readCached()
+    if not cached then
+        if type(deletefile) == "function" then
+            pcall(function() deletefile(path) end)
+        end
+
+        local data = nil
+
+        -- request/http_request suele conservar mejor los bytes binarios que
+        -- algunas implementaciones de game:HttpGet.
+        local requestFn = nil
+        if type(request) == "function" then
+            requestFn = request
+        elseif type(http_request) == "function" then
+            requestFn = http_request
+        elseif syn and type(syn.request) == "function" then
+            requestFn = syn.request
+        end
+
+        if requestFn then
+            local ok, response = pcall(function()
+                return requestFn({
+                    Url = skinInfo.url,
+                    Method = "GET"
+                })
+            end)
+
+            if ok and type(response) == "table"
+                and (response.StatusCode == nil or tonumber(response.StatusCode) == 200)
+                and type(response.Body) == "string" then
+                data = response.Body
+            end
+        end
+
+        if not validImageData(data) then
+            local ok, fallback = pcall(function()
+                return game:HttpGet(skinInfo.url)
+            end)
+            if ok and validImageData(fallback) then
+                data = fallback
+            end
+        end
+
+        if not validImageData(data) then
+            return nil, "GitHub descargó datos inválidos para " .. tostring(name)
         end
 
         local okWrite = pcall(function()
             writefile(path, data)
         end)
-
         if not okWrite then
             return nil, "No se pudo escribir " .. path
         end
@@ -405,6 +450,7 @@ local function getSkinAsset(skinInfo, name)
 
     return nil, "getcustomasset no pudo convertir " .. path
 end
+
 local function trySetTextureProperty(obj, propertyName, asset)
     local ok = pcall(function()
         obj[propertyName] = asset
@@ -413,8 +459,8 @@ local function trySetTextureProperty(obj, propertyName, asset)
 end
 
 local function applyPistolSkin(tool, skinName)
-    if not tool or not tool:IsA("Tool") then
-        return false, 0, "No hay una Tool equipada."
+    if not tool or (not tool:IsA("Tool") and not tool:IsA("Model")) then
+        return false, 0, "No hay un modelo de pistola equipado."
     end
 
     local skinInfo = PISTOL_SKINS[skinName]
@@ -488,10 +534,41 @@ end
 
 local function applySelectedPistolSkin()
     local tool = findEquippedPistol()
-    if not tool then
-        return false, 0, "Equipa la pistola primero."
+    if tool then
+        local ok, count, detail = applyPistolSkin(tool, selectedPistolSkin)
+        if ok and count > 0 then
+            return ok, count, detail
+        end
     end
-    return applyPistolSkin(tool, selectedPistolSkin)
+
+    -- Algunos juegos dibujan el arma en un ViewModel dentro de CurrentCamera
+    -- y no en la Tool del personaje. Intentamos modelos cuyo nombre identifica
+    -- razonablemente un arma, sin tocar toda la cámara.
+    local camera = workspace.CurrentCamera
+    if camera then
+        local total = 0
+        local lastDetail = nil
+        for _, obj in ipairs(camera:GetChildren()) do
+            if obj:IsA("Model") then
+                local n = obj.Name:lower()
+                if n:find("pistol") or n:find("gun")
+                    or n:find("revolver") or n:find("weapon")
+                    or n:find("viewmodel") then
+                    local ok, count, detail = applyPistolSkin(obj, selectedPistolSkin)
+                    if ok and count > 0 then
+                        total = total + count
+                        lastDetail = detail
+                    end
+                end
+            end
+        end
+        if total > 0 then
+            return true, total, lastDetail
+        end
+    end
+
+    return false, 0,
+        "No se encontraron texturas modificables en la pistola/visual model."
 end
 
 
@@ -18171,7 +18248,14 @@ pcall(function()
         Title = "Aplicar Skin",
         Desc = "Aplica la textura seleccionada a la pistola equipada.",
         Callback = function()
-            applySelectedPistolSkin()
+            local ok, count, detail = applySelectedPistolSkin()
+            pcall(function()
+                if ok then
+                    showBottomMessage("Skin aplicada: " .. tostring(count) .. " objeto(s).")
+                else
+                    showBottomMessage("Skin no aplicada: " .. tostring(detail))
+                end
+            end)
         end
     })
 end)
@@ -18184,7 +18268,7 @@ end)
 -- Importante: primero se construye toda la UI, luego se restaura.
 -- Así WindUI no vuelve a poner los valores por defecto después del load.
 task.spawn(function()
-    task.wait(1.0)
+    task.wait(2.0)
 
     local loaded = false
     pcall(function()
