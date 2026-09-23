@@ -18582,8 +18582,24 @@ buildAutoConfig = function()
         local sounds=runtime.SerializeSoundConfig()
         local sd={}
         if type(sounds)=="table" then
-            if sounds.Arma and (sounds.Arma.Activado==true or sounds.Arma.Silenciado==true) then sd.Arma=sounds.Arma end
-            if sounds.Muerte and sounds.Muerte.Activado==true then sd.Muerte=sounds.Muerte end
+            -- Guardar tambien la seleccion aunque el efecto este apagado.
+            -- Asi, si eliges un sonido y luego sales, la seleccion vuelve a aparecer.
+            if type(sounds.Arma)=="table" then
+                local a=sounds.Arma
+                if (a.Seleccionado and a.Seleccionado ~= "")
+                    or (a.Archivo and a.Archivo ~= "")
+                    or a.Activado==true or a.Silenciado==true then
+                    sd.Arma=a
+                end
+            end
+            if type(sounds.Muerte)=="table" then
+                local m=sounds.Muerte
+                if (m.Seleccionado and m.Seleccionado ~= "")
+                    or (m.Archivo and m.Archivo ~= "")
+                    or m.Activado==true then
+                    sd.Muerte=m
+                end
+            end
         end
         if next(sd) then data.Sonidos=sd end
     end
@@ -18593,7 +18609,12 @@ buildAutoConfig = function()
     end
     if hasAnimation then data.Animaciones={Paquete=selectedBundleCompleto,Mix=mixParts} end
     if modes and modes.active then data.Skybox={Activado=true,Nombre=tostring(modes.active),CustomInput=tostring(modes.customInput or ""),Custom=type(skies)=="table" and type(skies.Custom)=="table" and table.clone(skies.Custom) or nil} end
-    if getgenv and getgenv().XeroJumpSoundEnabled == true then data.SonidoSalto={Activado=true,Seleccionado=runtime.JumpSoundSelectedLabel} end
+    if getgenv and (getgenv().XeroJumpSoundEnabled == true or (runtime.JumpSoundSelectedLabel and runtime.JumpSoundSelectedLabel ~= "")) then
+        data.SonidoSalto={
+            Activado=getgenv().XeroJumpSoundEnabled == true,
+            Seleccionado=runtime.JumpSoundSelectedLabel
+        }
+    end
     if selectedPistolSkin and selectedPistolSkin ~= "Floral" then data.PistolSkin=tostring(selectedPistolSkin) end
     return data
 end
