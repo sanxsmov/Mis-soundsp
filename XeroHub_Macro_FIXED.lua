@@ -130,6 +130,15 @@ local knifeEquipDelay = 0.05
 local knifeThrowDelay = 0.07
 local selectedPistolSkin = "Floral"
 
+-- Estados compartidos que usa AUTO-SAVE pero cuya UI se crea más abajo.
+local selectedBundleCompleto = "Ninguno"
+local mixParts = {
+    Idle = "Ninguno", Walk = "Ninguno", Run = "Ninguno",
+    Jump = "Ninguno", Fall = "Ninguno", Climb = "Ninguno"
+}
+local jumpSoundEnabled = false
+local jumpSoundId = ""
+
 -- Soporte general de mando. La Dead Zone filtra el drift del stick derecho
 -- incluso cuando no está activo el Aimbot Controller.
 local controllerSupportEnabled = false
@@ -145,22 +154,23 @@ local controllerAimConnection = nil
 local stopControllerAimbot, startControllerAimbot
 
 -- ==========================================
--- AUTO-SAVE / AUTO-LOAD REAL
+-- PERSISTENCIA AUTOMATICA DE ESTADO
 -- ==========================================
--- Esta copia es independiente del selector "Auto Load Config".
--- Guarda una configuración completa en un archivo fijo y la restaura
--- DESPUÉS de que todos los controles/UI hayan sido creados.
-local AUTO_CONFIG_FILE = "XeroHub_AutoConfig.json"
-local AUTO_SAVE_DELAY = 0.60
+-- No depende de "Guardar Configuración" ni de "Auto Load Config".
+-- Guarda silenciosamente SOLO el estado activo/seleccionado y lo restaura al entrar.
+-- El usuario no necesita tocar ningún botón de guardar ni activar AutoLoad.
+local AUTO_CONFIG_FILE = "XeroHub_State.json"
+local AUTO_SAVE_DELAY = 0.15
 local autoSaveReady = false
 local autoSaveQueued = false
 local autoConfigLoaded = false
 
-local function autoCanFile()
-    -- Para guardar sólo necesitamos writefile.
-    -- Para cargar usamos readfile y no dependemos de isfile.
+local function autoCanWrite()
     return type(writefile) == "function"
-       and type(readfile) == "function"
+end
+
+local function autoCanRead()
+    return type(readfile) == "function"
 end
 
 local function autoJsonEncode(data)
@@ -327,7 +337,7 @@ local function buildAutoConfig()
 end
 
 local function saveAutoConfig()
-    if not autoSaveReady or not autoCanFile() then return false end
+    if not autoSaveReady or not autoCanWrite() then return false end
 
     local encoded = autoJsonEncode(buildAutoConfig())
     if not encoded then return false end
@@ -357,11 +367,12 @@ local function markAutoConfigChanged()
 end
 
 local function loadAutoConfig()
-    if not autoCanFile() then return false end
+    if not autoCanRead() then return nil end
     local okRead, raw = pcall(function() return readfile(AUTO_CONFIG_FILE) end)
-    if not okRead or type(raw) ~= "string" or raw == "" then return false end
+    if not okRead or type(raw) ~= "string" or raw == "" then return nil end
     local data = autoJsonDecode(raw)
-    return type(data) == "table"
+    if type(data) ~= "table" then return nil end
+    return data
 end
 
 local Players = game:GetService("Players")
@@ -12630,6 +12641,7 @@ UIElements.TogSilentAimPistola = Tabs.Aim:Toggle({
     Callback = function(Value)
         silentAimPistolaEnabled = Value
         showBottomMessage(Value and "Silent Aim Pistola: ACTIVADO" or "Silent Aim Pistola: DESACTIVADO")
+        markAutoConfigChanged()
         -- ENCIENDE/APAGA EL BUCLE
     end,
 })
@@ -12640,6 +12652,7 @@ UIElements.TogSilentAimCuchillo = Tabs.Aim:Toggle({
     Value = false,
     Callback = function(Value)
         silentAimCuchilloEnabled = Value
+        markAutoConfigChanged()
         -- ENCIENDE/APAGA EL BUCLE
     end,
 })
@@ -16124,6 +16137,7 @@ UIElements.ToggleAsBtn = Tabs.Aim:Toggle({
     Value = false,
     Callback = function(state)
         asBtn.Visible = state
+        markAutoConfigChanged()
     end
 })
 
@@ -16132,6 +16146,7 @@ UIElements.ToggleSaBtn = Tabs.Aim:Toggle({
     Value = false,
     Callback = function(state)
         saBtn.Visible = state
+        markAutoConfigChanged()
     end
 })
 
@@ -16858,7 +16873,10 @@ modes.dropdown = Tabs.Graficos:Dropdown({
     Desc = "Elige un skybox del repo o usa tu cielo personalizado.",
     Values = skyDropdownValues,
     Value = "Cielo personalizado",
-    Callback = function(value) modes.select(type(value) == "table" and value[1] or value) end
+    Callback = function(value)
+        modes.select(type(value) == "table" and value[1] or value)
+        markAutoConfigChanged()
+    end
 })
 Tabs.Graficos:Input({
     Title = "ID de tu cielo",
@@ -16867,6 +16885,7 @@ Tabs.Graficos:Input({
     Value = "92427017914292",
     Callback = function(text)
         modes.customInput = tostring(text or "")
+        markAutoConfigChanged()
     end
 })
 Tabs.Graficos:Button({
@@ -16884,6 +16903,7 @@ Tabs.Graficos:Button({
         for index = 1, 6 do skies.Custom[index] = id end
         modes.customInput = id
         modes.select("Cielo personalizado")
+        markAutoConfigChanged()
     end
 })
 Tabs.Graficos:Button({
@@ -17402,7 +17422,6 @@ table.sort(animList)
 
 Tabs.Emotes:Section({Title = "Paquetes Completos"})
 
-local selectedBundleCompleto = "Ninguno"
 Tabs.Emotes:Dropdown({
     Title = "Elegir Paquete", 
     Values = animList, 
@@ -17433,11 +17452,6 @@ end})
 
 -- 5. MEZCLADOR DE ANIMACIONES
 Tabs.Emotes:Section({Title = "Mezclador de Animaciones"})
-
-local mixParts = {
-    Idle = "Ninguno", Walk = "Ninguno", Run = "Ninguno", 
-    Jump = "Ninguno", Fall = "Ninguno", Climb = "Ninguno"
-}
 
 Tabs.Emotes:Dropdown({Title = "Reposo", Values = animList, Value = "Ninguno", Callback = function(Value) mixParts.Idle = Value end})
 Tabs.Emotes:Dropdown({Title = "Caminar", Values = animList, Value = "Ninguno", Callback = function(Value) mixParts.Walk = Value end})
@@ -18213,7 +18227,13 @@ local function loadSelectedConfig()
     end
     
     local path = configPaths[selectedConfig] or (configFolder .. "/" .. selectedConfig .. ".json")
-    if isfile and isfile(path) then
+    local fileExists = false
+    if type(isfile) == "function" then
+        fileExists = isfile(path) == true
+    elseif type(readfile) == "function" then
+        fileExists = pcall(function() readfile(path) end)
+    end
+    if fileExists then
         local success, decoded = pcall(function() return HttpService:JSONDecode(readfile(path)) end)
         if success and type(decoded) == "table" then
             
@@ -18270,6 +18290,7 @@ local function loadSelectedConfig()
                 if decoded.Toggles["Macro Cuchillo (L2)"] ~= nil then
                     knifeMacroEnabled = decoded.Toggles["Macro Cuchillo (L2)"] == true
                     secureLoadToggle(UIElements.TogKnifeMacro, knifeMacroEnabled)
+                end
                 if decoded.Toggles["Trigger Bot"] ~= nil then
                     triggerBotEnabled = decoded.Toggles["Trigger Bot"] == true
                     secureLoadToggle(UIElements.TogTriggerBot, triggerBotEnabled)
@@ -18471,12 +18492,14 @@ local function loadSelectedConfig()
             
             
             showBottomMessage("'" .. selectedConfig .. "' cargada con éxito.")
+            return true
         else 
             showBottomMessage("Error al leer el archivo.") 
         end
     else 
         showBottomMessage("La configuración no existe.") 
     end
+    return false
 end
 
 Tabs.Config:Button({ Title = " Cargar Configuración", Callback = loadSelectedConfig })
@@ -18505,9 +18528,6 @@ end)
 -- ==========================================
 -- SONIDO AL SALTAR
 -- ==========================================
-local jumpSoundEnabled = false
-local jumpSoundId = ""
-
 local function playJumpSound(character)
     local catalogAssetId = runtime.JumpSoundAssetId
     if type(catalogAssetId) == "string" and catalogAssetId ~= "" then
@@ -18692,128 +18712,106 @@ end)
 
 
 -- ==========================================
--- AUTO-SAVE / AUTO-LOAD FINAL
+-- PERSISTENCIA AUTOMATICA FINAL
 -- ==========================================
--- Este sistema es INDEPENDIENTE de "Auto Load Config".
--- Se restaura siempre al entrar, sin que el usuario tenga que activar AutoLoad.
+-- No es una configuración manual y no requiere AutoLoad.
+-- Restaura automáticamente el último estado activo al ejecutar XeroHub.
 task.spawn(function()
     task.wait(2.0)
 
     local loaded = false
     pcall(function()
-        if autoCanFile() then
-            local okRead = pcall(function() return readfile(AUTO_CONFIG_FILE) end)
-            if okRead then
-                -- Reutilizamos el mismo cargador completo de configuraciones para
-                -- que sonidos, animaciones, apariencia, skybox y toggles se apliquen
-                -- exactamente igual que una configuración normal.
+        local data = loadAutoConfig()
+        if type(data) == "table" then
+            local oldSelected = selectedConfig
+            local oldPath = configPaths["__XERO_AUTO__"]
+            configPaths["__XERO_AUTO__"] = AUTO_CONFIG_FILE
+            selectedConfig = "__XERO_AUTO__"
+
+            -- Todo lo que NO esté guardado debe arrancar apagado.
+            local resetToggles = {
+                UIElements.TogAutoShoot, UIElements.TogAutoShootCuchillo,
+                UIElements.TogSilentAimPistola, UIElements.TogSilentAimCuchillo,
+                UIElements.TogSilentAimFOV, UIElements.TogShowFOV,
+                UIElements.TogEspLines, UIElements.TogEspBox, UIElements.TogEspHealth,
+                UIElements.ToggleAsBtn, UIElements.ToggleSaBtn, UIElements.ToggleGhost,
+                UIElements.TogHitbox, UIElements.TogHbInv, UIElements.TogEsp,
+                UIElements.TogEspGl, UIElements.TogEspNm, UIElements.TogEspDs,
+                UIElements.TogHideName, UIElements.ToggleFPS, UIElements.TogMacro,
+                UIElements.TogTriggerBot, UIElements.TogKnifeMacro,
+                UIElements.TogControllerAimbot, UIElements.TogControllerSupport,
+                UIElements.TogControllerInvert
+            }
+            for _, control in ipairs(resetToggles) do
+                if control then pcall(function() control:Set(false) end) end
+            end
+
+            macroActivo = false
+            knifeMacroEnabled = false
+            triggerBotEnabled = false
+            controllerAimbotEnabled = false
+            controllerSupportEnabled = false
+            controllerDeadZone = 0.20
+            controllerSensitivity = 1.00
+            controllerCameraSensitivity = 1.00
+            controllerInvertY = false
+            setControllerDeadZoneFilter(false)
+
+            -- Usa el mismo cargador que una configuración normal.
+            -- Ahora funciona incluso si el ejecutor no expone isfile().
+            loaded = loadSelectedConfig() == true
+
+            if controllerSupportEnabled then
+                setControllerDeadZoneFilter(true)
+                applyControllerCameraSensitivity()
+            else
+                setControllerDeadZoneFilter(false)
+            end
+            if controllerAimbotEnabled and controllerSupportEnabled then
+                startControllerAimbot()
+            else
+                stopControllerAimbot()
+            end
+
+            selectedConfig = oldSelected
+            if oldPath then configPaths["__XERO_AUTO__"] = oldPath else configPaths["__XERO_AUTO__"] = nil end
+        end
+    end)
+
+    -- El estado queda listo para guardar inmediatamente después de restaurar.
+    autoConfigLoaded = loaded
+    autoSaveReady = true
+
+    -- Si algún control terminó de crearse un frame tarde, hacemos una segunda
+    -- lectura breve del mismo estado sin que el usuario tenga que hacer nada.
+    if not loaded then
+        saveAutoConfig()
+    else
+        task.delay(0.35, function()
+            local data = loadAutoConfig()
+            if type(data) == "table" then
                 local oldSelected = selectedConfig
                 local oldPath = configPaths["__XERO_AUTO__"]
                 configPaths["__XERO_AUTO__"] = AUTO_CONFIG_FILE
                 selectedConfig = "__XERO_AUTO__"
-
-                -- Los controles no guardados deben arrancar apagados.
-                local resetToggles = {
-                    UIElements.TogAutoShoot,
-                    UIElements.TogAutoShootCuchillo,
-                    UIElements.TogSilentAimPistola,
-                    UIElements.TogSilentAimCuchillo,
-                    UIElements.TogSilentAimFOV,
-                    UIElements.TogShowFOV,
-                    UIElements.TogEspLines,
-                    UIElements.TogEspBox,
-                    UIElements.TogEspHealth,
-                    UIElements.ToggleAsBtn,
-                    UIElements.ToggleSaBtn,
-                    UIElements.ToggleGhost,
-                    UIElements.TogHitbox,
-                    UIElements.TogHbInv,
-                    UIElements.TogEsp,
-                    UIElements.TogEspGl,
-                    UIElements.TogEspNm,
-                    UIElements.TogEspDs,
-                    UIElements.TogHideName,
-                    UIElements.ToggleFPS,
-                    UIElements.TogMacro,
-                    UIElements.TogTriggerBot,
-                    UIElements.TogKnifeMacro,
-                    UIElements.TogControllerAimbot,
-                    UIElements.TogControllerSupport,
-                    UIElements.TogControllerInvert,
-                }
-                for _, control in ipairs(resetToggles) do
-                    if control then pcall(function() control:Set(false) end) end
-                end
-
-                -- Estados internos que algunos controles no exponen directamente.
-                macroActivo = false
-                knifeMacroEnabled = false
-                triggerBotEnabled = false
-                controllerAimbotEnabled = false
-                controllerSupportEnabled = false
-                controllerDeadZone = 0.20
-                controllerSensitivity = 1.00
-                controllerInvertY = false
-                setControllerDeadZoneFilter(false)
-                autoShootEnabled = false
-                autoShootCuchilloEnabled = false
-                silentAimPistolaEnabled = false
-                silentAimCuchilloEnabled = false
-                silentAimFovEnabled = false
-                fovVisiblePreference = false
-                espLinesEnabled = false
-                espSettings.Box = false
-                espSettings.HealthBar = false
-                hitboxEnabled = false
-                hitboxInvisible = false
-                espEnabled = false
-                espSettings.Glow = false
-                espSettings.Name = false
-                espSettings.Distance = false
-                hideNameEnabled = false
-                fpsBoostEnabled = false
-
-                pcall(function()
-                    loadSelectedConfig()
-                    if controllerSupportEnabled then
-                        setControllerDeadZoneFilter(true)
-                    else
-                        setControllerDeadZoneFilter(false)
-                    end
-                    if controllerAimbotEnabled and controllerSupportEnabled then
-                        startControllerAimbot()
-                    else
-                        stopControllerAimbot()
-                    end
-                    loaded = true
-                end)
-
+                pcall(loadSelectedConfig)
                 selectedConfig = oldSelected
                 if oldPath then configPaths["__XERO_AUTO__"] = oldPath else configPaths["__XERO_AUTO__"] = nil end
             end
-        end
-    end)
-
-    autoConfigLoaded = loaded
-    autoSaveReady = true
-
-    if not loaded then
-        saveAutoConfig()
+        end)
     end
 end)
 
--- Guarda cualquier cambio realizado desde la UI.
+-- Respaldo: detecta cambios aunque un control no llame markAutoConfigChanged().
 task.spawn(function()
     local lastState = nil
-
-    while task.wait(1.0) do
-        if autoSaveReady then
+    while task.wait(0.75) do
+        if autoSaveReady and autoCanWrite() then
             local snapshot = autoJsonEncode(buildAutoConfig()) or ""
             if snapshot ~= lastState then
                 lastState = snapshot
-                queueAutoConfigSave()
+                saveAutoConfig()
             end
         end
     end
 end)
-
