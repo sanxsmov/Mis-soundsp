@@ -116,21 +116,6 @@ local DUELS_BIMO_PLACE_ID = 116817810725116
 
 
 -- ==========================================
--- ESTADO COMPARTIDO PARA AUTO-SAVE
--- ==========================================
--- Estas variables deben existir ANTES de declarar las funciones de auto-save.
--- Si se declaran después, Lua las trata como locales distintas y el auto-save
--- termina leyendo/escribiendo valores incorrectos.
-local macroActivo = false
-local macroEquipDelay = 0.04
-local macroShootDelay = 0.10
-local knifeMacroEnabled = false
-local triggerBotEnabled = false
-local knifeEquipDelay = 0.10
-local knifeThrowDelay = 0.10
-local selectedPistolSkin = "Floral"
-
--- ==========================================
 -- AUTO-SAVE / AUTO-LOAD REAL
 -- ==========================================
 -- Esta copia es independiente del selector "Auto Load Config".
@@ -143,10 +128,9 @@ local autoSaveQueued = false
 local autoConfigLoaded = false
 
 local function autoCanFile()
-    -- Para guardar sólo necesitamos writefile.
-    -- Para cargar usamos readfile y no dependemos de isfile.
     return type(writefile) == "function"
        and type(readfile) == "function"
+       and type(isfile) == "function"
 end
 
 local function autoJsonEncode(data)
@@ -165,7 +149,7 @@ end
 
 local function buildAutoConfig()
     return {
-        Version = 3,
+        Version = 2,
         Toggles = {
             ["Activar Macro"] = macroActivo == true,
             ["Macro Cuchillo (L2)"] = knifeMacroEnabled == true,
@@ -204,18 +188,15 @@ local function queueAutoConfigSave()
     end)
 end
 
-local function markAutoConfigChanged()
-    -- Un pequeño debounce evita escribir el archivo en cada tick del control.
-    if autoSaveReady then
-        queueAutoConfigSave()
-    end
-end
-
 local function loadAutoConfig()
     if not autoCanFile() then return false end
 
-    -- No dependemos de isfile: algunos ejecutores exponen readfile/writefile
-    -- pero no isfile. Un readfile fallido simplemente significa que aún no existe.
+    local exists = false
+    pcall(function()
+        exists = isfile(AUTO_CONFIG_FILE)
+    end)
+    if not exists then return false end
+
     local okRead, raw = pcall(function()
         return readfile(AUTO_CONFIG_FILE)
     end)
@@ -253,7 +234,7 @@ local function loadAutoConfig()
         end
     end
 
-    if type(data.PistolSkin) == "string" and (data.PistolSkin == "Floral" or data.PistolSkin == "Haunted" or data.PistolSkin == "Blanco/Negro") then
+    if type(data.PistolSkin) == "string" and data.PistolSkin ~= "" then
         selectedPistolSkin = data.PistolSkin
     end
 
@@ -321,254 +302,144 @@ local player = Players.LocalPlayer
 -- SKINS DE PISTOLA - GitHub
 -- ==========================================
 local PISTOL_SKINS = {
-    ["Floral"] = {
-        url = "https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/textures/pistola_floral.png",
-        ext = "png"
-    },
-    ["Haunted"] = {
-        url = "https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/textures/1989.jpg",
-        ext = "jpg"
-    },
-    ["Blanco/Negro"] = {
-        url = "https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/textures/pistola_chiquita_en_negro_.png",
-        ext = "png"
-    }
+    ["Floral"] = "https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/textures/pistola_floral.png",
+    ["Haunted"] = "https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/textures/pistola_haunted.png",
+    ["Blanco/Negro"] = "https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/textures/pistola_blanco_negro.png"
 }
 
+local selectedPistolSkin = "Floral"
 
-local function getSkinAsset(skinInfo, name)
-    if type(skinInfo) ~= "table" or type(skinInfo.url) ~= "string" then
-        return nil, "Ruta de skin inválida"
+local function getSkinAsset(url, name)
+    -- Delta reports getcustomasset, so the GitHub image must first be
+    -- downloaded to a local executor file and then converted to an asset.
+    if type(writefile) ~= "function" or type(isfile) ~= "function" then
+        return nil
     end
 
-    if type(writefile) ~= "function"
-        or type(getcustomasset) ~= "function" then
-        return nil, "Falta writefile o getcustomasset"
-    end
+    local folder = "XeroHub_Skins"
 
-    local folder = "XeroHub_Skins_V5"
     pcall(function()
-        if type(isfolder) == "function" and not isfolder(folder)
+        if type(isfolder) == "function"
+            and not isfolder(folder)
             and type(makefolder) == "function" then
             makefolder(folder)
         end
     end)
 
-    local ext = tostring(skinInfo.ext or "png"):lower()
-    if ext ~= "png" and ext ~= "jpg" and ext ~= "jpeg" then
-        ext = "png"
-    end
-
     local safeName = tostring(name):gsub("[^%w_%-]", "_")
-    local path = folder .. "/" .. safeName .. "." .. ext
+    local path = folder .. "/" .. safeName .. ".png"
 
-    local function validImageData(data)
-        if type(data) ~= "string" or #data < 64 then
-            return false
-        end
+    local exists = false
+    pcall(function()
+        exists = isfile(path)
+    end)
 
-        local b1, b2, b3, b4 = data:byte(1, 4)
-        local isPNG = b1 == 137 and b2 == 80 and b3 == 78 and b4 == 71
-        local isJPG = b1 == 255 and b2 == 216 and b3 == 255
-        return isPNG or isJPG
-    end
-
-    local function readCached()
-        if type(readfile) ~= "function" then return nil end
+    if not exists then
         local ok, data = pcall(function()
-            return readfile(path)
+            return game:HttpGet(url)
         end)
-        if ok and validImageData(data) then
-            return data
-        end
-        return nil
-    end
 
-    -- Si hay una copia dañada, la eliminamos y descargamos de nuevo.
-    local cached = readCached()
-    if not cached then
-        if type(deletefile) == "function" then
-            pcall(function() deletefile(path) end)
-        end
-
-        local data = nil
-
-        -- request/http_request suele conservar mejor los bytes binarios que
-        -- algunas implementaciones de game:HttpGet.
-        local requestFn = nil
-        if type(request) == "function" then
-            requestFn = request
-        elseif type(http_request) == "function" then
-            requestFn = http_request
-        elseif syn and type(syn.request) == "function" then
-            requestFn = syn.request
-        end
-
-        if requestFn then
-            local ok, response = pcall(function()
-                return requestFn({
-                    Url = skinInfo.url,
-                    Method = "GET"
-                })
-            end)
-
-            if ok and type(response) == "table"
-                and (response.StatusCode == nil or tonumber(response.StatusCode) == 200)
-                and type(response.Body) == "string" then
-                data = response.Body
-            end
-        end
-
-        if not validImageData(data) then
-            local ok, fallback = pcall(function()
-                return game:HttpGet(skinInfo.url)
-            end)
-            if ok and validImageData(fallback) then
-                data = fallback
-            end
-        end
-
-        if not validImageData(data) then
-            return nil, "GitHub descargó datos inválidos para " .. tostring(name)
+        if not ok or type(data) ~= "string" or #data < 16 then
+            return nil
         end
 
         local okWrite = pcall(function()
             writefile(path, data)
         end)
+
         if not okWrite then
-            return nil, "No se pudo escribir " .. path
+            return nil
         end
     end
 
-    local ok, asset = pcall(function()
-        return getcustomasset(path)
-    end)
+    if type(getcustomasset) == "function" then
+        local ok, asset = pcall(function()
+            return getcustomasset(path)
+        end)
 
-    if ok and type(asset) == "string" and asset ~= "" then
-        return asset, path
+        if ok and asset then
+            return asset
+        end
     end
 
-    return nil, "getcustomasset no pudo convertir " .. path
-end
+    -- Fallbacks, without passing the GitHub URL directly to asset functions.
+    if type(getsynasset) == "function" then
+        local ok, asset = pcall(function()
+            return getsynasset(path)
+        end)
 
-local function trySetTextureProperty(obj, propertyName, asset)
-    local ok = pcall(function()
-        obj[propertyName] = asset
-    end)
-    return ok
+        if ok and asset then
+            return asset
+        end
+    end
+
+    if type(getasset) == "function" then
+        local ok, asset = pcall(function()
+            return getasset(path)
+        end)
+
+        if ok and asset then
+            return asset
+        end
+    end
+
+    return nil
 end
 
 local function applyPistolSkin(tool, skinName)
-    if not tool or (not tool:IsA("Tool") and not tool:IsA("Model")) then
-        return false, 0, "No hay un modelo de pistola equipado."
+    if not tool or not tool:IsA("Tool") then
+        return false, 0
     end
 
-    local skinInfo = PISTOL_SKINS[skinName]
-    if not skinInfo then
-        return false, 0, "Skin desconocida: " .. tostring(skinName)
+    local url = PISTOL_SKINS[skinName]
+    if not url then
+        return false, 0
     end
 
-    local asset, assetInfo = getSkinAsset(skinInfo, skinName)
+    local asset = getSkinAsset(url, skinName)
     if not asset then
-        return false, 0, assetInfo or "No se pudo crear el asset."
+        return false, 0
     end
 
-    local changed = 0
-    local inspected = 0
-    local touched = {}
+    local changedCount = 0
 
     for _, obj in ipairs(tool:GetDescendants()) do
-        inspected = inspected + 1
-        local ok = false
-
-        -- Texturas/decals clásicos.
         if obj:IsA("Texture") or obj:IsA("Decal") then
-            ok = trySetTextureProperty(obj, "Texture", asset)
+            local ok = pcall(function()
+                obj.Texture = asset
+            end)
+            if ok then
+                changedCount = changedCount + 1
+            end
 
-        -- MeshPart.
         elseif obj:IsA("MeshPart") then
-            ok = trySetTextureProperty(obj, "TextureID", asset)
+            local ok = pcall(function()
+                obj.TextureID = asset
+            end)
+            if ok then
+                changedCount = changedCount + 1
+            end
 
-        -- SpecialMesh.
         elseif obj:IsA("SpecialMesh") then
-            ok = trySetTextureProperty(obj, "TextureId", asset)
-
-        -- Algunos modelos usan SurfaceAppearance.
-        elseif obj:IsA("SurfaceAppearance") then
-            ok = trySetTextureProperty(obj, "ColorMap", asset)
-        end
-
-        if ok then
-            changed = changed + 1
-            table.insert(touched, obj:GetFullName())
+            local ok = pcall(function()
+                obj.TextureId = asset
+            end)
+            if ok then
+                changedCount = changedCount + 1
+            end
         end
     end
 
-    if changed == 0 then
-        return false, 0,
-            "No se encontró Texture, Decal, MeshPart, SpecialMesh o SurfaceAppearance modificable."
-    end
-
-    return true, changed,
-        "Asset: " .. tostring(assetInfo) ..
-        " | Revisados: " .. tostring(inspected)
-end
-
-local function findEquippedPistol()
-    local character = player.Character
-    if not character then return nil end
-
-    local equipped = character:FindFirstChildOfClass("Tool")
-    if not equipped then return nil end
-
-    -- Si el juego tiene una herramienta claramente identificada como pistola,
-    -- la usamos. Si no, usamos la Tool equipada.
-    local lower = equipped.Name:lower()
-    if lower:find("pistol") or lower:find("gun") or lower:find("revolver")
-        or lower:find("weapon") then
-        return equipped
-    end
-
-    return equipped
+    return changedCount > 0, changedCount
 end
 
 local function applySelectedPistolSkin()
-    local tool = findEquippedPistol()
-    if tool then
-        local ok, count, detail = applyPistolSkin(tool, selectedPistolSkin)
-        if ok and count > 0 then
-            return ok, count, detail
-        end
+    local char = player.Character
+    local tool = char and char:FindFirstChildOfClass("Tool")
+    if not tool then
+        return false, 0
     end
-
-    -- Algunos juegos dibujan el arma en un ViewModel dentro de CurrentCamera
-    -- y no en la Tool del personaje. Intentamos modelos cuyo nombre identifica
-    -- razonablemente un arma, sin tocar toda la cámara.
-    local camera = workspace.CurrentCamera
-    if camera then
-        local total = 0
-        local lastDetail = nil
-        for _, obj in ipairs(camera:GetChildren()) do
-            if obj:IsA("Model") then
-                local n = obj.Name:lower()
-                if n:find("pistol") or n:find("gun")
-                    or n:find("revolver") or n:find("weapon")
-                    or n:find("viewmodel") then
-                    local ok, count, detail = applyPistolSkin(obj, selectedPistolSkin)
-                    if ok and count > 0 then
-                        total = total + count
-                        lastDetail = detail
-                    end
-                end
-            end
-        end
-        if total > 0 then
-            return true, total, lastDetail
-        end
-    end
-
-    return false, 0,
-        "No se encontraron texturas modificables en la pistola/visual model."
+    return applyPistolSkin(tool, selectedPistolSkin)
 end
 
 
@@ -3644,14 +3515,23 @@ runtime.Track(Players.PlayerRemoving:Connect(function(p)
     end
 end))
 
+local macroActivo = false
+local macroEquipDelay = 0.04
+local macroShootDelay = 0.10
+
 -- Macro de cuchillo independiente de la pistola
+local knifeMacroEnabled = false
+local triggerBotEnabled = false
 local triggerBotConnection = nil
+
+local knifeEquipDelay = 0.10
+local knifeThrowDelay = 0.10
 
 Tabs.Aim:Section({Title = "Macro (Pistola)"})
 UIElements.TogMacro = Tabs.Aim:Toggle({
     Title = "Activar Macro", 
     Desc = "Dispara con un solo toque.",
-    Callback = function(s) macroActivo = s == true; markAutoConfigChanged() end
+    Callback = function(s) macroActivo = s end
 })
 
 UIElements.SliMacroEquip = Tabs.Aim:Slider({
@@ -3659,7 +3539,7 @@ UIElements.SliMacroEquip = Tabs.Aim:Slider({
     Desc = "Sube esto si la pistola no alcanza a salir. (Segundos)",
     Step = 0.01,
     Value = {Min = 0.01, Max = 0.50, Default = 0.04},
-    Callback = function(v) macroEquipDelay = tonumber(v) or macroEquipDelay; markAutoConfigChanged() end
+    Callback = function(v) macroEquipDelay = v end
 })
 
 UIElements.SliMacroShoot = Tabs.Aim:Slider({
@@ -3667,7 +3547,7 @@ UIElements.SliMacroShoot = Tabs.Aim:Slider({
     Desc = "Sube esto si el tiro no cuenta daño. (Segundos)",
     Step = 0.01,
     Value = {Min = 0.05, Max = 0.80, Default = 0.10},
-    Callback = function(v) macroShootDelay = tonumber(v) or macroShootDelay; markAutoConfigChanged() end
+    Callback = function(v) macroShootDelay = v end
 })
 
 Tabs.Aim:Section({Title = "Macro (Cuchillo)"})
@@ -3704,6 +3584,7 @@ end
 -- Dispara automáticamente en cuanto un jugador enemigo cruza
 -- exactamente el centro de la mira. Se evalúa en RenderStepped
 -- para minimizar la latencia y no depende del clic del usuario.
+local triggerBotEnabled = false
 local triggerBotConnection = nil
 local triggerLastTarget = nil
 local triggerLastFire = 0
@@ -3798,7 +3679,6 @@ UIElements.TogTriggerBot = Tabs.Aim:Toggle({
     Desc = "Dispara solo con el centro exacto de la mira sobre un enemigo.",
     Callback = function(v)
         setTriggerBot(v)
-        markAutoConfigChanged()
     end
 })
 
@@ -3808,7 +3688,6 @@ UIElements.TogKnifeMacro = Tabs.Aim:Toggle({
     Callback = function(v)
         knifeMacroEnabled = v == true
         setKnifeL2Block(knifeMacroEnabled)
-        markAutoConfigChanged()
     end
 })
 
@@ -3817,7 +3696,7 @@ UIElements.SliKnifeEquip = Tabs.Aim:Slider({
     Desc = "Tiempo antes de lanzar. (Segundos)",
     Step = 0.01,
     Value = {Min = 0.01, Max = 0.50, Default = 0.10},
-    Callback = function(v) knifeEquipDelay = tonumber(v) or knifeEquipDelay; markAutoConfigChanged() end
+    Callback = function(v) knifeEquipDelay = v end
 })
 
 UIElements.SliKnifeThrow = Tabs.Aim:Slider({
@@ -3825,7 +3704,7 @@ UIElements.SliKnifeThrow = Tabs.Aim:Slider({
     Desc = "Tiempo después del lanzamiento. (Segundos)",
     Step = 0.01,
     Value = {Min = 0.01, Max = 0.50, Default = 0.10},
-    Callback = function(v) knifeThrowDelay = tonumber(v) or knifeThrowDelay; markAutoConfigChanged() end
+    Callback = function(v) knifeThrowDelay = v end
 })
 
 -- L2 se usa como un solo toque. La macro no exige mantener el botón.
@@ -18237,7 +18116,6 @@ pcall(function()
         Value = selectedPistolSkin,
         Callback = function(value)
             selectedPistolSkin = value
-            markAutoConfigChanged()
             task.defer(function()
                 applySelectedPistolSkin()
             end)
@@ -18248,14 +18126,7 @@ pcall(function()
         Title = "Aplicar Skin",
         Desc = "Aplica la textura seleccionada a la pistola equipada.",
         Callback = function()
-            local ok, count, detail = applySelectedPistolSkin()
-            pcall(function()
-                if ok then
-                    showBottomMessage("Skin aplicada: " .. tostring(count) .. " objeto(s).")
-                else
-                    showBottomMessage("Skin no aplicada: " .. tostring(detail))
-                end
-            end)
+            applySelectedPistolSkin()
         end
     })
 end)
@@ -18268,7 +18139,7 @@ end)
 -- Importante: primero se construye toda la UI, luego se restaura.
 -- Así WindUI no vuelve a poner los valores por defecto después del load.
 task.spawn(function()
-    task.wait(2.0)
+    task.wait(1.0)
 
     local loaded = false
     pcall(function()
