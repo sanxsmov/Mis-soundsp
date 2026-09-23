@@ -116,6 +116,35 @@ local DUELS_BIMO_PLACE_ID = 116817810725116
 
 
 -- ==========================================
+-- ESTADO COMPARTIDO PARA AUTO-SAVE
+-- ==========================================
+-- Estas variables deben existir ANTES de declarar las funciones de auto-save.
+-- Si se declaran después, Lua las trata como locales distintas y el auto-save
+-- termina leyendo/escribiendo valores incorrectos.
+local macroActivo = false
+local macroEquipDelay = 0.04
+local macroShootDelay = 0.10
+local knifeMacroEnabled = false
+local triggerBotEnabled = false
+local knifeEquipDelay = 0.10
+local knifeThrowDelay = 0.10
+local selectedPistolSkin = "Floral"
+
+-- Soporte general de mando. La Dead Zone filtra el drift del stick derecho
+-- incluso cuando no está activo el Aimbot Controller.
+local controllerSupportEnabled = false
+local controllerDeadZone = 0.20
+local controllerSensitivity = 1.00
+local controllerCameraSensitivity = 1.00
+local controllerInvertY = false
+local controllerDeadZoneAction = "XeroHub_Controller_DeadZone"
+local controllerDeadZoneBound = false
+local controllerAimbotEnabled = false
+local controllerAimDeadZone = 0.20
+local controllerAimConnection = nil
+local stopControllerAimbot, startControllerAimbot
+
+-- ==========================================
 -- AUTO-SAVE / AUTO-LOAD REAL
 -- ==========================================
 -- Esta copia es independiente del selector "Auto Load Config".
@@ -128,9 +157,10 @@ local autoSaveQueued = false
 local autoConfigLoaded = false
 
 local function autoCanFile()
+    -- Para guardar sólo necesitamos writefile.
+    -- Para cargar usamos readfile y no dependemos de isfile.
     return type(writefile) == "function"
        and type(readfile) == "function"
-       and type(isfile) == "function"
 end
 
 local function autoJsonEncode(data)
@@ -148,21 +178,152 @@ local function autoJsonDecode(raw)
 end
 
 local function buildAutoConfig()
-    return {
-        Version = 2,
-        Toggles = {
-            ["Activar Macro"] = macroActivo == true,
-            ["Macro Cuchillo (L2)"] = knifeMacroEnabled == true,
-            ["Trigger Bot"] = triggerBotEnabled == true,
-        },
-        Sliders = {
-            ["Delay Equipar Macro"] = tonumber(macroEquipDelay) or 0,
-            ["Delay Disparo Macro"] = tonumber(macroShootDelay) or 0,
-            ["Delay Equipar Cuchillo"] = tonumber(knifeEquipDelay) or 0,
-            ["Delay Lanzamiento Cuchillo"] = tonumber(knifeThrowDelay) or 0,
-        },
-        PistolSkin = tostring(selectedPistolSkin or "Floral"),
+    -- Guarda únicamente lo que realmente está activo/seleccionado.
+    -- Así, al cargarlo en una ejecución nueva, todo lo omitido queda en su estado inicial.
+    local toggles = {}
+    local sliders = {}
+    local colors = {}
+    local extras = {}
+
+    local function saveToggle(name, value)
+        if value == true then toggles[name] = true end
+    end
+
+    local function saveSlider(name, value, enabled)
+        if enabled then sliders[name] = tonumber(value) end
+    end
+
+    saveToggle("Auto Shoot", autoShootEnabled)
+    saveToggle("AutoShoot Cuchillo", autoShootCuchilloEnabled)
+    saveToggle("Silent Aim (Pistola)", silentAimPistolaEnabled)
+    saveToggle("Silent Aim (Cuchillo)", silentAimCuchilloEnabled)
+    saveToggle("Silent Aim (FOV)", silentAimFovEnabled)
+    saveToggle("Mostrar Círculo FOV", fovVisiblePreference)
+    saveToggle("ESP Lineas", espLinesEnabled)
+    saveToggle("ESP Box 2D", espSettings.Box)
+    saveToggle("ESP Barra Vida", espSettings.HealthBar)
+    saveToggle("Btn Flotante AutoShoot", asBtn and asBtn.Visible)
+    saveToggle("Btn Flotante SilentAim", saBtn and saBtn.Visible)
+    saveToggle("Btn Flotante Fantasma", ghostBtn and ghostBtn.Visible)
+    saveToggle("Aumentar Hitbox", hitboxEnabled)
+    saveToggle("Hitbox Invisible", hitboxInvisible)
+    saveToggle("ESP Jugadores", espEnabled)
+    saveToggle("Mostrar Resplandor (Glow)", espSettings.Glow)
+    saveToggle("Mostrar Nombre", espSettings.Name)
+    saveToggle("Mostrar Distancia", espSettings.Distance)
+    saveToggle("Ocultar mi Nombre (Local)", hideNameEnabled)
+    saveToggle("FPS Boost", fpsBoostEnabled)
+    saveToggle("Activar Macro", macroActivo)
+    saveToggle("Activar Trigger Bot", triggerBotEnabled)
+    saveToggle("Macro Cuchillo (L2)", knifeMacroEnabled)
+    saveToggle("Aimbot Controller Support", controllerAimbotEnabled)
+    saveToggle("Controller Support", controllerSupportEnabled)
+
+    saveSlider("Tamaño del FOV", fovRadius, silentAimFovEnabled or fovVisiblePreference)
+    saveSlider("Tamaño de Hitbox", hitboxSize, hitboxEnabled)
+    saveSlider("Delay Equipar Macro", macroEquipDelay, macroActivo)
+    saveSlider("Delay Disparo Macro", macroShootDelay, macroActivo)
+    saveSlider("Delay Equipar Cuchillo", knifeEquipDelay, knifeMacroEnabled)
+    saveSlider("Delay Lanzamiento Cuchillo", knifeThrowDelay, knifeMacroEnabled)
+    saveSlider("Dead Zone Aimbot", controllerAimDeadZone * 100, controllerAimbotEnabled)
+    saveSlider("Dead Zone del Stick", controllerDeadZone * 100, controllerSupportEnabled)
+    saveSlider("Sensibilidad del Stick", controllerSensitivity * 100, controllerSupportEnabled)
+    saveSlider("Sensibilidad de Cámara", controllerCameraSensitivity * 100, controllerSupportEnabled)
+    if controllerSupportEnabled then
+        extras["Invertir Stick"] = controllerInvertY == true
+    end
+
+    if hitboxEnabled then
+        colors["Color de Hitbox"] = {R = hitboxColor.R, G = hitboxColor.G, B = hitboxColor.B}
+    end
+    if espEnabled then
+        colors["Color del ESP"] = {R = espColor.R, G = espColor.G, B = espColor.B}
+    end
+
+    if silentAimPistolaEnabled or silentAimCuchilloEnabled then
+        extras["Partes Aimbot"] = runtime.GetTargetSelectionArray("SilentAim")
+        extras["Parte Aimbot"] = silentAimTargetPart
+    end
+    if autoShootEnabled or autoShootCuchilloEnabled then
+        extras["Partes AutoShoot"] = runtime.GetTargetSelectionArray("AutoShoot")
+        extras["Parte AutoShoot"] = autoShootTargetPart
+    end
+
+    local data = {
+        Version = 4,
+        Toggles = toggles,
+        Sliders = sliders,
+        Colors = colors,
+        Extras = extras,
     }
+
+    -- Apariencia: solo se conserva si hay algo activado.
+    if runtime.SerializeAppearanceConfig then
+        local appearance = runtime.SerializeAppearanceConfig()
+        local anyAppearance = false
+        if type(appearance.Enabled) == "table" then
+            for key, enabled in pairs(appearance.Enabled) do
+                if enabled == true then anyAppearance = true break end
+            end
+        end
+        if anyAppearance then
+            data.Apariencia = appearance
+        end
+    end
+
+    -- Sonidos: solo se conservan los que realmente están activados.
+    if runtime.SerializeSoundConfig then
+        local sounds = runtime.SerializeSoundConfig()
+        local soundData = {}
+        if sounds.Arma and (sounds.Arma.Activado == true or sounds.Arma.Silenciado == true) then
+            soundData.Arma = sounds.Arma
+        end
+        if sounds.Muerte and sounds.Muerte.Activado == true then
+            soundData.Muerte = sounds.Muerte
+        end
+        if next(soundData) ~= nil then data.Sonidos = soundData end
+    end
+
+    -- Animaciones: solo si hay paquete o alguna parte del mix seleccionada.
+    local hasAnimation = selectedBundleCompleto and selectedBundleCompleto ~= "Ninguno"
+    if not hasAnimation and type(mixParts) == "table" then
+        for _, value in pairs(mixParts) do
+            if value and value ~= "Ninguno" then hasAnimation = true break end
+        end
+    end
+    if hasAnimation then
+        data.Animaciones = {
+            Paquete = selectedBundleCompleto,
+            Mix = mixParts,
+        }
+    end
+
+    -- Skybox: solo si el usuario tiene uno realmente seleccionado.
+    if modes and modes.active then
+        data.Skybox = {
+            Activado = true,
+            Nombre = tostring(modes.active),
+            CustomInput = tostring(modes.customInput or ""),
+            Custom = type(skies) == "table" and type(skies.Custom) == "table" and table.clone(skies.Custom) or nil,
+        }
+    end
+
+    -- Sonido al saltar: se lee mediante variables globales para poder conservar
+    -- el auto-save aunque la UI de salto se declare más abajo en el archivo.
+    local jumpEnabled = getgenv and getgenv().XeroJumpSoundEnabled == true
+    local jumpLabel = runtime.JumpSoundSelectedLabel
+    if jumpEnabled then
+        data.SonidoSalto = {
+            Activado = true,
+            Seleccionado = jumpLabel,
+        }
+    end
+
+    if selectedPistolSkin and selectedPistolSkin ~= "Floral" then
+        data.PistolSkin = tostring(selectedPistolSkin)
+    end
+
+    return data
 end
 
 local function saveAutoConfig()
@@ -188,58 +349,19 @@ local function queueAutoConfigSave()
     end)
 end
 
+local function markAutoConfigChanged()
+    -- Un pequeño debounce evita escribir el archivo en cada tick del control.
+    if autoSaveReady then
+        queueAutoConfigSave()
+    end
+end
+
 local function loadAutoConfig()
     if not autoCanFile() then return false end
-
-    local exists = false
-    pcall(function()
-        exists = isfile(AUTO_CONFIG_FILE)
-    end)
-    if not exists then return false end
-
-    local okRead, raw = pcall(function()
-        return readfile(AUTO_CONFIG_FILE)
-    end)
-    if not okRead or type(raw) ~= "string" or raw == "" then
-        return false
-    end
-
+    local okRead, raw = pcall(function() return readfile(AUTO_CONFIG_FILE) end)
+    if not okRead or type(raw) ~= "string" or raw == "" then return false end
     local data = autoJsonDecode(raw)
-    if type(data) ~= "table" then return false end
-
-    if type(data.Toggles) == "table" then
-        if data.Toggles["Activar Macro"] ~= nil then
-            macroActivo = data.Toggles["Activar Macro"] == true
-        end
-        if data.Toggles["Macro Cuchillo (L2)"] ~= nil then
-            knifeMacroEnabled = data.Toggles["Macro Cuchillo (L2)"] == true
-        end
-        if data.Toggles["Trigger Bot"] ~= nil then
-            triggerBotEnabled = data.Toggles["Trigger Bot"] == true
-        end
-    end
-
-    if type(data.Sliders) == "table" then
-        if type(data.Sliders["Delay Equipar Macro"]) == "number" then
-            macroEquipDelay = data.Sliders["Delay Equipar Macro"]
-        end
-        if type(data.Sliders["Delay Disparo Macro"]) == "number" then
-            macroShootDelay = data.Sliders["Delay Disparo Macro"]
-        end
-        if type(data.Sliders["Delay Equipar Cuchillo"]) == "number" then
-            knifeEquipDelay = data.Sliders["Delay Equipar Cuchillo"]
-        end
-        if type(data.Sliders["Delay Lanzamiento Cuchillo"]) == "number" then
-            knifeThrowDelay = data.Sliders["Delay Lanzamiento Cuchillo"]
-        end
-    end
-
-    if type(data.PistolSkin) == "string" and data.PistolSkin ~= "" then
-        selectedPistolSkin = data.PistolSkin
-    end
-
-    autoConfigLoaded = true
-    return true
+    return type(data) == "table"
 end
 
 local Players = game:GetService("Players")
@@ -302,144 +424,254 @@ local player = Players.LocalPlayer
 -- SKINS DE PISTOLA - GitHub
 -- ==========================================
 local PISTOL_SKINS = {
-    ["Floral"] = "https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/textures/pistola_floral.png",
-    ["Haunted"] = "https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/textures/pistola_haunted.png",
-    ["Blanco/Negro"] = "https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/textures/pistola_blanco_negro.png"
+    ["Floral"] = {
+        url = "https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/textures/pistola_floral.png",
+        ext = "png"
+    },
+    ["Haunted"] = {
+        url = "https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/textures/1989.jpg",
+        ext = "jpg"
+    },
+    ["Blanco/Negro"] = {
+        url = "https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/textures/pistola_chiquita_en_negro_.png",
+        ext = "png"
+    }
 }
 
-local selectedPistolSkin = "Floral"
 
-local function getSkinAsset(url, name)
-    -- Delta reports getcustomasset, so the GitHub image must first be
-    -- downloaded to a local executor file and then converted to an asset.
-    if type(writefile) ~= "function" or type(isfile) ~= "function" then
-        return nil
+local function getSkinAsset(skinInfo, name)
+    if type(skinInfo) ~= "table" or type(skinInfo.url) ~= "string" then
+        return nil, "Ruta de skin inválida"
     end
 
-    local folder = "XeroHub_Skins"
+    if type(writefile) ~= "function"
+        or type(getcustomasset) ~= "function" then
+        return nil, "Falta writefile o getcustomasset"
+    end
 
+    local folder = "XeroHub_Skins_V5"
     pcall(function()
-        if type(isfolder) == "function"
-            and not isfolder(folder)
+        if type(isfolder) == "function" and not isfolder(folder)
             and type(makefolder) == "function" then
             makefolder(folder)
         end
     end)
 
+    local ext = tostring(skinInfo.ext or "png"):lower()
+    if ext ~= "png" and ext ~= "jpg" and ext ~= "jpeg" then
+        ext = "png"
+    end
+
     local safeName = tostring(name):gsub("[^%w_%-]", "_")
-    local path = folder .. "/" .. safeName .. ".png"
+    local path = folder .. "/" .. safeName .. "." .. ext
 
-    local exists = false
-    pcall(function()
-        exists = isfile(path)
-    end)
+    local function validImageData(data)
+        if type(data) ~= "string" or #data < 64 then
+            return false
+        end
 
-    if not exists then
+        local b1, b2, b3, b4 = data:byte(1, 4)
+        local isPNG = b1 == 137 and b2 == 80 and b3 == 78 and b4 == 71
+        local isJPG = b1 == 255 and b2 == 216 and b3 == 255
+        return isPNG or isJPG
+    end
+
+    local function readCached()
+        if type(readfile) ~= "function" then return nil end
         local ok, data = pcall(function()
-            return game:HttpGet(url)
+            return readfile(path)
         end)
+        if ok and validImageData(data) then
+            return data
+        end
+        return nil
+    end
 
-        if not ok or type(data) ~= "string" or #data < 16 then
-            return nil
+    -- Si hay una copia dañada, la eliminamos y descargamos de nuevo.
+    local cached = readCached()
+    if not cached then
+        if type(deletefile) == "function" then
+            pcall(function() deletefile(path) end)
+        end
+
+        local data = nil
+
+        -- request/http_request suele conservar mejor los bytes binarios que
+        -- algunas implementaciones de game:HttpGet.
+        local requestFn = nil
+        if type(request) == "function" then
+            requestFn = request
+        elseif type(http_request) == "function" then
+            requestFn = http_request
+        elseif syn and type(syn.request) == "function" then
+            requestFn = syn.request
+        end
+
+        if requestFn then
+            local ok, response = pcall(function()
+                return requestFn({
+                    Url = skinInfo.url,
+                    Method = "GET"
+                })
+            end)
+
+            if ok and type(response) == "table"
+                and (response.StatusCode == nil or tonumber(response.StatusCode) == 200)
+                and type(response.Body) == "string" then
+                data = response.Body
+            end
+        end
+
+        if not validImageData(data) then
+            local ok, fallback = pcall(function()
+                return game:HttpGet(skinInfo.url)
+            end)
+            if ok and validImageData(fallback) then
+                data = fallback
+            end
+        end
+
+        if not validImageData(data) then
+            return nil, "GitHub descargó datos inválidos para " .. tostring(name)
         end
 
         local okWrite = pcall(function()
             writefile(path, data)
         end)
-
         if not okWrite then
-            return nil
+            return nil, "No se pudo escribir " .. path
         end
     end
 
-    if type(getcustomasset) == "function" then
-        local ok, asset = pcall(function()
-            return getcustomasset(path)
-        end)
+    local ok, asset = pcall(function()
+        return getcustomasset(path)
+    end)
 
-        if ok and asset then
-            return asset
-        end
+    if ok and type(asset) == "string" and asset ~= "" then
+        return asset, path
     end
 
-    -- Fallbacks, without passing the GitHub URL directly to asset functions.
-    if type(getsynasset) == "function" then
-        local ok, asset = pcall(function()
-            return getsynasset(path)
-        end)
+    return nil, "getcustomasset no pudo convertir " .. path
+end
 
-        if ok and asset then
-            return asset
-        end
-    end
-
-    if type(getasset) == "function" then
-        local ok, asset = pcall(function()
-            return getasset(path)
-        end)
-
-        if ok and asset then
-            return asset
-        end
-    end
-
-    return nil
+local function trySetTextureProperty(obj, propertyName, asset)
+    local ok = pcall(function()
+        obj[propertyName] = asset
+    end)
+    return ok
 end
 
 local function applyPistolSkin(tool, skinName)
-    if not tool or not tool:IsA("Tool") then
-        return false, 0
+    if not tool or (not tool:IsA("Tool") and not tool:IsA("Model")) then
+        return false, 0, "No hay un modelo de pistola equipado."
     end
 
-    local url = PISTOL_SKINS[skinName]
-    if not url then
-        return false, 0
+    local skinInfo = PISTOL_SKINS[skinName]
+    if not skinInfo then
+        return false, 0, "Skin desconocida: " .. tostring(skinName)
     end
 
-    local asset = getSkinAsset(url, skinName)
+    local asset, assetInfo = getSkinAsset(skinInfo, skinName)
     if not asset then
-        return false, 0
+        return false, 0, assetInfo or "No se pudo crear el asset."
     end
 
-    local changedCount = 0
+    local changed = 0
+    local inspected = 0
+    local touched = {}
 
     for _, obj in ipairs(tool:GetDescendants()) do
+        inspected = inspected + 1
+        local ok = false
+
+        -- Texturas/decals clásicos.
         if obj:IsA("Texture") or obj:IsA("Decal") then
-            local ok = pcall(function()
-                obj.Texture = asset
-            end)
-            if ok then
-                changedCount = changedCount + 1
-            end
+            ok = trySetTextureProperty(obj, "Texture", asset)
 
+        -- MeshPart.
         elseif obj:IsA("MeshPart") then
-            local ok = pcall(function()
-                obj.TextureID = asset
-            end)
-            if ok then
-                changedCount = changedCount + 1
-            end
+            ok = trySetTextureProperty(obj, "TextureID", asset)
 
+        -- SpecialMesh.
         elseif obj:IsA("SpecialMesh") then
-            local ok = pcall(function()
-                obj.TextureId = asset
-            end)
-            if ok then
-                changedCount = changedCount + 1
-            end
+            ok = trySetTextureProperty(obj, "TextureId", asset)
+
+        -- Algunos modelos usan SurfaceAppearance.
+        elseif obj:IsA("SurfaceAppearance") then
+            ok = trySetTextureProperty(obj, "ColorMap", asset)
+        end
+
+        if ok then
+            changed = changed + 1
+            table.insert(touched, obj:GetFullName())
         end
     end
 
-    return changedCount > 0, changedCount
+    if changed == 0 then
+        return false, 0,
+            "No se encontró Texture, Decal, MeshPart, SpecialMesh o SurfaceAppearance modificable."
+    end
+
+    return true, changed,
+        "Asset: " .. tostring(assetInfo) ..
+        " | Revisados: " .. tostring(inspected)
+end
+
+local function findEquippedPistol()
+    local character = player.Character
+    if not character then return nil end
+
+    local equipped = character:FindFirstChildOfClass("Tool")
+    if not equipped then return nil end
+
+    -- Si el juego tiene una herramienta claramente identificada como pistola,
+    -- la usamos. Si no, usamos la Tool equipada.
+    local lower = equipped.Name:lower()
+    if lower:find("pistol") or lower:find("gun") or lower:find("revolver")
+        or lower:find("weapon") then
+        return equipped
+    end
+
+    return equipped
 end
 
 local function applySelectedPistolSkin()
-    local char = player.Character
-    local tool = char and char:FindFirstChildOfClass("Tool")
-    if not tool then
-        return false, 0
+    local tool = findEquippedPistol()
+    if tool then
+        local ok, count, detail = applyPistolSkin(tool, selectedPistolSkin)
+        if ok and count > 0 then
+            return ok, count, detail
+        end
     end
-    return applyPistolSkin(tool, selectedPistolSkin)
+
+    -- Algunos juegos dibujan el arma en un ViewModel dentro de CurrentCamera
+    -- y no en la Tool del personaje. Intentamos modelos cuyo nombre identifica
+    -- razonablemente un arma, sin tocar toda la cámara.
+    local camera = workspace.CurrentCamera
+    if camera then
+        local total = 0
+        local lastDetail = nil
+        for _, obj in ipairs(camera:GetChildren()) do
+            if obj:IsA("Model") then
+                local n = obj.Name:lower()
+                if n:find("pistol") or n:find("gun")
+                    or n:find("revolver") or n:find("weapon")
+                    or n:find("viewmodel") then
+                    local ok, count, detail = applyPistolSkin(obj, selectedPistolSkin)
+                    if ok and count > 0 then
+                        total = total + count
+                        lastDetail = detail
+                    end
+                end
+            end
+        end
+        if total > 0 then
+            return true, total, lastDetail
+        end
+    end
+
+    return false, 0,
+        "No se encontraron texturas modificables en la pistola/visual model."
 end
 
 
@@ -2935,6 +3167,7 @@ jumpCatalogDropdown = Tabs.Sonidos:Dropdown({
         if not soundState.ByLabel[label] then return end
 
         runtime.JumpSoundSelectedLabel = label
+        markAutoConfigChanged()
         local entry = soundState.ByLabel[label]
 
         task.spawn(function()
@@ -3515,23 +3748,14 @@ runtime.Track(Players.PlayerRemoving:Connect(function(p)
     end
 end))
 
-local macroActivo = false
-local macroEquipDelay = 0.04
-local macroShootDelay = 0.10
-
 -- Macro de cuchillo independiente de la pistola
-local knifeMacroEnabled = false
-local triggerBotEnabled = false
 local triggerBotConnection = nil
-
-local knifeEquipDelay = 0.10
-local knifeThrowDelay = 0.10
 
 Tabs.Aim:Section({Title = "Macro (Pistola)"})
 UIElements.TogMacro = Tabs.Aim:Toggle({
     Title = "Activar Macro", 
     Desc = "Dispara con un solo toque.",
-    Callback = function(s) macroActivo = s end
+    Callback = function(s) macroActivo = s == true; markAutoConfigChanged() end
 })
 
 UIElements.SliMacroEquip = Tabs.Aim:Slider({
@@ -3539,7 +3763,7 @@ UIElements.SliMacroEquip = Tabs.Aim:Slider({
     Desc = "Sube esto si la pistola no alcanza a salir. (Segundos)",
     Step = 0.01,
     Value = {Min = 0.01, Max = 0.50, Default = 0.04},
-    Callback = function(v) macroEquipDelay = v end
+    Callback = function(v) macroEquipDelay = tonumber(v) or macroEquipDelay; markAutoConfigChanged() end
 })
 
 UIElements.SliMacroShoot = Tabs.Aim:Slider({
@@ -3547,7 +3771,7 @@ UIElements.SliMacroShoot = Tabs.Aim:Slider({
     Desc = "Sube esto si el tiro no cuenta daño. (Segundos)",
     Step = 0.01,
     Value = {Min = 0.05, Max = 0.80, Default = 0.10},
-    Callback = function(v) macroShootDelay = v end
+    Callback = function(v) macroShootDelay = tonumber(v) or macroShootDelay; markAutoConfigChanged() end
 })
 
 Tabs.Aim:Section({Title = "Macro (Cuchillo)"})
@@ -3584,7 +3808,6 @@ end
 -- Dispara automáticamente en cuanto un jugador enemigo cruza
 -- exactamente el centro de la mira. Se evalúa en RenderStepped
 -- para minimizar la latencia y no depende del clic del usuario.
-local triggerBotEnabled = false
 local triggerBotConnection = nil
 local triggerLastTarget = nil
 local triggerLastFire = 0
@@ -3679,6 +3902,7 @@ UIElements.TogTriggerBot = Tabs.Aim:Toggle({
     Desc = "Dispara solo con el centro exacto de la mira sobre un enemigo.",
     Callback = function(v)
         setTriggerBot(v)
+        markAutoConfigChanged()
     end
 })
 
@@ -3688,6 +3912,7 @@ UIElements.TogKnifeMacro = Tabs.Aim:Toggle({
     Callback = function(v)
         knifeMacroEnabled = v == true
         setKnifeL2Block(knifeMacroEnabled)
+        markAutoConfigChanged()
     end
 })
 
@@ -3696,7 +3921,7 @@ UIElements.SliKnifeEquip = Tabs.Aim:Slider({
     Desc = "Tiempo antes de lanzar. (Segundos)",
     Step = 0.01,
     Value = {Min = 0.01, Max = 0.50, Default = 0.10},
-    Callback = function(v) knifeEquipDelay = v end
+    Callback = function(v) knifeEquipDelay = tonumber(v) or knifeEquipDelay; markAutoConfigChanged() end
 })
 
 UIElements.SliKnifeThrow = Tabs.Aim:Slider({
@@ -3704,7 +3929,7 @@ UIElements.SliKnifeThrow = Tabs.Aim:Slider({
     Desc = "Tiempo después del lanzamiento. (Segundos)",
     Step = 0.01,
     Value = {Min = 0.01, Max = 0.50, Default = 0.10},
-    Callback = function(v) knifeThrowDelay = v end
+    Callback = function(v) knifeThrowDelay = tonumber(v) or knifeThrowDelay; markAutoConfigChanged() end
 })
 
 -- L2 se usa como un solo toque. La macro no exige mantener el botón.
@@ -4108,7 +4333,6 @@ local silentAimPistolaEnabled = false
 local silentAimCuchilloEnabled = false 
 local silentAimTargetPart = "Cabeza"
 local silentAimFovEnabled = false
-
 -- ==========================================
 -- SELECTOR CORPORAL VISUAL + APARIENCIA
 -- Todo vive en runtime para no aumentar la presión de locales del chunk principal.
@@ -12422,6 +12646,261 @@ UIElements.TogSilentAimCuchillo = Tabs.Aim:Toggle({
 
 
 -- ==========================================
+-- CONTROL / SOPORTE DE MANDO
+-- ==========================================
+Tabs.Aim:Section({Title = "🎮 Control"})
+
+local function setControllerDeadZoneFilter(enabled)
+    if enabled and not controllerDeadZoneBound then
+        local ok = pcall(function()
+            ContextActionService:BindActionAtPriority(
+                controllerDeadZoneAction,
+                function(_, inputState, inputObject)
+                    if not controllerSupportEnabled then
+                        return Enum.ContextActionResult.Pass
+                    end
+                    if inputObject and inputObject.KeyCode == Enum.KeyCode.Thumbstick2 then
+                        local p = inputObject.Position
+                        local magnitude = Vector2.new(p.X, p.Y).Magnitude
+                        -- Sólo consume el pequeño movimiento que corresponde al drift.
+                        if magnitude <= controllerDeadZone then
+                            return Enum.ContextActionResult.Sink
+                        end
+                    end
+                    return Enum.ContextActionResult.Pass
+                end,
+                false,
+                4000,
+                Enum.KeyCode.Thumbstick2
+            )
+        end)
+        controllerDeadZoneBound = ok
+    elseif not enabled and controllerDeadZoneBound then
+        pcall(function() ContextActionService:UnbindAction(controllerDeadZoneAction) end)
+        controllerDeadZoneBound = false
+    end
+end
+
+UIElements.TogControllerSupport = Tabs.Aim:Toggle({
+    Title = "Controller Support",
+    Desc = "Activa el filtro del stick derecho y el soporte de mando.",
+    Value = false,
+    Callback = function(v)
+        controllerSupportEnabled = v == true
+        if controllerSupportEnabled then applyControllerCameraSensitivity() end
+        setControllerDeadZoneFilter(controllerSupportEnabled)
+        if not controllerSupportEnabled and controllerAimbotEnabled then
+            controllerAimbotEnabled = false
+            pcall(function() UIElements.TogControllerAimbot:Set(false) end)
+            stopControllerAimbot()
+        end
+        markAutoConfigChanged()
+    end
+})
+
+UIElements.SliControllerDeadZone = Tabs.Aim:Slider({
+    Title = "Dead Zone del Stick",
+    Desc = "0–50%. Ignora movimientos pequeños causados por drift.",
+    Step = 1,
+    Value = {Min = 0, Max = 50, Default = 20},
+    Callback = function(v)
+        controllerDeadZone = math.clamp((tonumber(v) or 20) / 100, 0, 0.50)
+        if controllerSupportEnabled then setControllerDeadZoneFilter(true) end
+        markAutoConfigChanged()
+    end
+})
+
+UIElements.SliControllerSensitivity = Tabs.Aim:Slider({
+    Title = "Sensibilidad del Stick",
+    Desc = "Ajusta cuánto influye el stick en el Aimbot Controller.",
+    Step = 1,
+    Value = {Min = 25, Max = 200, Default = 100},
+    Callback = function(v)
+        controllerSensitivity = math.clamp((tonumber(v) or 100) / 100, 0.25, 2.00)
+        markAutoConfigChanged()
+    end
+})
+
+local function applyControllerCameraSensitivity()
+    local ugs = UserSettings and UserSettings()
+    local gameSettings = ugs and ugs:GetService("UserGameSettings")
+    if gameSettings then
+        pcall(function()
+            gameSettings.GamepadCameraSensitivity = controllerCameraSensitivity
+        end)
+    end
+end
+
+UIElements.SliControllerCameraSensitivity = Tabs.Aim:Slider({
+    Title = "Sensibilidad de Cámara",
+    Desc = "Cámara rápida sin aumentar el drift del stick.",
+    Step = 1,
+    Value = {Min = 50, Max = 150, Default = 100},
+    Callback = function(v)
+        controllerCameraSensitivity = math.clamp((tonumber(v) or 100) / 100, 0.50, 1.50)
+        applyControllerCameraSensitivity()
+        markAutoConfigChanged()
+    end
+})
+
+UIElements.TogControllerInvert = Tabs.Aim:Toggle({
+    Title = "Invertir Stick",
+    Desc = "Invierte el eje vertical del Aimbot Controller.",
+    Value = false,
+    Callback = function(v)
+        controllerInvertY = v == true
+        markAutoConfigChanged()
+    end
+})
+
+-- ==========================================
+-- AIMBOT CONTROLLER SUPPORT
+-- ==========================================
+Tabs.Aim:Section({Title = "🎯 Aimbot Controller"})
+
+local function getControllerRightStickMagnitude()
+    local ok, states = pcall(function()
+        return UserInputService:GetGamepadState(Enum.UserInputType.Gamepad1)
+    end)
+    if not ok or type(states) ~= "table" then
+        return 0
+    end
+
+    for i = 1, #states do
+        local state = states[i]
+        if state.KeyCode == Enum.KeyCode.Thumbstick2 then
+            local p = state.Position
+            return Vector2.new(p.X, p.Y).Magnitude
+        end
+    end
+
+    return 0
+end
+
+local function findControllerAimTarget()
+    local camera = workspace.CurrentCamera
+    if not camera then return nil end
+
+    local viewport = camera.ViewportSize
+    local center = Vector2.new(viewport.X * 0.5, viewport.Y * 0.5)
+    local bestPart = nil
+    local bestDistSq = math.huge
+
+    local char = player.Character
+    local myCore = char and getCharCore(char)
+    local myHrp = myCore and myCore.HRP
+    if not myHrp then return nil end
+
+    for i = 1, #listaJugadores do
+        local p = listaJugadores[i]
+        if p ~= player and isEnemy(p) then
+            local enemyChar = p.Character
+            local enemyCore = enemyChar and getCharCore(enemyChar)
+            local hum = enemyCore and enemyCore.Humanoid
+
+            if enemyChar and hum and hum.Health > 0 then
+                runtime.CollectTargetParts(
+                    enemyChar,
+                    "SilentAim",
+                    runtime._ControllerAimParts or {},
+                    runtime._ControllerAimSeen or {}
+                )
+
+                local parts = runtime._ControllerAimParts or {}
+                for j = 1, #parts do
+                    local part = parts[j]
+                    if part and part.Parent then
+                        local screenPos, onScreen = camera:WorldToViewportPoint(part.Position)
+                        if onScreen and screenPos.Z > 0 then
+                            local dx = screenPos.X - center.X
+                            local dy = screenPos.Y - center.Y
+                            local distSq = dx * dx + dy * dy
+
+                            if distSq < bestDistSq then
+                                bestDistSq = distSq
+                                bestPart = part
+                            end
+                        end
+                    end
+                end
+
+                table.clear(parts)
+                table.clear(runtime._ControllerAimSeen or {})
+            end
+        end
+    end
+
+    return bestPart
+end
+
+function stopControllerAimbot()
+    if controllerAimConnection then
+        controllerAimConnection:Disconnect()
+        controllerAimConnection = nil
+    end
+end
+
+function startControllerAimbot()
+    stopControllerAimbot()
+
+    controllerAimConnection = runtime.Track(RunService.RenderStepped:Connect(function()
+        if not controllerAimbotEnabled then return end
+
+        local camera = workspace.CurrentCamera
+        if not camera then return end
+
+        -- La Dead Zone evita que el drift del stick derecho active el soporte.
+        if getControllerRightStickMagnitude() <= controllerAimDeadZone then
+            return
+        end
+
+        local target = findControllerAimTarget()
+        if not target or not target.Parent then return end
+
+        local camPos = camera.CFrame.Position
+        local desired = CFrame.lookAt(camPos, target.Position)
+        local lerpAmount = math.clamp(0.20 * controllerSensitivity, 0.05, 0.90)
+        if controllerInvertY then
+            local current = camera.CFrame
+            local targetCF = CFrame.lookAt(camPos, target.Position)
+            local _, pitch, yaw = targetCF:ToOrientation()
+            desired = CFrame.new(camPos) * CFrame.Angles(-pitch, yaw, 0)
+        end
+        camera.CFrame = camera.CFrame:Lerp(desired, lerpAmount)
+    end))
+end
+
+UIElements.TogControllerAimbot = Tabs.Aim:Toggle({
+    Title = "Aimbot Controller Support",
+    Desc = "Mueve la cámara hacia el enemigo usando el stick derecho.",
+    Value = false,
+    Callback = function(Value)
+        controllerAimbotEnabled = (Value == true) and controllerSupportEnabled
+        if controllerAimbotEnabled then
+            startControllerAimbot()
+        else
+            stopControllerAimbot()
+        end
+        markAutoConfigChanged()
+    end,
+})
+
+UIElements.SliControllerAimDeadZone = Tabs.Aim:Slider({
+    Title = "Dead Zone Aimbot",
+    Desc = "Ignora movimientos pequeños del stick derecho.",
+    Step = 1,
+    Value = {
+        Min = 0,
+        Max = 50,
+        Default = 20
+    },
+    Callback = function(Value)
+        controllerAimDeadZone = (tonumber(Value) or 20) / 100
+        markAutoConfigChanged()
+    end,
+})
+
+-- ==========================================
 -- KEYBIND PARA SILENT AIM (SOLO PC)
 -- ==========================================
 silentAimKey = nil
@@ -16550,14 +17029,8 @@ do
         skies.Custom[index] = "92427017914292"
     end
     modes.customInput = "92427017914292"
-
-    local okDefault, defaultErr = pcall(function()
-        modes.select("Cielo personalizado")
-    end)
-
-    if not okDefault then
-        warn("[XeroHub] No se pudo aplicar el cielo inicial: " .. tostring(defaultErr))
-    end
+    -- No se activa ningún Skybox por defecto. Solo se restaurará uno si
+    -- el usuario lo había seleccionado previamente en el auto-save.
 end
 
 end -- graphics scope
@@ -17666,7 +18139,8 @@ Tabs.Config:Button({ Title = "Guardar Configuración", Callback = function()
             ["Delay Equipar Macro"] = macroEquipDelay,
             ["Delay Disparo Macro"] = macroShootDelay,
             ["Delay Equipar Cuchillo"] = knifeEquipDelay,
-            ["Delay Lanzamiento Cuchillo"] = knifeThrowDelay
+            ["Delay Lanzamiento Cuchillo"] = knifeThrowDelay,
+            ["Dead Zone Aimbot"] = controllerAimDeadZone * 100
         },
         Colors = {
             ["Color de Hitbox"] = {R = hitboxColor.R, G = hitboxColor.G, B = hitboxColor.B}, 
@@ -17799,6 +18273,18 @@ local function loadSelectedConfig()
                     triggerBotEnabled = decoded.Toggles["Trigger Bot"] == true
                     secureLoadToggle(UIElements.TogTriggerBot, triggerBotEnabled)
                 end
+                if decoded.Toggles["Controller Support"] ~= nil then
+                    controllerSupportEnabled = decoded.Toggles["Controller Support"] == true
+                    secureLoadToggle(UIElements.TogControllerSupport, controllerSupportEnabled)
+                end
+                if decoded.Toggles["Aimbot Controller Support"] ~= nil then
+                    controllerAimbotEnabled = (decoded.Toggles["Aimbot Controller Support"] == true) and controllerSupportEnabled
+                    secureLoadToggle(UIElements.TogControllerAimbot, controllerAimbotEnabled)
+                end
+                if decoded.Extras and decoded.Extras["Invertir Stick"] ~= nil then
+                    controllerInvertY = decoded.Extras["Invertir Stick"] == true
+                    secureLoadToggle(UIElements.TogControllerInvert, controllerInvertY)
+                end
                 end
 
                 -- FIX AUTOLOAD: algunos builds de WindUI terminan de pintar los
@@ -17806,6 +18292,9 @@ local function loadSelectedConfig()
                 -- para que visual y variable queden sincronizados.
                 local savedMacroState = decoded.Toggles["Activar Macro"]
                 local savedKnifeMacroState = decoded.Toggles["Macro Cuchillo (L2)"]
+                local savedControllerSupportState = decoded.Toggles["Controller Support"]
+                local savedControllerAimbotState = decoded.Toggles["Aimbot Controller Support"]
+                local savedControllerInvertState = decoded.Extras and decoded.Extras["Invertir Stick"]
                 task.defer(function()
                     task.wait(0.15)
                     if savedMacroState ~= nil then
@@ -17815,6 +18304,19 @@ local function loadSelectedConfig()
                     if savedKnifeMacroState ~= nil then
                         knifeMacroEnabled = savedKnifeMacroState == true
                         pcall(function() UIElements.TogKnifeMacro:Set(knifeMacroEnabled) end)
+                    end
+                    if savedControllerSupportState ~= nil then
+                        controllerSupportEnabled = savedControllerSupportState == true
+                        pcall(function() UIElements.TogControllerSupport:Set(controllerSupportEnabled) end)
+                        setControllerDeadZoneFilter(controllerSupportEnabled)
+                    end
+                    if savedControllerInvertState ~= nil then
+                        controllerInvertY = savedControllerInvertState == true
+                        pcall(function() UIElements.TogControllerInvert:Set(controllerInvertY) end)
+                    end
+                    if savedControllerAimbotState ~= nil and controllerSupportEnabled then
+                        controllerAimbotEnabled = savedControllerAimbotState == true
+                        pcall(function() UIElements.TogControllerAimbot:Set(controllerAimbotEnabled) end)
                     end
                 end)
             end
@@ -17828,6 +18330,23 @@ local function loadSelectedConfig()
                 if decoded.Sliders["Delay Disparo Macro"] ~= nil then macroShootDelay = decoded.Sliders["Delay Disparo Macro"]; secureLoadToggle(UIElements.SliMacroShoot, macroShootDelay) end
                 if decoded.Sliders["Delay Equipar Cuchillo"] ~= nil then knifeEquipDelay = decoded.Sliders["Delay Equipar Cuchillo"]; secureLoadToggle(UIElements.SliKnifeEquip, knifeEquipDelay) end
                 if decoded.Sliders["Delay Lanzamiento Cuchillo"] ~= nil then knifeThrowDelay = decoded.Sliders["Delay Lanzamiento Cuchillo"]; secureLoadToggle(UIElements.SliKnifeThrow, knifeThrowDelay) end
+                if decoded.Sliders["Dead Zone Aimbot"] ~= nil then
+                    controllerAimDeadZone = (tonumber(decoded.Sliders["Dead Zone Aimbot"]) or 20) / 100
+                    secureLoadToggle(UIElements.SliControllerAimDeadZone, decoded.Sliders["Dead Zone Aimbot"])
+                end
+                if decoded.Sliders["Dead Zone del Stick"] ~= nil then
+                    controllerDeadZone = math.clamp((tonumber(decoded.Sliders["Dead Zone del Stick"]) or 20) / 100, 0, 0.50)
+                    secureLoadToggle(UIElements.SliControllerDeadZone, decoded.Sliders["Dead Zone del Stick"])
+                end
+                if decoded.Sliders["Sensibilidad del Stick"] ~= nil then
+                    controllerSensitivity = math.clamp((tonumber(decoded.Sliders["Sensibilidad del Stick"]) or 100) / 100, 0.25, 2.00)
+                    secureLoadToggle(UIElements.SliControllerSensitivity, decoded.Sliders["Sensibilidad del Stick"])
+                end
+                if decoded.Sliders["Sensibilidad de Cámara"] ~= nil then
+                    controllerCameraSensitivity = math.clamp((tonumber(decoded.Sliders["Sensibilidad de Cámara"]) or 100) / 100, 0.50, 1.50)
+                    secureLoadToggle(UIElements.SliControllerCameraSensitivity, decoded.Sliders["Sensibilidad de Cámara"])
+                    applyControllerCameraSensitivity()
+                end
             end
         
             
@@ -17879,8 +18398,36 @@ local function loadSelectedConfig()
                 runtime.LoadAppearanceConfig(decoded.Apariencia)
             end
 
+            -- SKYBOX AUTO-SAVE: solo se aplica si el usuario tenía uno activo.
+            if decoded.Skybox and decoded.Skybox.Activado == true and modes then
+                pcall(function()
+                    if decoded.Skybox.Nombre == "Cielo personalizado" then
+                        local custom = decoded.Skybox.Custom
+                        if type(custom) == "table" and #custom >= 6 then
+                            for index = 1, 6 do
+                                skies.Custom[index] = tostring(custom[index])
+                            end
+                        end
+                        modes.customInput = tostring(decoded.Skybox.CustomInput or skies.Custom[1] or "")
+                        modes.select("Cielo personalizado")
+                    elseif decoded.Skybox.Nombre and decoded.Skybox.Nombre ~= "Ninguno" then
+                        modes.select(tostring(decoded.Skybox.Nombre))
+                    end
+                end)
+            end
+
             if decoded.Sonidos and runtime.LoadSoundConfig then
                 runtime.LoadSoundConfig(decoded.Sonidos)
+            end
+
+            if decoded.SonidoSalto and decoded.SonidoSalto.Activado == true then
+                getgenv().XeroJumpSoundEnabled = true
+                jumpSoundEnabled = true
+                local jumpLabel = decoded.SonidoSalto.Seleccionado
+                if jumpLabel and runtime.JumpSoundDropdown then
+                    runtime.JumpSoundSelectedLabel = jumpLabel
+                    pcall(function() runtime.JumpSoundDropdown:Select(jumpLabel) end)
+                end
             end
 
             -- CARGAR ANIMACIONES NUEVAS
@@ -18036,6 +18583,8 @@ Tabs.Config:Toggle({
     Value = false,
     Callback = function(Value)
         jumpSoundEnabled = Value == true
+        getgenv().XeroJumpSoundEnabled = jumpSoundEnabled
+        markAutoConfigChanged()
     end
 })
 
@@ -18116,6 +18665,7 @@ pcall(function()
         Value = selectedPistolSkin,
         Callback = function(value)
             selectedPistolSkin = value
+            markAutoConfigChanged()
             task.defer(function()
                 applySelectedPistolSkin()
             end)
@@ -18126,7 +18676,14 @@ pcall(function()
         Title = "Aplicar Skin",
         Desc = "Aplica la textura seleccionada a la pistola equipada.",
         Callback = function()
-            applySelectedPistolSkin()
+            local ok, count, detail = applySelectedPistolSkin()
+            pcall(function()
+                if ok then
+                    showBottomMessage("Skin aplicada: " .. tostring(count) .. " objeto(s).")
+                else
+                    showBottomMessage("Skin no aplicada: " .. tostring(detail))
+                end
+            end)
         end
     })
 end)
@@ -18136,56 +18693,109 @@ end)
 -- ==========================================
 -- AUTO-SAVE / AUTO-LOAD FINAL
 -- ==========================================
--- Importante: primero se construye toda la UI, luego se restaura.
--- Así WindUI no vuelve a poner los valores por defecto después del load.
+-- Este sistema es INDEPENDIENTE de "Auto Load Config".
+-- Se restaura siempre al entrar, sin que el usuario tenga que activar AutoLoad.
 task.spawn(function()
-    task.wait(1.0)
+    task.wait(2.0)
 
     local loaded = false
     pcall(function()
-        loaded = loadAutoConfig()
+        if autoCanFile() then
+            local okRead = pcall(function() return readfile(AUTO_CONFIG_FILE) end)
+            if okRead then
+                -- Reutilizamos el mismo cargador completo de configuraciones para
+                -- que sonidos, animaciones, apariencia, skybox y toggles se apliquen
+                -- exactamente igual que una configuración normal.
+                local oldSelected = selectedConfig
+                local oldPath = configPaths["__XERO_AUTO__"]
+                configPaths["__XERO_AUTO__"] = AUTO_CONFIG_FILE
+                selectedConfig = "__XERO_AUTO__"
+
+                -- Los controles no guardados deben arrancar apagados.
+                local resetToggles = {
+                    UIElements.TogAutoShoot,
+                    UIElements.TogAutoShootCuchillo,
+                    UIElements.TogSilentAimPistola,
+                    UIElements.TogSilentAimCuchillo,
+                    UIElements.TogSilentAimFOV,
+                    UIElements.TogShowFOV,
+                    UIElements.TogEspLines,
+                    UIElements.TogEspBox,
+                    UIElements.TogEspHealth,
+                    UIElements.ToggleAsBtn,
+                    UIElements.ToggleSaBtn,
+                    UIElements.ToggleGhost,
+                    UIElements.TogHitbox,
+                    UIElements.TogHbInv,
+                    UIElements.TogEsp,
+                    UIElements.TogEspGl,
+                    UIElements.TogEspNm,
+                    UIElements.TogEspDs,
+                    UIElements.TogHideName,
+                    UIElements.ToggleFPS,
+                    UIElements.TogMacro,
+                    UIElements.TogTriggerBot,
+                    UIElements.TogKnifeMacro,
+                    UIElements.TogControllerAimbot,
+                    UIElements.TogControllerSupport,
+                    UIElements.TogControllerInvert,
+                }
+                for _, control in ipairs(resetToggles) do
+                    if control then pcall(function() control:Set(false) end) end
+                end
+
+                -- Estados internos que algunos controles no exponen directamente.
+                macroActivo = false
+                knifeMacroEnabled = false
+                triggerBotEnabled = false
+                controllerAimbotEnabled = false
+                controllerSupportEnabled = false
+                controllerDeadZone = 0.20
+                controllerSensitivity = 1.00
+                controllerInvertY = false
+                setControllerDeadZoneFilter(false)
+                autoShootEnabled = false
+                autoShootCuchilloEnabled = false
+                silentAimPistolaEnabled = false
+                silentAimCuchilloEnabled = false
+                silentAimFovEnabled = false
+                fovVisiblePreference = false
+                espLinesEnabled = false
+                espSettings.Box = false
+                espSettings.HealthBar = false
+                hitboxEnabled = false
+                hitboxInvisible = false
+                espEnabled = false
+                espSettings.Glow = false
+                espSettings.Name = false
+                espSettings.Distance = false
+                hideNameEnabled = false
+                fpsBoostEnabled = false
+
+                pcall(function()
+                    loadSelectedConfig()
+                    if controllerSupportEnabled then
+                        setControllerDeadZoneFilter(true)
+                    else
+                        setControllerDeadZoneFilter(false)
+                    end
+                    if controllerAimbotEnabled and controllerSupportEnabled then
+                        startControllerAimbot()
+                    else
+                        stopControllerAimbot()
+                    end
+                    loaded = true
+                end)
+
+                selectedConfig = oldSelected
+                if oldPath then configPaths["__XERO_AUTO__"] = oldPath else configPaths["__XERO_AUTO__"] = nil end
+            end
+        end
     end)
 
-    -- Aplicar el estado restaurado al UI, sin depender de callbacks.
-    pcall(function()
-        if UIElements.TogMacro then
-            UIElements.TogMacro:Set(macroActivo)
-        end
-        if UIElements.TogKnifeMacro then
-            UIElements.TogKnifeMacro:Set(knifeMacroEnabled)
-        end
-        if UIElements.TogTriggerBot then
-            UIElements.TogTriggerBot:Set(triggerBotEnabled)
-        end
-        if UIElements.SliMacroEquip then
-            UIElements.SliMacroEquip:Set(macroEquipDelay)
-        end
-        if UIElements.SliMacroShoot then
-            UIElements.SliMacroShoot:Set(macroShootDelay)
-        end
-        if UIElements.SliKnifeEquip then
-            UIElements.SliKnifeEquip:Set(knifeEquipDelay)
-        end
-        if UIElements.SliKnifeThrow then
-            UIElements.SliKnifeThrow:Set(knifeThrowDelay)
-        end
-        if UIElements.PistolSkin then
-            UIElements.PistolSkin:Set(selectedPistolSkin)
-        end
-    end)
-
-    -- Reactivar lógica que depende del estado del toggle.
-    pcall(function()
-        setKnifeL2Block(knifeMacroEnabled)
-    end)
-    pcall(function()
-        setTriggerBot(triggerBotEnabled)
-    end)
-
-    -- Marca el sistema como listo SOLO después de cargar.
+    autoConfigLoaded = loaded
     autoSaveReady = true
 
-    -- Si no había archivo, crea uno inicial con los valores actuales.
     if not loaded then
         saveAutoConfig()
     end
@@ -18195,21 +18805,11 @@ end)
 task.spawn(function()
     local lastState = nil
 
-    while task.wait(0.50) do
+    while task.wait(1.0) do
         if autoSaveReady then
-            local state = table.concat({
-                tostring(macroActivo),
-                tostring(knifeMacroEnabled),
-                tostring(triggerBotEnabled),
-                tostring(macroEquipDelay),
-                tostring(macroShootDelay),
-                tostring(knifeEquipDelay),
-                tostring(knifeThrowDelay),
-                tostring(selectedPistolSkin),
-            }, "|")
-
-            if state ~= lastState then
-                lastState = state
+            local snapshot = autoJsonEncode(buildAutoConfig()) or ""
+            if snapshot ~= lastState then
+                lastState = snapshot
                 queueAutoConfigSave()
             end
         end
