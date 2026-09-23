@@ -122,12 +122,12 @@ local DUELS_BIMO_PLACE_ID = 116817810725116
 -- Si se declaran después, Lua las trata como locales distintas y el auto-save
 -- termina leyendo/escribiendo valores incorrectos.
 local macroActivo = false
-local macroEquipDelay = 0.04
-local macroShootDelay = 0.10
+local macroEquipDelay = 0.03
+local macroShootDelay = 0.06
 local knifeMacroEnabled = false
 local triggerBotEnabled = false
-local knifeEquipDelay = 0.10
-local knifeThrowDelay = 0.10
+local knifeEquipDelay = 0.05
+local knifeThrowDelay = 0.07
 local selectedPistolSkin = "Floral"
 
 -- Soporte general de mando. La Dead Zone filtra el drift del stick derecho
@@ -3616,7 +3616,7 @@ UIElements.SliMacroEquip = Tabs.Aim:Slider({
     Title = "Delay al Equipar",
     Desc = "Sube esto si la pistola no alcanza a salir. (Segundos)",
     Step = 0.01,
-    Value = {Min = 0.01, Max = 0.50, Default = 0.04},
+    Value = {Min = 0.01, Max = 0.50, Default = 0.03},
     Callback = function(v) macroEquipDelay = tonumber(v) or macroEquipDelay; markAutoConfigChanged() end
 })
 
@@ -3624,7 +3624,7 @@ UIElements.SliMacroShoot = Tabs.Aim:Slider({
     Title = "Delay de Disparo",
     Desc = "Sube esto si el tiro no cuenta daño. (Segundos)",
     Step = 0.01,
-    Value = {Min = 0.05, Max = 0.80, Default = 0.10},
+    Value = {Min = 0.03, Max = 0.80, Default = 0.06},
     Callback = function(v) macroShootDelay = tonumber(v) or macroShootDelay; markAutoConfigChanged() end
 })
 
@@ -3835,10 +3835,8 @@ runtime.Track(UserInputService.InputBegan:Connect(function(input, gameProcessed)
             task.wait()
         until knife.Parent == character or os.clock() >= equipDeadline
 
-        -- Un pequeño margen después de que el Tool entra al personaje ayuda a que
-        -- KnifeClient/LocalScripts terminen de inicializarse antes del lanzamiento.
-        task.wait(math.max(0, knifeEquipDelay))
-
+        -- No añadimos otro delay completo aquí: el bucle anterior ya esperó
+        -- a que el Tool estuviera equipado. Así evitamos una doble espera.
         -- Usamos la activación normal de la Tool. Esto deja que el propio
         -- KnifeClient ejecute la secuencia correcta de lanzamiento y sus argumentos,
         -- en vez de llamar a Throw:FireServer() sin los datos que el juego pueda exigir.
