@@ -145,12 +145,12 @@ local controllerAimConnection = nil
 local stopControllerAimbot, startControllerAimbot
 
 -- ==========================================
--- AUTO-SAVE INDEPENDIENTE
+-- AUTO-SAVE / AUTO-LOAD REAL
 -- ==========================================
--- Este sistema es independiente de Auto Load Config y de Guardar Configuración.
--- Usa un archivo exclusivo de AutoSave y se restaura automáticamente
+-- Esta copia es independiente del selector "Auto Load Config".
+-- Guarda una configuración completa en un archivo fijo y la restaura
 -- DESPUÉS de que todos los controles/UI hayan sido creados.
-local AUTO_CONFIG_FILE = "XeroHub_AutoSave_State.json"
+local AUTO_CONFIG_FILE = "XeroHub_AutoConfig.json"
 local AUTO_SAVE_DELAY = 0.60
 local autoSaveReady = false
 local autoSaveQueued = false
@@ -177,7 +177,154 @@ local function autoJsonDecode(raw)
     return ok and result or nil
 end
 
-local buildAutoConfig
+local function buildAutoConfig()
+    -- Guarda únicamente lo que realmente está activo/seleccionado.
+    -- Así, al cargarlo en una ejecución nueva, todo lo omitido queda en su estado inicial.
+    local toggles = {}
+    local sliders = {}
+    local colors = {}
+    local extras = {}
+
+    local function saveToggle(name, value)
+        if value == true then toggles[name] = true end
+    end
+
+    local function saveSlider(name, value, enabled)
+        if enabled then sliders[name] = tonumber(value) end
+    end
+
+    saveToggle("Auto Shoot", autoShootEnabled)
+    saveToggle("AutoShoot Cuchillo", autoShootCuchilloEnabled)
+    saveToggle("Silent Aim (Pistola)", silentAimPistolaEnabled)
+    saveToggle("Silent Aim (Cuchillo)", silentAimCuchilloEnabled)
+    saveToggle("Silent Aim (FOV)", silentAimFovEnabled)
+    saveToggle("Mostrar Círculo FOV", fovVisiblePreference)
+    saveToggle("ESP Lineas", espLinesEnabled)
+    saveToggle("ESP Box 2D", espSettings.Box)
+    saveToggle("ESP Barra Vida", espSettings.HealthBar)
+    saveToggle("Btn Flotante AutoShoot", asBtn and asBtn.Visible)
+    saveToggle("Btn Flotante SilentAim", saBtn and saBtn.Visible)
+    saveToggle("Btn Flotante Fantasma", ghostBtn and ghostBtn.Visible)
+    saveToggle("Aumentar Hitbox", hitboxEnabled)
+    saveToggle("Hitbox Invisible", hitboxInvisible)
+    saveToggle("ESP Jugadores", espEnabled)
+    saveToggle("Mostrar Resplandor (Glow)", espSettings.Glow)
+    saveToggle("Mostrar Nombre", espSettings.Name)
+    saveToggle("Mostrar Distancia", espSettings.Distance)
+    saveToggle("Ocultar mi Nombre (Local)", hideNameEnabled)
+    saveToggle("FPS Boost", fpsBoostEnabled)
+    saveToggle("Activar Macro", macroActivo)
+    saveToggle("Activar Trigger Bot", triggerBotEnabled)
+    saveToggle("Macro Cuchillo (L2)", knifeMacroEnabled)
+    saveToggle("Aimbot Controller Support", controllerAimbotEnabled)
+    saveToggle("Controller Support", controllerSupportEnabled)
+
+    saveSlider("Tamaño del FOV", fovRadius, silentAimFovEnabled or fovVisiblePreference)
+    saveSlider("Tamaño de Hitbox", hitboxSize, hitboxEnabled)
+    saveSlider("Delay Equipar Macro", macroEquipDelay, macroActivo)
+    saveSlider("Delay Disparo Macro", macroShootDelay, macroActivo)
+    saveSlider("Delay Equipar Cuchillo", knifeEquipDelay, knifeMacroEnabled)
+    saveSlider("Delay Lanzamiento Cuchillo", knifeThrowDelay, knifeMacroEnabled)
+    saveSlider("Dead Zone Aimbot", controllerAimDeadZone * 100, controllerAimbotEnabled)
+    saveSlider("Dead Zone del Stick", controllerDeadZone * 100, controllerSupportEnabled)
+    saveSlider("Sensibilidad del Stick", controllerSensitivity * 100, controllerSupportEnabled)
+    saveSlider("Sensibilidad de Cámara", controllerCameraSensitivity * 100, controllerSupportEnabled)
+    if controllerSupportEnabled then
+        extras["Invertir Stick"] = controllerInvertY == true
+    end
+
+    if hitboxEnabled then
+        colors["Color de Hitbox"] = {R = hitboxColor.R, G = hitboxColor.G, B = hitboxColor.B}
+    end
+    if espEnabled then
+        colors["Color del ESP"] = {R = espColor.R, G = espColor.G, B = espColor.B}
+    end
+
+    if silentAimPistolaEnabled or silentAimCuchilloEnabled then
+        extras["Partes Aimbot"] = runtime.GetTargetSelectionArray("SilentAim")
+        extras["Parte Aimbot"] = silentAimTargetPart
+    end
+    if autoShootEnabled or autoShootCuchilloEnabled then
+        extras["Partes AutoShoot"] = runtime.GetTargetSelectionArray("AutoShoot")
+        extras["Parte AutoShoot"] = autoShootTargetPart
+    end
+
+    local data = {
+        Version = 4,
+        Toggles = toggles,
+        Sliders = sliders,
+        Colors = colors,
+        Extras = extras,
+    }
+
+    -- Apariencia: solo se conserva si hay algo activado.
+    if runtime.SerializeAppearanceConfig then
+        local appearance = runtime.SerializeAppearanceConfig()
+        local anyAppearance = false
+        if type(appearance.Enabled) == "table" then
+            for key, enabled in pairs(appearance.Enabled) do
+                if enabled == true then anyAppearance = true break end
+            end
+        end
+        if anyAppearance then
+            data.Apariencia = appearance
+        end
+    end
+
+    -- Sonidos: solo se conservan los que realmente están activados.
+    if runtime.SerializeSoundConfig then
+        local sounds = runtime.SerializeSoundConfig()
+        local soundData = {}
+        if sounds.Arma and (sounds.Arma.Activado == true or sounds.Arma.Silenciado == true) then
+            soundData.Arma = sounds.Arma
+        end
+        if sounds.Muerte and sounds.Muerte.Activado == true then
+            soundData.Muerte = sounds.Muerte
+        end
+        if next(soundData) ~= nil then data.Sonidos = soundData end
+    end
+
+    -- Animaciones: solo si hay paquete o alguna parte del mix seleccionada.
+    local hasAnimation = selectedBundleCompleto and selectedBundleCompleto ~= "Ninguno"
+    if not hasAnimation and type(mixParts) == "table" then
+        for _, value in pairs(mixParts) do
+            if value and value ~= "Ninguno" then hasAnimation = true break end
+        end
+    end
+    if hasAnimation then
+        data.Animaciones = {
+            Paquete = selectedBundleCompleto,
+            Mix = mixParts,
+        }
+    end
+
+    -- Skybox: solo si el usuario tiene uno realmente seleccionado.
+    if modes and modes.active then
+        data.Skybox = {
+            Activado = true,
+            Nombre = tostring(modes.active),
+            CustomInput = tostring(modes.customInput or ""),
+            Custom = type(skies) == "table" and type(skies.Custom) == "table" and table.clone(skies.Custom) or nil,
+        }
+    end
+
+    -- Sonido al saltar: se lee mediante variables globales para poder conservar
+    -- el auto-save aunque la UI de salto se declare más abajo en el archivo.
+    local jumpEnabled = getgenv and getgenv().XeroJumpSoundEnabled == true
+    local jumpLabel = runtime.JumpSoundSelectedLabel
+    if jumpEnabled then
+        data.SonidoSalto = {
+            Activado = true,
+            Seleccionado = jumpLabel,
+        }
+    end
+
+    if selectedPistolSkin and selectedPistolSkin ~= "Floral" then
+        data.PistolSkin = tostring(selectedPistolSkin)
+    end
+
+    return data
+end
 
 local function saveAutoConfig()
     if not autoSaveReady or not autoCanFile() then return false end
@@ -3774,7 +3921,7 @@ UIElements.SliKnifeEquip = Tabs.Aim:Slider({
     Title = "Delay Equipar Cuchillo",
     Desc = "Tiempo antes de lanzar. (Segundos)",
     Step = 0.01,
-    Value = {Min = 0.01, Max = 0.50, Default = 0.10},
+    Value = {Min = 0.01, Max = 0.50, Default = 0.05},
     Callback = function(v) knifeEquipDelay = tonumber(v) or knifeEquipDelay; markAutoConfigChanged() end
 })
 
@@ -3782,7 +3929,7 @@ UIElements.SliKnifeThrow = Tabs.Aim:Slider({
     Title = "Delay Lanzamiento Cuchillo",
     Desc = "Tiempo después del lanzamiento. (Segundos)",
     Step = 0.01,
-    Value = {Min = 0.01, Max = 0.50, Default = 0.10},
+    Value = {Min = 0.01, Max = 0.50, Default = 0.07},
     Callback = function(v) knifeThrowDelay = tonumber(v) or knifeThrowDelay; markAutoConfigChanged() end
 })
 
@@ -3835,8 +3982,10 @@ runtime.Track(UserInputService.InputBegan:Connect(function(input, gameProcessed)
             task.wait()
         until knife.Parent == character or os.clock() >= equipDeadline
 
-        -- No añadimos otro delay completo aquí: el bucle anterior ya esperó
-        -- a que el Tool estuviera equipado. Así evitamos una doble espera.
+        -- Un pequeño margen después de que el Tool entra al personaje ayuda a que
+        -- KnifeClient/LocalScripts terminen de inicializarse antes del lanzamiento.
+        task.wait(math.max(0, knifeEquipDelay))
+
         -- Usamos la activación normal de la Tool. Esto deja que el propio
         -- KnifeClient ejecute la secuencia correcta de lanzamiento y sus argumentos,
         -- en vez de llamar a Throw:FireServer() sin los datos que el juego pueda exigir.
@@ -18121,7 +18270,6 @@ local function loadSelectedConfig()
                 if decoded.Toggles["Macro Cuchillo (L2)"] ~= nil then
                     knifeMacroEnabled = decoded.Toggles["Macro Cuchillo (L2)"] == true
                     secureLoadToggle(UIElements.TogKnifeMacro, knifeMacroEnabled)
-                end
                 if decoded.Toggles["Trigger Bot"] ~= nil then
                     triggerBotEnabled = decoded.Toggles["Trigger Bot"] == true
                     secureLoadToggle(UIElements.TogTriggerBot, triggerBotEnabled)
@@ -18543,163 +18691,11 @@ end)
 
 
 
-local function buildAutoConfig()
-    -- Guarda únicamente lo que realmente está activo/seleccionado.
-    -- Así, al cargarlo en una ejecución nueva, todo lo omitido queda en su estado inicial.
-    local toggles = {}
-    local sliders = {}
-    local colors = {}
-    local extras = {}
-
-    local function saveToggle(name, value)
-        if value == true then toggles[name] = true end
-    end
-
-    local function saveSlider(name, value, enabled)
-        if enabled then sliders[name] = tonumber(value) end
-    end
-
-    saveToggle("Auto Shoot", autoShootEnabled)
-    saveToggle("AutoShoot Cuchillo", autoShootCuchilloEnabled)
-    saveToggle("Silent Aim (Pistola)", silentAimPistolaEnabled)
-    saveToggle("Silent Aim (Cuchillo)", silentAimCuchilloEnabled)
-    saveToggle("Silent Aim (FOV)", silentAimFovEnabled)
-    saveToggle("Mostrar Círculo FOV", fovVisiblePreference)
-    saveToggle("ESP Lineas", espLinesEnabled)
-    saveToggle("ESP Box 2D", espSettings.Box)
-    saveToggle("ESP Barra Vida", espSettings.HealthBar)
-    saveToggle("Btn Flotante AutoShoot", asBtn and asBtn.Visible)
-    saveToggle("Btn Flotante SilentAim", saBtn and saBtn.Visible)
-    saveToggle("Btn Flotante Fantasma", ghostBtn and ghostBtn.Visible)
-    saveToggle("Aumentar Hitbox", hitboxEnabled)
-    saveToggle("Hitbox Invisible", hitboxInvisible)
-    saveToggle("ESP Jugadores", espEnabled)
-    saveToggle("Mostrar Resplandor (Glow)", espSettings.Glow)
-    saveToggle("Mostrar Nombre", espSettings.Name)
-    saveToggle("Mostrar Distancia", espSettings.Distance)
-    saveToggle("Ocultar mi Nombre (Local)", hideNameEnabled)
-    saveToggle("FPS Boost", fpsBoostEnabled)
-    saveToggle("Activar Macro", macroActivo)
-    saveToggle("Activar Trigger Bot", triggerBotEnabled)
-    saveToggle("Macro Cuchillo (L2)", knifeMacroEnabled)
-    saveToggle("Aimbot Controller Support", controllerAimbotEnabled)
-    saveToggle("Controller Support", controllerSupportEnabled)
-
-    saveSlider("Tamaño del FOV", fovRadius, silentAimFovEnabled or fovVisiblePreference)
-    saveSlider("Tamaño de Hitbox", hitboxSize, hitboxEnabled)
-    saveSlider("Delay Equipar Macro", macroEquipDelay, macroActivo)
-    saveSlider("Delay Disparo Macro", macroShootDelay, macroActivo)
-    saveSlider("Delay Equipar Cuchillo", knifeEquipDelay, knifeMacroEnabled)
-    saveSlider("Delay Lanzamiento Cuchillo", knifeThrowDelay, knifeMacroEnabled)
-    saveSlider("Dead Zone Aimbot", controllerAimDeadZone * 100, controllerAimbotEnabled)
-    saveSlider("Dead Zone del Stick", controllerDeadZone * 100, controllerSupportEnabled)
-    saveSlider("Sensibilidad del Stick", controllerSensitivity * 100, controllerSupportEnabled)
-    saveSlider("Sensibilidad de Cámara", controllerCameraSensitivity * 100, controllerSupportEnabled)
-    if controllerSupportEnabled then
-        extras["Invertir Stick"] = controllerInvertY == true
-    end
-
-    if hitboxEnabled then
-        colors["Color de Hitbox"] = {R = hitboxColor.R, G = hitboxColor.G, B = hitboxColor.B}
-    end
-    if espEnabled then
-        colors["Color del ESP"] = {R = espColor.R, G = espColor.G, B = espColor.B}
-    end
-
-    if silentAimPistolaEnabled or silentAimCuchilloEnabled then
-        extras["Partes Aimbot"] = runtime.GetTargetSelectionArray("SilentAim")
-        extras["Parte Aimbot"] = silentAimTargetPart
-    end
-    if autoShootEnabled or autoShootCuchilloEnabled then
-        extras["Partes AutoShoot"] = runtime.GetTargetSelectionArray("AutoShoot")
-        extras["Parte AutoShoot"] = autoShootTargetPart
-    end
-
-    local data = {
-        Version = 4,
-        Toggles = toggles,
-        Sliders = sliders,
-        Colors = colors,
-        Extras = extras,
-    }
-
-    -- Apariencia: solo se conserva si hay algo activado.
-    if runtime.SerializeAppearanceConfig then
-        local appearance = runtime.SerializeAppearanceConfig()
-        local anyAppearance = false
-        if type(appearance.Enabled) == "table" then
-            for key, enabled in pairs(appearance.Enabled) do
-                if enabled == true then anyAppearance = true break end
-            end
-        end
-        if anyAppearance then
-            data.Apariencia = appearance
-        end
-    end
-
-    -- Sonidos: solo se conservan los que realmente están activados.
-    if runtime.SerializeSoundConfig then
-        local sounds = runtime.SerializeSoundConfig()
-        local soundData = {}
-        if sounds.Arma and (sounds.Arma.Activado == true or sounds.Arma.Silenciado == true) then
-            soundData.Arma = sounds.Arma
-        end
-        if sounds.Muerte and sounds.Muerte.Activado == true then
-            soundData.Muerte = sounds.Muerte
-        end
-        if next(soundData) ~= nil then data.Sonidos = soundData end
-    end
-
-    -- Animaciones: solo si hay paquete o alguna parte del mix seleccionada.
-    local hasAnimation = selectedBundleCompleto and selectedBundleCompleto ~= "Ninguno"
-    if not hasAnimation and type(mixParts) == "table" then
-        for _, value in pairs(mixParts) do
-            if value and value ~= "Ninguno" then hasAnimation = true break end
-        end
-    end
-    if hasAnimation then
-        data.Animaciones = {
-            Paquete = selectedBundleCompleto,
-            Mix = mixParts,
-        }
-    end
-
-    -- Skybox: solo si el usuario tiene uno realmente seleccionado.
-    if modes and modes.active then
-        data.Skybox = {
-            Activado = true,
-            Nombre = tostring(modes.active),
-            CustomInput = tostring(modes.customInput or ""),
-            Custom = type(skies) == "table" and type(skies.Custom) == "table" and table.clone(skies.Custom) or nil,
-        }
-    end
-
-    -- Sonido al saltar: se lee mediante variables globales para poder conservar
-    -- el auto-save aunque la UI de salto se declare más abajo en el archivo.
-    local jumpEnabled = getgenv and getgenv().XeroJumpSoundEnabled == true
-    local jumpLabel = runtime.JumpSoundSelectedLabel
-    if jumpEnabled then
-        data.SonidoSalto = {
-            Activado = true,
-            Seleccionado = jumpLabel,
-        }
-    end
-
-    if selectedPistolSkin and selectedPistolSkin ~= "Floral" then
-        data.PistolSkin = tostring(selectedPistolSkin)
-    end
-
-    return data
-end
-
-
 -- ==========================================
--- AUTO-SAVE INDEPENDIENTE FINAL
+-- AUTO-SAVE / AUTO-LOAD FINAL
 -- ==========================================
--- NO depende de Auto Load Config.
--- NO depende de Guardar Configuración.
--- Usa exclusivamente XeroHub_AutoSave_State.json.
--- Se restaura siempre al ejecutar XeroHub.
+-- Este sistema es INDEPENDIENTE de "Auto Load Config".
+-- Se restaura siempre al entrar, sin que el usuario tenga que activar AutoLoad.
 task.spawn(function()
     task.wait(2.0)
 
