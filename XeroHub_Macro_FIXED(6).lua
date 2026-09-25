@@ -451,17 +451,9 @@ local function getSkinAsset(skinInfo, name)
         return nil, "Ruta de skin inválida"
     end
 
-    local assetLoader = nil
-    if type(getcustomasset) == "function" then
-        assetLoader = getcustomasset
-    elseif type(getsynasset) == "function" then
-        assetLoader = getsynasset
-    elseif type(getasset) == "function" then
-        assetLoader = getasset
-    end
-
-    if type(writefile) ~= "function" or not assetLoader then
-        return nil, "Falta writefile o una función de asset (getcustomasset/getsynasset/getasset)"
+    if type(writefile) ~= "function"
+        or type(getcustomasset) ~= "function" then
+        return nil, "Falta writefile o getcustomasset"
     end
 
     local folder = "XeroHub_Skins_V5"
@@ -559,14 +551,14 @@ local function getSkinAsset(skinInfo, name)
     end
 
     local ok, asset = pcall(function()
-        return assetLoader(path)
+        return getcustomasset(path)
     end)
 
     if ok and type(asset) == "string" and asset ~= "" then
         return asset, path
     end
 
-    return nil, "No se pudo convertir " .. path .. " a un asset local"
+    return nil, "getcustomasset no pudo convertir " .. path
 end
 
 local function trySetTextureProperty(obj, propertyName, asset)
@@ -18226,10 +18218,6 @@ Tabs.Config:Button({ Title = "Guardar Configuración", Callback = function()
             Mix = mixParts
         }
     }
-
-    if selectedPistolSkin and PISTOL_SKINS and PISTOL_SKINS[selectedPistolSkin] then
-        configData.PistolSkin = tostring(selectedPistolSkin)
-    end
     
     if writefile then 
         local sEncode, encodedData = pcall(function() return HttpService:JSONEncode(configData) end)
@@ -18281,18 +18269,6 @@ local function loadSelectedConfig()
     if isfile and isfile(path) then
         local success, decoded = pcall(function() return HttpService:JSONDecode(readfile(path)) end)
         if success and type(decoded) == "table" then
-
-            -- Skin de pistola: restaura la selección guardada.
-            if type(decoded.PistolSkin) == "string" and PISTOL_SKINS[decoded.PistolSkin] then
-                selectedPistolSkin = decoded.PistolSkin
-                if UIElements.PistolSkin then
-                    pcall(function() UIElements.PistolSkin:Select(selectedPistolSkin) end)
-                end
-                task.defer(function()
-                    task.wait(0.10)
-                    pcall(applySelectedPistolSkin)
-                end)
-            end
             
             -- Toggles
              if decoded.Toggles then
@@ -18489,6 +18465,20 @@ local function loadSelectedConfig()
 
             if decoded.Apariencia then
                 runtime.LoadAppearanceConfig(decoded.Apariencia)
+            end
+
+            -- SKIN DE PISTOLA: restaurar la seleccion guardada.
+            if decoded.PistolSkin and PISTOL_SKINS[tostring(decoded.PistolSkin)] then
+                selectedPistolSkin = tostring(decoded.PistolSkin)
+                pcall(function()
+                    if UIElements.PistolSkin then
+                        UIElements.PistolSkin:SetValue(selectedPistolSkin)
+                    end
+                end)
+                task.defer(function()
+                    task.wait(0.25)
+                    applySelectedPistolSkin()
+                end)
             end
 
             -- SKYBOX AUTO-SAVE: solo se aplica si el usuario tenía uno activo.
@@ -18781,57 +18771,48 @@ pcall(function()
     })
 end)
 
--- ==========================================
 -- AUTO-APLICAR SKIN DE PISTOLA
--- ==========================================
+-- Reintenta cuando aparece/equipa una Tool y cuando aparece un ViewModel en la camara.
 pcall(function()
-    local function queuePistolSkinApply(delayTime)
-        task.delay(delayTime or 0.15, function()
-            pcall(applySelectedPistolSkin)
+    local function schedulePistolSkinApply()
+        task.defer(function()
+            task.wait(0.15)
+            if runtime and runtime.Alive then
+                pcall(applySelectedPistolSkin)
+            end
         end)
     end
 
-    runtime.Track(player.CharacterAdded:Connect(function(character)
-        task.delay(0.35, function()
-            pcall(applySelectedPistolSkin)
-        end)
-        runtime.Track(character.ChildAdded:Connect(function(child)
-            if child:IsA("Tool") then
-                queuePistolSkinApply(0.12)
-                queuePistolSkinApply(0.45)
+    local function bindCharacter(char)
+        if not char then return end
+        char.ChildAdded:Connect(function(child)
+            if child and child:IsA("Tool") then
+                schedulePistolSkinApply()
             end
-        end))
-    end))
+        end)
+        schedulePistolSkinApply()
+    end
 
     if player.Character then
-        runtime.Track(player.Character.ChildAdded:Connect(function(child)
-            if child:IsA("Tool") then
-                queuePistolSkinApply(0.12)
-                queuePistolSkinApply(0.45)
-            end
-        end))
+        bindCharacter(player.Character)
     end
 
-    local camera = workspace.CurrentCamera
-    if camera then
-        runtime.Track(camera.ChildAdded:Connect(function(child)
-            if child:IsA("Model") then
+    player.CharacterAdded:Connect(function(char)
+        task.wait(0.25)
+        bindCharacter(char)
+    end)
+
+    local cam = workspace.CurrentCamera
+    if cam then
+        cam.ChildAdded:Connect(function(child)
+            if child and child:IsA("Model") then
                 local n = child.Name:lower()
-                if n:find("pistol") or n:find("gun") or n:find("revolver")
-                    or n:find("weapon") or n:find("viewmodel") then
-                    queuePistolSkinApply(0.10)
-                    queuePistolSkinApply(0.40)
+                if n:find("pistol") or n:find("gun") or n:find("revolver") or n:find("weapon") or n:find("viewmodel") then
+                    schedulePistolSkinApply()
                 end
             end
-        end))
+        end)
     end
-
-    task.spawn(function()
-        while runtime.Alive do
-            task.wait(1.25)
-            pcall(applySelectedPistolSkin)
-        end
-    end)
 end)
 
 
