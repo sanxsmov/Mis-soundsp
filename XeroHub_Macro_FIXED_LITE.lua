@@ -1427,42 +1427,43 @@ end
 local MainSection = Window:Section({ Title = "PRINCIPAL", Opened = true })
 local TrollSection = Window:Section({ Title = "PERSONAL", Opened = true })
 
+-- Tab interna de descarte: NO crea una pestaña visible.
+-- Se usa únicamente para que el código antiguo que todavía referencia
+-- una función eliminada no vuelva a crear controles en la interfaz.
+local function makeUISink()
+    local sink = {}
+    local dummy = setmetatable({}, {
+        __index = function(_, _)
+            return function(...) return dummy end
+        end
+    })
+    setmetatable(sink, {
+        __index = function(_, _)
+            return function(...) return dummy end
+        end
+    })
+    return sink
+end
+
+local UISink = makeUISink()
+
 local Tabs = {
-    -- Estas pestañas siguen siendo objetos reales porque el resto del código
-    -- usa sus controles internamente. Luego se ocultan de la interfaz.
     Inicio = MainSection:Tab({Title = "Inicio", Icon = "solar:home-bold"}),
     Aim = MainSection:Tab({Title = "Macro / Silent", Icon = "solar:target-bold"}),
-    KillAll = MainSection:Tab({Title = "Kill All", Icon = "solar:target-bold"}),
     Vis = MainSection:Tab({Title = "ESP", Icon = "solar:eye-bold"}),
-    Mov = MainSection:Tab({Title = "Movimiento", Icon = "solar:running-bold"}),
-    Farm = MainSection:Tab({Title = "AutoFarm", Icon = "solar:dollar-bold"}),
-    Graficos = MainSection:Tab({Title = "Gráficos", Icon = "solar:palette-bold"}),
     Sonidos = MainSection:Tab({Title = "Sounds", Icon = "solar:volume-loud-bold"}),
-    Teclado = MainSection:Tab({Title = "Teclado", Icon = "solar:keyboard-bold"}),
-    Emotes = TrollSection:Tab({Title = "Animaciones", Icon = "solar:smile-circle-bold"}),
-    Apariencia = TrollSection:Tab({Title = "Apariencia", Icon = "solar:palette-bold"}),
     Config = TrollSection:Tab({Title = "Configuración", Icon = "solar:settings-bold"}),
-    Creditos = TrollSection:Tab({Title = "Créditos", Icon = "solar:user-bold"})
-}
 
--- Ocultamos únicamente las pestañas que no quieres ver.
--- No usamos tabs falsos/dummy: así todos los callbacks y estados
--- originales siguen inicializándose y el script no se rompe al cargar.
-local hiddenTabs = {
-    Tabs.Inicio,
-    Tabs.KillAll,
-    Tabs.Mov,
-    Tabs.Farm,
-    Tabs.Graficos,
-    Tabs.Teclado,
-    Tabs.Emotes,
-    Tabs.Apariencia,
-    Tabs.Creditos,
+    -- Estas funciones quedan sin interfaz y sin pestaña.
+    KillAll = UISink,
+    Mov = UISink,
+    Farm = UISink,
+    Graficos = UISink,
+    Teclado = UISink,
+    Emotes = UISink,
+    Apariencia = UISink,
+    Creditos = UISink,
 }
-
-for _, tab in ipairs(hiddenTabs) do
-    pcall(function() tab:SetVisible(false) end)
-end
 
 pcall(function() Tabs.Aim:Select() end)
 
@@ -17649,8 +17650,8 @@ end})
 -- ==========================================
 -- NUEVA SECCIÓN: INVENTARIO & ARMAS (0 LAG)
 -- ==========================================
-local SpoofSection = Window:Section({ Title = "INVENTARIO", Opened = true })
-local TabSpoof = SpoofSection:Tab({Title = "Generar Armas", Icon = "solar:box-bold"})
+local SpoofSection = nil
+local TabSpoof = UISink
 
 TabSpoof:Paragraph({
     Title = "Aviso",
