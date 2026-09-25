@@ -17956,6 +17956,7 @@ local function loadSelectedConfig()
                 if decoded.Toggles["Macro Cuchillo (L2)"] ~= nil then
                     knifeMacroEnabled = decoded.Toggles["Macro Cuchillo (L2)"] == true
                     secureLoadToggle(UIElements.TogKnifeMacro, knifeMacroEnabled)
+                end
                 if decoded.Toggles["Trigger Bot"] ~= nil then
                     triggerBotEnabled = decoded.Toggles["Trigger Bot"] == true
                     secureLoadToggle(UIElements.TogTriggerBot, triggerBotEnabled)
@@ -18275,11 +18276,11 @@ local function setupJumpSound(character)
     end))
 end
 
-Tabs.Config:Section({
+Tabs.Sonidos:Section({
     Title = "Sonido al Saltar"
 })
 
-Tabs.Config:Toggle({
+Tabs.Sonidos:Toggle({
     Title = "Sonido al Saltar",
     Desc = "Reproduce un sonido cada vez que tu personaje salta.",
     Value = false,
@@ -18292,7 +18293,7 @@ Tabs.Config:Toggle({
 
 -- El selector del sonido al saltar está en la pestaña Sonidos y usa
 -- el mismo catálogo remoto de GitHub (/sounds). No se introduce ningún ID.
-Tabs.Config:Paragraph({
+Tabs.Sonidos:Paragraph({
     Title = "Sonido al saltar",
     Desc = "Selecciona el sonido desde la pestaña Sonidos.",
 })
@@ -18312,83 +18313,6 @@ startupSplashState.Finish()
 runtime.NotificationsReady = true
 -- XERO_FULL_GENERAL_OPTIMIZATION_2026_09_13
 -- XERO_GENERAL_OPTIMIZATION_2026_09_14
-
-
-
--- ==========================================
--- PRUEBA DE SOPORTE DE ASSETS
--- ==========================================
-pcall(function()
-    Tabs.Config:Section({Title = "Compatibilidad de Skins"})
-
-    UIElements.TestSkinSupport = Tabs.Config:Button({
-        Title = "Probar soporte de skins",
-        Desc = "Comprueba automáticamente las funciones de Delta.",
-        Callback = function()
-            local custom = type(getcustomasset) == "function"
-            local syn = type(getsynasset) == "function"
-            local asset = type(getasset) == "function"
-
-            local compatible = custom or syn or asset
-
-            local detalle
-            if compatible then
-                local cual = {}
-                if custom then table.insert(cual, "getcustomasset") end
-                if syn then table.insert(cual, "getsynasset") end
-                if asset then table.insert(cual, "getasset") end
-                detalle = "Compatible: " .. table.concat(cual, ", ")
-            else
-                detalle = "No compatible: no se encontró una función de asset."
-            end
-
-            -- Intenta usar el sistema de notificaciones existente.
-            local mostrado = pcall(function()
-                showBottomMessage(detalle)
-            end)
-
-            if not mostrado and type(setclipboard) == "function" then
-                pcall(setclipboard, detalle)
-            end
-        end
-    })
-end)
-
-
--- ==========================================
--- SELECTOR DE SKIN DE PISTOLA
--- ==========================================
-pcall(function()
-    Tabs.Config:Section({Title = "Skin Pistola"})
-
-    UIElements.PistolSkin = Tabs.Config:Dropdown({
-        Title = "Skin de Pistola",
-        Values = {"Floral", "Haunted", "Blanco/Negro"},
-        Value = selectedPistolSkin,
-        Callback = function(value)
-            selectedPistolSkin = value
-            markAutoConfigChanged()
-            task.defer(function()
-                applySelectedPistolSkin()
-            end)
-        end
-    })
-
-    UIElements.ApplyPistolSkin = Tabs.Config:Button({
-        Title = "Aplicar Skin",
-        Desc = "Aplica la textura seleccionada a la pistola equipada.",
-        Callback = function()
-            local ok, count, detail = applySelectedPistolSkin()
-            pcall(function()
-                if ok then
-                    showBottomMessage("Skin aplicada: " .. tostring(count) .. " objeto(s).")
-                else
-                    showBottomMessage("Skin no aplicada: " .. tostring(detail))
-                end
-            end)
-        end
-    })
-end)
 
 
 
