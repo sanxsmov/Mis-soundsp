@@ -1427,41 +1427,44 @@ end
 local MainSection = Window:Section({ Title = "PRINCIPAL", Opened = true })
 local TrollSection = Window:Section({ Title = "PERSONAL", Opened = true })
 
--- ============================================================
--- XeroHub LITE: SOLO SE MUESTRAN LAS SECCIONES NECESARIAS
--- Macro/Trigger/Silent, ESP, Sonidos y Configuración.
--- Las pestañas antiguas se convierten en contenedores NO-OP para
--- que el código restante no produzca errores, pero NO aparecen en UI.
--- ============================================================
-local DummyControl = setmetatable({}, {
-    __index = function()
-        return function() return DummyControl end
-    end
-})
-
-local DummyTab = setmetatable({}, {
-    __index = function()
-        return function() return DummyControl end
-    end
-})
-
 local Tabs = {
+    -- Estas pestañas siguen siendo objetos reales porque el resto del código
+    -- usa sus controles internamente. Luego se ocultan de la interfaz.
+    Inicio = MainSection:Tab({Title = "Inicio", Icon = "solar:home-bold"}),
     Aim = MainSection:Tab({Title = "Macro / Silent", Icon = "solar:target-bold"}),
+    KillAll = MainSection:Tab({Title = "Kill All", Icon = "solar:target-bold"}),
     Vis = MainSection:Tab({Title = "ESP", Icon = "solar:eye-bold"}),
+    Mov = MainSection:Tab({Title = "Movimiento", Icon = "solar:running-bold"}),
+    Farm = MainSection:Tab({Title = "AutoFarm", Icon = "solar:dollar-bold"}),
+    Graficos = MainSection:Tab({Title = "Gráficos", Icon = "solar:palette-bold"}),
     Sonidos = MainSection:Tab({Title = "Sounds", Icon = "solar:volume-loud-bold"}),
+    Teclado = MainSection:Tab({Title = "Teclado", Icon = "solar:keyboard-bold"}),
+    Emotes = TrollSection:Tab({Title = "Animaciones", Icon = "solar:smile-circle-bold"}),
+    Apariencia = TrollSection:Tab({Title = "Apariencia", Icon = "solar:palette-bold"}),
     Config = TrollSection:Tab({Title = "Configuración", Icon = "solar:settings-bold"}),
-
-    -- No crean pestañas visibles. Solo mantienen compatibilidad interna.
-    Inicio = DummyTab,
-    KillAll = DummyTab,
-    Mov = DummyTab,
-    Farm = DummyTab,
-    Graficos = DummyTab,
-    Teclado = DummyTab,
-    Emotes = DummyTab,
-    Apariencia = DummyTab,
-    Creditos = DummyTab,
+    Creditos = TrollSection:Tab({Title = "Créditos", Icon = "solar:user-bold"})
 }
+
+-- Ocultamos únicamente las pestañas que no quieres ver.
+-- No usamos tabs falsos/dummy: así todos los callbacks y estados
+-- originales siguen inicializándose y el script no se rompe al cargar.
+local hiddenTabs = {
+    Tabs.Inicio,
+    Tabs.KillAll,
+    Tabs.Mov,
+    Tabs.Farm,
+    Tabs.Graficos,
+    Tabs.Teclado,
+    Tabs.Emotes,
+    Tabs.Apariencia,
+    Tabs.Creditos,
+}
+
+for _, tab in ipairs(hiddenTabs) do
+    pcall(function() tab:SetVisible(false) end)
+end
+
+pcall(function() Tabs.Aim:Select() end)
 
 -- ==========================================
 -- ⌨️ TECLADO VIRTUAL + DICTADO POR VOZ
