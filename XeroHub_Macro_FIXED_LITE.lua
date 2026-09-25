@@ -1427,20 +1427,40 @@ end
 local MainSection = Window:Section({ Title = "PRINCIPAL", Opened = true })
 local TrollSection = Window:Section({ Title = "PERSONAL", Opened = true })
 
+-- ============================================================
+-- XeroHub LITE: SOLO SE MUESTRAN LAS SECCIONES NECESARIAS
+-- Macro/Trigger/Silent, ESP, Sonidos y Configuración.
+-- Las pestañas antiguas se convierten en contenedores NO-OP para
+-- que el código restante no produzca errores, pero NO aparecen en UI.
+-- ============================================================
+local DummyControl = setmetatable({}, {
+    __index = function()
+        return function() return DummyControl end
+    end
+})
+
+local DummyTab = setmetatable({}, {
+    __index = function()
+        return function() return DummyControl end
+    end
+})
+
 local Tabs = {
-    Inicio = MainSection:Tab({Title = "Inicio", Icon = "solar:home-bold"}),
-    Aim = MainSection:Tab({Title = "Aimbot", Icon = "solar:target-bold"}),
-    KillAll = MainSection:Tab({Title = "Kill All", Icon = "solar:target-bold"}), -- 🔥 NUEVA CATEGORÍA AGREGADA
-    Vis = MainSection:Tab({Title = "Visuales", Icon = "solar:eye-bold"}),
-    Mov = MainSection:Tab({Title = "Movimiento", Icon = "solar:running-bold"}),
-    Farm = MainSection:Tab({Title = "AutoFarm", Icon = "solar:dollar-bold"}),
-    Graficos = MainSection:Tab({Title = "Gráficos", Icon = "solar:palette-bold"}), -- 🔥 NUEVA PESTAÑA AQUÍ
-    Sonidos = MainSection:Tab({Title = "Sonidos", Icon = "solar:volume-loud-bold"}),
-    Teclado = MainSection:Tab({Title = "Teclado", Icon = "solar:keyboard-bold"}),
-    Emotes = TrollSection:Tab({Title = "Animaciones", Icon = "solar:smile-circle-bold"}),
-    Apariencia = TrollSection:Tab({Title = "Apariencia", Icon = "solar:palette-bold"}),
+    Aim = MainSection:Tab({Title = "Macro / Silent", Icon = "solar:target-bold"}),
+    Vis = MainSection:Tab({Title = "ESP", Icon = "solar:eye-bold"}),
+    Sonidos = MainSection:Tab({Title = "Sounds", Icon = "solar:volume-loud-bold"}),
     Config = TrollSection:Tab({Title = "Configuración", Icon = "solar:settings-bold"}),
-    Creditos = TrollSection:Tab({Title = "Créditos", Icon = "solar:user-bold"})
+
+    -- No crean pestañas visibles. Solo mantienen compatibilidad interna.
+    Inicio = DummyTab,
+    KillAll = DummyTab,
+    Mov = DummyTab,
+    Farm = DummyTab,
+    Graficos = DummyTab,
+    Teclado = DummyTab,
+    Emotes = DummyTab,
+    Apariencia = DummyTab,
+    Creditos = DummyTab,
 }
 
 -- ==========================================
