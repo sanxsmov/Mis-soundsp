@@ -594,8 +594,8 @@ local function trySetTextureProperty(obj, propertyName, asset)
 end
 
 local function applyPistolSkin(tool, skinName, preloadedAsset)
-    if not tool or (not tool:IsA("Tool") and not tool:IsA("Model")) then
-        return false, 0, "No hay un modelo de pistola equipado."
+    if not tool or (not tool:IsA("Tool") and not tool:IsA("Model") and not tool:IsA("BasePart")) then
+        return false, 0, "No hay un modelo de pistola válido."
     end
 
     local skinInfo = PISTOL_SKINS[skinName]
@@ -613,38 +613,48 @@ local function applyPistolSkin(tool, skinName, preloadedAsset)
 
     local changed = 0
     local inspected = 0
-    local touched = {}
+    local candidates = 0
 
-    for _, obj in ipairs(tool:GetDescendants()) do
+    local function tryObject(obj)
         inspected = inspected + 1
         local ok = false
 
-        -- Texturas/decals clásicos.
+        -- Texture / Decal
         if obj:IsA("Texture") or obj:IsA("Decal") then
+            candidates = candidates + 1
             ok = trySetTextureProperty(obj, "Texture", asset)
 
-        -- MeshPart.
+        -- MeshPart: TextureID es la propiedad que usa la textura UV.
         elseif obj:IsA("MeshPart") then
+            candidates = candidates + 1
             ok = trySetTextureProperty(obj, "TextureID", asset)
 
-        -- SpecialMesh.
+        -- SpecialMesh dentro de un Part/Tool.
         elseif obj:IsA("SpecialMesh") then
+            candidates = candidates + 1
             ok = trySetTextureProperty(obj, "TextureId", asset)
 
-        -- Algunos modelos usan SurfaceAppearance.
+        -- SurfaceAppearance.
         elseif obj:IsA("SurfaceAppearance") then
+            candidates = candidates + 1
             ok = trySetTextureProperty(obj, "ColorMap", asset)
         end
 
         if ok then
             changed = changed + 1
-            table.insert(touched, obj:GetFullName())
         end
+    end
+
+    -- Incluye el objeto raíz por si el visual es un MeshPart suelto.
+    tryObject(tool)
+    for _, obj in ipairs(tool:GetDescendants()) do
+        tryObject(obj)
     end
 
     if changed == 0 then
         return false, 0,
-            "No se encontró Texture, Decal, MeshPart, SpecialMesh o SurfaceAppearance modificable."
+            "No se pudo modificar la textura. Revisados: " .. tostring(inspected) ..
+            " | Candidatos: " .. tostring(candidates)
     end
 
     return true, changed,
@@ -652,55 +662,71 @@ local function applyPistolSkin(tool, skinName, preloadedAsset)
         " | Revisados: " .. tostring(inspected)
 end
 
+local function objectLooksLikeWeapon(obj)
+    local name = tostring(obj.Name or ""):lower()
+    return name:find("pistol", 1, true)
+        or name:find("gun", 1, true)
+        or name:find("revolver", 1, true)
+        or name:find("weapon", 1, true)
+        or name:find("sheriff", 1, true)
+        or name:find("revolver", 1, true)
+end
+
+
 local function findEquippedPistol()
     local character = player.Character
     if not character then return nil end
 
+    -- Primero una Tool equipada; no exigimos que tenga un nombre concreto.
     local equipped = character:FindFirstChildOfClass("Tool")
-    if not equipped then return nil end
-
-    -- Si el juego tiene una herramienta claramente identificada como pistola,
-    -- la usamos. Si no, usamos la Tool equipada.
-    local lower = equipped.Name:lower()
-    if lower:find("pistol") or lower:find("gun") or lower:find("revolver")
-        or lower:find("weapon") then
+    if equipped then
         return equipped
     end
 
-    return equipped
-end
-
-local function applySelectedPistolSkin()
-    local okResult, countResult, detailResult = false, 0, nil
-
-    -- Primero intentamos la Tool que ya está equipada. Esto mantiene el
-    -- comportamiento original: la textura aparece al sacar/equipar el arma.
-    local tool = findEquippedPistol()
-    if tool then
-        local ok, count, detail = pcall(applyPistolSkin, tool, selectedPistolSkin)
-        if ok and count and count > 0 then
-            return true, count, detail
-        end
-        if ok and detail then
-            detailResult = detail
-        elseif not ok then
-            detailResult = "Error aplicando la skin a la Tool"
+    -- Algunos juegos mantienen el visual como Model dentro del personaje.
+    for _, obj in ipairs(character:GetDescendants()) do
+        if obj:IsA("Model") and objectLooksLikeWeapon(obj) then
+            return obj
         end
     end
 
-    -- Algunos juegos dibujan el arma en un Model separado dentro de Character
-    -- o CurrentCamera. No todos usan nombres como "Pistol" o "ViewModel",
-    -- así que también revisamos los Models hijos directos.
-    -- Esto NO crea ninguna copia del arma.
+    return nil
+end
+
+local function applySelectedPistolSkin()
+    local detailResult = nil
+    local asset = getCachedSkinAsset(selectedPistolSkin)
+
+    -- 1) Tool/model equipado.
+    local equipped = findEquippedPistol()
+    if equipped then
+        local ok, count, detail = pcall(applyPistolSkin, equipped, selectedPistolSkin, asset)
+        if ok and count and count > 0 then
+            return true, count, detail
+        end
+        if ok and detail then detailResult = detail end
+    end
+
+    -- 2) Revisar todos los modelos relevantes del Character, no solo sus hijos directos.
     local character = player.Character
     if character then
         local total = 0
         local lastDetail = nil
-        for _, obj in ipairs(character:GetChildren()) do
-            if obj:IsA("Model") then
-                local ok, count, detail = pcall(applyPistolSkin, obj, selectedPistolSkin)
+        local seen = {}
+        for _, obj in ipairs(character:GetDescendants()) do
+            local candidate = nil
+            if obj:IsA("Model") and objectLooksLikeWeapon(obj) then
+                candidate = obj
+            elseif obj:IsA("MeshPart") and objectLooksLikeWeapon(obj) then
+                candidate = obj
+            end
+            if candidate and not seen[candidate] then
+                seen[candidate] = true
+                local ok, count, detail = pcall(applyPistolSkin, candidate, selectedPistolSkin, asset)
                 if ok and count and count > 0 then
                     total = total + count
+                    lastDetail = detail
+                elseif ok and detail then
                     lastDetail = detail
                 end
             end
@@ -710,15 +736,26 @@ local function applySelectedPistolSkin()
         end
     end
 
+    -- 3) ViewModel/visual de cámara. Se revisan Models completos, incluso anidados.
     local camera = workspace.CurrentCamera
     if camera then
         local total = 0
         local lastDetail = nil
-        for _, obj in ipairs(camera:GetChildren()) do
-            if obj:IsA("Model") then
-                local ok, count, detail = pcall(applyPistolSkin, obj, selectedPistolSkin)
+        local seen = {}
+        for _, obj in ipairs(camera:GetDescendants()) do
+            local candidate = nil
+            if obj:IsA("Model") and objectLooksLikeWeapon(obj) then
+                candidate = obj
+            elseif obj:IsA("MeshPart") and objectLooksLikeWeapon(obj) then
+                candidate = obj
+            end
+            if candidate and not seen[candidate] then
+                seen[candidate] = true
+                local ok, count, detail = pcall(applyPistolSkin, candidate, selectedPistolSkin, asset)
                 if ok and count and count > 0 then
                     total = total + count
+                    lastDetail = detail
+                elseif ok and detail then
                     lastDetail = detail
                 end
             end
@@ -729,7 +766,7 @@ local function applySelectedPistolSkin()
     end
 
     return false, 0, detailResult
-        or "No se encontraron texturas modificables en la pistola/visual model."
+        or "No se encontró una textura modificable en el arma. El modelo puede usar una Union/Part sin textura UV o un sistema de apariencia distinto."
 end
 
 
