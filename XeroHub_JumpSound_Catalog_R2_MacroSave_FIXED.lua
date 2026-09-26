@@ -432,7 +432,7 @@ local player = Players.LocalPlayer
 -- ==========================================
 local PISTOL_SKINS = {
     ["Floral"] = {
-        url = "https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/textures/pistola_floral.png",
+        url = "https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/textures/armaf.png",
         ext = "png"
     },
     ["Haunted"] = {
@@ -688,24 +688,38 @@ local function applySelectedPistolSkin()
         end
     end
 
-    -- Algunos juegos dibujan el arma en un ViewModel dentro de CurrentCamera.
-    -- Sólo se modifica si el ViewModel ya existe (por ejemplo, durante el
-    -- proceso de sacar el arma); no se crea ninguna copia del arma.
+    -- Algunos juegos dibujan el arma en un Model separado dentro de Character
+    -- o CurrentCamera. No todos usan nombres como "Pistol" o "ViewModel",
+    -- así que también revisamos los Models hijos directos.
+    -- Esto NO crea ninguna copia del arma.
+    local character = player.Character
+    if character then
+        local total = 0
+        local lastDetail = nil
+        for _, obj in ipairs(character:GetChildren()) do
+            if obj:IsA("Model") then
+                local ok, count, detail = pcall(applyPistolSkin, obj, selectedPistolSkin)
+                if ok and count and count > 0 then
+                    total = total + count
+                    lastDetail = detail
+                end
+            end
+        end
+        if total > 0 then
+            return true, total, lastDetail
+        end
+    end
+
     local camera = workspace.CurrentCamera
     if camera then
         local total = 0
         local lastDetail = nil
         for _, obj in ipairs(camera:GetChildren()) do
             if obj:IsA("Model") then
-                local n = obj.Name:lower()
-                if n:find("pistol") or n:find("gun")
-                    or n:find("revolver") or n:find("weapon")
-                    or n:find("viewmodel") then
-                    local ok, count, detail = pcall(applyPistolSkin, obj, selectedPistolSkin)
-                    if ok and count and count > 0 then
-                        total = total + count
-                        lastDetail = detail
-                    end
+                local ok, count, detail = pcall(applyPistolSkin, obj, selectedPistolSkin)
+                if ok and count and count > 0 then
+                    total = total + count
+                    lastDetail = detail
                 end
             end
         end
@@ -845,12 +859,11 @@ do
 
     local function applyVisualNow(obj, asset)
         if not obj or not obj.Parent then return 0 end
-        local ok, _, detail = pcall(applyPistolSkin, obj, selectedPistolSkin, asset)
+        local ok, count = pcall(function()
+            local _, c = applyPistolSkin(obj, selectedPistolSkin, asset)
+            return c
+        end)
         if ok then
-            local _, count = pcall(function()
-                local _, c = applyPistolSkin(obj, selectedPistolSkin, asset)
-                return c
-            end)
             return tonumber(count) or 0
         end
         return 0
