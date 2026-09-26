@@ -446,17 +446,25 @@ local PISTOL_SKINS = {
 }
 
 
+local SKIN_ASSET_CACHE = {}
+local SKIN_PRELOAD_STATE = {}
+
 local function getSkinAsset(skinInfo, name)
     if type(skinInfo) ~= "table" or type(skinInfo.url) ~= "string" then
         return nil, "Ruta de skin inválida"
     end
 
-    if type(writefile) ~= "function"
-        or type(getcustomasset) ~= "function" then
+    if type(writefile) ~= "function" or type(getcustomasset) ~= "function" then
         return nil, "Falta writefile o getcustomasset"
     end
 
-    local folder = "XeroHub_Skins_V5"
+    -- Si ya fue preparado, no volvemos a descargarlo al equipar.
+    local cachedAsset = SKIN_ASSET_CACHE[name]
+    if type(cachedAsset) == "string" and cachedAsset ~= "" then
+        return cachedAsset, "cache"
+    end
+
+    local folder = "XeroHub_Skins_V6"
     pcall(function()
         if type(isfolder) == "function" and not isfolder(folder)
             and type(makefolder) == "function" then
@@ -476,36 +484,28 @@ local function getSkinAsset(skinInfo, name)
         if type(data) ~= "string" or #data < 64 then
             return false
         end
-
         local b1, b2, b3, b4 = data:byte(1, 4)
         local isPNG = b1 == 137 and b2 == 80 and b3 == 78 and b4 == 71
         local isJPG = b1 == 255 and b2 == 216 and b3 == 255
         return isPNG or isJPG
     end
 
-    local function readCached()
-        if type(readfile) ~= "function" then return nil end
-        local ok, data = pcall(function()
-            return readfile(path)
+    local cached = nil
+    if type(readfile) == "function" then
+        pcall(function()
+            local data = readfile(path)
+            if validImageData(data) then cached = data end
         end)
-        if ok and validImageData(data) then
-            return data
-        end
-        return nil
     end
 
-    -- Si hay una copia dañada, la eliminamos y descargamos de nuevo.
-    local cached = readCached()
     if not cached then
         if type(deletefile) == "function" then
             pcall(function() deletefile(path) end)
         end
 
         local data = nil
-
-        -- request/http_request suele conservar mejor los bytes binarios que
-        -- algunas implementaciones de game:HttpGet.
         local requestFn = nil
+
         if type(request) == "function" then
             requestFn = request
         elseif type(http_request) == "function" then
@@ -524,7 +524,8 @@ local function getSkinAsset(skinInfo, name)
 
             if ok and type(response) == "table"
                 and (response.StatusCode == nil or tonumber(response.StatusCode) == 200)
-                and type(response.Body) == "string" then
+                and type(response.Body) == "string"
+                and validImageData(response.Body) then
                 data = response.Body
             end
         end
@@ -548,6 +549,7 @@ local function getSkinAsset(skinInfo, name)
         if not okWrite then
             return nil, "No se pudo escribir " .. path
         end
+        cached = data
     end
 
     local ok, asset = pcall(function()
@@ -555,35 +557,34 @@ local function getSkinAsset(skinInfo, name)
     end)
 
     if ok and type(asset) == "string" and asset ~= "" then
+        SKIN_ASSET_CACHE[name] = asset
+        SKIN_PRELOAD_STATE[name] = true
         return asset, path
     end
 
     return nil, "getcustomasset no pudo convertir " .. path
 end
 
-local pistolSkinAssetCache = {}
-
-local function getCachedSkinAsset(skinName)
-    local cached = pistolSkinAssetCache[skinName]
-    if cached and cached.asset then
-        return cached.asset, cached.info
-    end
-
+local function preloadSelectedPistolSkin()
+    local skinName = selectedPistolSkin
     local skinInfo = PISTOL_SKINS[skinName]
-    if not skinInfo then
-        return nil, "Skin desconocida: " .. tostring(skinName)
+    if not skinInfo then return false end
+
+    local asset = SKIN_ASSET_CACHE[skinName]
+    if type(asset) == "string" and asset ~= "" then
+        SKIN_PRELOAD_STATE[skinName] = true
+        return true
     end
 
-    local asset, assetInfo = getSkinAsset(skinInfo, skinName)
-    if asset then
-        pistolSkinAssetCache[skinName] = {
-            asset = asset,
-            info = assetInfo,
-        }
-        return asset, assetInfo
+    local ok, result = pcall(function()
+        return getSkinAsset(skinInfo, skinName)
+    end)
+
+    if ok and result then
+        return true
     end
 
-    return nil, assetInfo
+    return false
 end
 
 local function trySetTextureProperty(obj, propertyName, asset)
@@ -594,8 +595,9 @@ local function trySetTextureProperty(obj, propertyName, asset)
 end
 
 local function applyPistolSkin(tool, skinName, preloadedAsset)
-    if not tool or (not tool:IsA("Tool") and not tool:IsA("Model") and not tool:IsA("BasePart")) then
-        return false, 0, "No hay un modelo de pistola válido."
+    if not tool or (not tool:IsA("Tool") and not tool:IsA("Model")
+        and not tool:IsA("BasePart")) then
+        return false, 0, "No hay un modelo de pistola/holster válido."
     end
 
     local skinInfo = PISTOL_SKINS[skinName]
@@ -603,40 +605,31 @@ local function applyPistolSkin(tool, skinName, preloadedAsset)
         return false, 0, "Skin desconocida: " .. tostring(skinName)
     end
 
-    local asset, assetInfo = preloadedAsset
-    if not asset then
-        asset, assetInfo = getCachedSkinAsset(skinName)
+    local asset = preloadedAsset or SKIN_ASSET_CACHE[skinName]
+    local assetInfo = "cache"
+
+    if type(asset) ~= "string" or asset == "" then
+        asset, assetInfo = getSkinAsset(skinInfo, skinName)
     end
+
     if not asset then
         return false, 0, assetInfo or "No se pudo crear el asset."
     end
 
     local changed = 0
     local inspected = 0
-    local candidates = 0
 
-    local function tryObject(obj)
+    for _, obj in ipairs(tool:GetDescendants()) do
         inspected = inspected + 1
         local ok = false
 
-        -- Texture / Decal
         if obj:IsA("Texture") or obj:IsA("Decal") then
-            candidates = candidates + 1
             ok = trySetTextureProperty(obj, "Texture", asset)
-
-        -- MeshPart: TextureID es la propiedad que usa la textura UV.
         elseif obj:IsA("MeshPart") then
-            candidates = candidates + 1
             ok = trySetTextureProperty(obj, "TextureID", asset)
-
-        -- SpecialMesh dentro de un Part/Tool.
         elseif obj:IsA("SpecialMesh") then
-            candidates = candidates + 1
             ok = trySetTextureProperty(obj, "TextureId", asset)
-
-        -- SurfaceAppearance.
         elseif obj:IsA("SurfaceAppearance") then
-            candidates = candidates + 1
             ok = trySetTextureProperty(obj, "ColorMap", asset)
         end
 
@@ -645,16 +638,9 @@ local function applyPistolSkin(tool, skinName, preloadedAsset)
         end
     end
 
-    -- Incluye el objeto raíz por si el visual es un MeshPart suelto.
-    tryObject(tool)
-    for _, obj in ipairs(tool:GetDescendants()) do
-        tryObject(obj)
-    end
-
     if changed == 0 then
         return false, 0,
-            "No se pudo modificar la textura. Revisados: " .. tostring(inspected) ..
-            " | Candidatos: " .. tostring(candidates)
+            "No se encontró Texture, Decal, MeshPart, SpecialMesh o SurfaceAppearance modificable."
     end
 
     return true, changed,
@@ -662,111 +648,173 @@ local function applyPistolSkin(tool, skinName, preloadedAsset)
         " | Revisados: " .. tostring(inspected)
 end
 
-local function objectLooksLikeWeapon(obj)
-    local name = tostring(obj.Name or ""):lower()
-    return name:find("pistol", 1, true)
-        or name:find("gun", 1, true)
-        or name:find("revolver", 1, true)
-        or name:find("weapon", 1, true)
-        or name:find("sheriff", 1, true)
-        or name:find("revolver", 1, true)
-end
-
 
 local function findEquippedPistol()
     local character = player.Character
     if not character then return nil end
 
-    -- Primero una Tool equipada; no exigimos que tenga un nombre concreto.
     local equipped = character:FindFirstChildOfClass("Tool")
-    if equipped then
+    if not equipped then return nil end
+
+    -- Si el juego tiene una herramienta claramente identificada como pistola,
+    -- la usamos. Si no, usamos la Tool equipada.
+    local lower = equipped.Name:lower()
+    if lower:find("pistol") or lower:find("gun") or lower:find("revolver")
+        or lower:find("weapon") then
         return equipped
     end
 
-    -- Algunos juegos mantienen el visual como Model dentro del personaje.
+    return equipped
+end
+
+local function isRevolverDefaultTool(obj)
+    if not obj then return false end
+    local name = tostring(obj.Name or ""):lower()
+    return name == "revolver default"
+        or name:find("revolver") ~= nil
+end
+
+local function applyHolsteredPistolSkin()
+    -- Algunos juegos mantienen una copia VISUAL del arma en el personaje
+    -- mientras la Tool real permanece en Backpack. Esta es la pistola que
+    -- se ve en la cintura. No creamos ninguna copia: sólo modificamos la
+    -- copia que el propio juego ya está mostrando.
+    local character = player.Character
+    if not character then
+        return false, 0, "Character no encontrado"
+    end
+
+    local asset = SKIN_ASSET_CACHE[selectedPistolSkin]
+    if not asset then
+        preloadSelectedPistolSkin()
+        asset = SKIN_ASSET_CACHE[selectedPistolSkin]
+    end
+    if not asset then
+        return false, 0, "Skin todavía no preparada"
+    end
+
+    local total = 0
+
     for _, obj in ipairs(character:GetDescendants()) do
-        if obj:IsA("Model") and objectLooksLikeWeapon(obj) then
-            return obj
+        local n = tostring(obj.Name or ""):lower()
+        local looksLikeRevolver =
+            n == "revolver default"
+            or n:find("revolver") ~= nil
+
+        if looksLikeRevolver and
+            (obj:IsA("Model") or obj:IsA("Tool") or obj:IsA("BasePart")) then
+            local ok, count = applyPistolSkin(obj, selectedPistolSkin, asset)
+            if ok and count > 0 then
+                total = total + count
+            end
         end
     end
 
-    return nil
+    if total > 0 then
+        return true, total, "Skin aplicada al Revolver Default/holster mientras está guardado."
+    end
+
+    return false, 0, "No se encontró el modelo visual del Revolver Default en la cintura."
+end
+
+local function applyStoredPistolSkin()
+    -- IMPORTANTE: la Tool puede seguir en Backpack. No hace falta tenerla
+    -- en la mano para preparar sus texturas. No se crea ninguna copia.
+    local backpack = player:FindFirstChildOfClass("Backpack")
+    if not backpack then
+        return false, 0, "Backpack no encontrada"
+    end
+
+    local asset = SKIN_ASSET_CACHE[selectedPistolSkin]
+    if not asset then
+        preloadSelectedPistolSkin()
+        asset = SKIN_ASSET_CACHE[selectedPistolSkin]
+    end
+    if not asset then
+        return false, 0, "Skin todavía no preparada"
+    end
+
+    local total = 0
+    local found = false
+
+    for _, child in ipairs(backpack:GetChildren()) do
+        if child:IsA("Tool") and isRevolverDefaultTool(child) then
+            found = true
+            local ok, count = applyPistolSkin(child, selectedPistolSkin, asset)
+            if ok and count > 0 then
+                total = total + count
+            end
+        end
+    end
+
+    if total > 0 then
+        return true, total, "Skin preparada mientras Revolver Default está guardado."
+    end
+
+    if found then
+        return false, 0,
+            "Revolver Default está guardado, pero su modelo visual no expone una textura modificable todavía."
+    end
+
+    return false, 0, "Revolver Default no está actualmente en Backpack."
 end
 
 local function applySelectedPistolSkin()
-    local detailResult = nil
-    local asset = getCachedSkinAsset(selectedPistolSkin)
+    -- Primero preparamos el asset y la Tool aunque esté guardada.
+    preloadSelectedPistolSkin()
+    local preloadedAsset = SKIN_ASSET_CACHE[selectedPistolSkin]
 
-    -- 1) Tool/model equipado.
-    local equipped = findEquippedPistol()
-    if equipped then
-        local ok, count, detail = pcall(applyPistolSkin, equipped, selectedPistolSkin, asset)
-        if ok and count and count > 0 then
-            return true, count, detail
-        end
-        if ok and detail then detailResult = detail end
+    -- Aplicar también al modelo visual que el juego deja en la cintura
+    -- mientras la Tool real permanece guardada.
+    local holsterOK, holsterCount, holsterDetail = applyHolsteredPistolSkin()
+    if holsterOK and holsterCount > 0 then
+        return holsterOK, holsterCount, holsterDetail
     end
 
-    -- 2) Revisar todos los modelos relevantes del Character, no solo sus hijos directos.
-    local character = player.Character
-    if character then
-        local total = 0
-        local lastDetail = nil
-        local seen = {}
-        for _, obj in ipairs(character:GetDescendants()) do
-            local candidate = nil
-            if obj:IsA("Model") and objectLooksLikeWeapon(obj) then
-                candidate = obj
-            elseif obj:IsA("MeshPart") and objectLooksLikeWeapon(obj) then
-                candidate = obj
-            end
-            if candidate and not seen[candidate] then
-                seen[candidate] = true
-                local ok, count, detail = pcall(applyPistolSkin, candidate, selectedPistolSkin, asset)
-                if ok and count and count > 0 then
-                    total = total + count
-                    lastDetail = detail
-                elseif ok and detail then
-                    lastDetail = detail
-                end
-            end
-        end
-        if total > 0 then
-            return true, total, lastDetail
+    -- Aplicar directamente a la Tool que está en Backpack.
+    -- Así la textura queda lista antes de sacar el revolver.
+    local storedOK, storedCount, storedDetail = applyStoredPistolSkin()
+    if storedOK and storedCount > 0 then
+        return storedOK, storedCount, storedDetail
+    end
+
+    local tool = findEquippedPistol()
+    if tool then
+        local ok, count, detail = applyPistolSkin(tool, selectedPistolSkin, preloadedAsset)
+        if ok and count > 0 then
+            return ok, count, detail
         end
     end
 
-    -- 3) ViewModel/visual de cámara. Se revisan Models completos, incluso anidados.
+    -- ViewModels: primero modelos directos y después descendientes anidados.
     local camera = workspace.CurrentCamera
     if camera then
         local total = 0
         local lastDetail = nil
-        local seen = {}
+
         for _, obj in ipairs(camera:GetDescendants()) do
-            local candidate = nil
-            if obj:IsA("Model") and objectLooksLikeWeapon(obj) then
-                candidate = obj
-            elseif obj:IsA("MeshPart") and objectLooksLikeWeapon(obj) then
-                candidate = obj
-            end
-            if candidate and not seen[candidate] then
-                seen[candidate] = true
-                local ok, count, detail = pcall(applyPistolSkin, candidate, selectedPistolSkin, asset)
-                if ok and count and count > 0 then
-                    total = total + count
-                    lastDetail = detail
-                elseif ok and detail then
-                    lastDetail = detail
+            if obj:IsA("Model") then
+                local n = obj.Name:lower()
+                if n:find("pistol") or n:find("gun")
+                    or n:find("revolver") or n:find("weapon")
+                    or n:find("viewmodel") then
+                    local ok, count, detail =
+                        applyPistolSkin(obj, selectedPistolSkin, preloadedAsset)
+                    if ok and count > 0 then
+                        total = total + count
+                        lastDetail = detail
+                    end
                 end
             end
         end
+
         if total > 0 then
             return true, total, lastDetail
         end
     end
 
-    return false, 0, detailResult
-        or "No se encontró una textura modificable en el arma. El modelo puede usar una Union/Part sin textura UV o un sistema de apariencia distinto."
+    return false, 0,
+        "No se encontraron texturas modificables en la pistola/visual model."
 end
 
 
@@ -831,263 +879,6 @@ function runtime.Track(connection)
     return connection
 end
 
--- ==========================================
--- SKIN DE PISTOLA: equipar con textura desde el PRIMER instante visible
--- ==========================================
--- Flujo exacto:
---   1) La skin seleccionada se descarga/prepara mientras la Tool está en Backpack.
---      NO se crea ninguna copia visible del arma.
---   2) Cuando Roblox empieza Backpack -> Character, aplicamos la textura
---      inmediatamente a la Tool.
---   3) Durante la animación inicial de sacar el arma vigilamos Tool/Character/
---      CurrentCamera porque algunos sistemas crean o reemplazan el modelo
---      visual en varios pasos.
---   4) Cuando la Tool vuelve a Backpack se desconecta el watcher y no queda
---      ningún arma visible adicional.
---
-do
-    local skinBindGeneration = 0
-    local activeTool = nil
-    local activeConnections = {}
-    local activeWatcherId = 0
-    local transitionToken = 0
-
-    local function disconnectActive()
-        transitionToken = transitionToken + 1
-        for i = #activeConnections, 1, -1 do
-            pcall(function() activeConnections[i]:Disconnect() end)
-            activeConnections[i] = nil
-        end
-        activeTool = nil
-        activeWatcherId = activeWatcherId + 1
-    end
-
-    local function trackActive(conn)
-        if conn then
-            activeConnections[#activeConnections + 1] = conn
-            runtime.Track(conn)
-        end
-        return conn
-    end
-
-    local function isPistolLikeTool(tool)
-        if not tool or not tool:IsA("Tool") then return false end
-        local n = tostring(tool.Name or ""):lower()
-        return n:find("pistol") ~= nil
-            or n:find("gun") ~= nil
-            or n:find("revolver") ~= nil
-            or n:find("weapon") ~= nil
-            or n:find("sheriff") ~= nil
-            or n:find("magnum") ~= nil
-            or n:find("revolver") ~= nil
-    end
-
-    local function isHeldWeaponModel(model)
-        if not model or not model:IsA("Model") then return false end
-        local n = tostring(model.Name or ""):lower()
-        return n:find("pistol") ~= nil
-            or n:find("gun") ~= nil
-            or n:find("revolver") ~= nil
-            or n:find("weapon") ~= nil
-            or n:find("sheriff") ~= nil
-            or n:find("magnum") ~= nil
-            or n:find("viewmodel") ~= nil
-    end
-
-    local function applyVisualNow(obj, asset)
-        if not obj or not obj.Parent then return 0 end
-        local ok, count = pcall(function()
-            local _, c = applyPistolSkin(obj, selectedPistolSkin, asset)
-            return c
-        end)
-        if ok then
-            return tonumber(count) or 0
-        end
-        return 0
-    end
-
-    local function applyHeldVisuals(tool, asset)
-        if not runtime.Alive or not tool or not asset then return end
-
-        -- La Tool real, incluso antes de que termine la animación.
-        pcall(applyPistolSkin, tool, selectedPistolSkin, asset)
-
-        local character = player.Character
-        if character then
-            -- El modelo puede separarse temporalmente de la Tool y quedar como
-            -- un Model propio dentro del Character durante la animación.
-            for _, child in ipairs(character:GetChildren()) do
-                if child:IsA("Model") and isHeldWeaponModel(child) then
-                    pcall(applyPistolSkin, child, selectedPistolSkin, asset)
-                end
-            end
-
-            -- Si el juego mete el arma bajo una mano/brazo, también capturamos
-            -- los modelos de arma que aparezcan en cualquier nivel del Character.
-            for _, desc in ipairs(character:GetDescendants()) do
-                if desc:IsA("Model") and isHeldWeaponModel(desc) then
-                    pcall(applyPistolSkin, desc, selectedPistolSkin, asset)
-                end
-            end
-        end
-
-        -- ViewModel de primera persona, cuando exista.
-        local camera = workspace.CurrentCamera
-        if camera then
-            for _, child in ipairs(camera:GetChildren()) do
-                if child:IsA("Model") and isHeldWeaponModel(child) then
-                    pcall(applyPistolSkin, child, selectedPistolSkin, asset)
-                end
-            end
-        end
-    end
-
-    local function beginEquippedWatcher(tool)
-        disconnectActive()
-        activeTool = tool
-        activeWatcherId = activeWatcherId + 1
-        local watcherId = activeWatcherId
-        transitionToken = transitionToken + 1
-        local myToken = transitionToken
-
-        local asset = getCachedSkinAsset(selectedPistolSkin)
-        if not asset then
-            -- Si no estaba preparado, lo preparamos aquí como último recurso.
-            local info = PISTOL_SKINS[selectedPistolSkin]
-            if info then
-                asset = select(1, getSkinAsset(info, selectedPistolSkin))
-            end
-        end
-        if not asset then return end
-
-        -- Aplicación inmediata: la skin aparece al comenzar a sacar el arma.
-        applyHeldVisuals(tool, asset)
-
-        -- Captura de partes/modelos creados durante la animación.
-        trackActive(tool.DescendantAdded:Connect(function()
-            if watcherId ~= activeWatcherId then return end
-            task.defer(function()
-                if watcherId == activeWatcherId and activeTool == tool
-                    and tool.Parent == player.Character then
-                    applyHeldVisuals(tool, asset)
-                end
-            end)
-        end))
-
-        local character = player.Character
-        if character then
-            trackActive(character.DescendantAdded:Connect(function(desc)
-                if watcherId ~= activeWatcherId then return end
-                if desc:IsA("Model") and isHeldWeaponModel(desc) then
-                    task.defer(function()
-                        if watcherId == activeWatcherId and activeTool == tool
-                            and tool.Parent == player.Character then
-                            pcall(applyPistolSkin, desc, selectedPistolSkin, asset)
-                        end
-                    end)
-                elseif desc:IsA("MeshPart") or desc:IsA("SpecialMesh")
-                    or desc:IsA("Texture") or desc:IsA("Decal")
-                    or desc:IsA("SurfaceAppearance") then
-                    task.defer(function()
-                        if watcherId == activeWatcherId and activeTool == tool
-                            and tool.Parent == player.Character then
-                            applyHeldVisuals(tool, asset)
-                        end
-                    end)
-                end
-            end))
-        end
-
-        local camera = workspace.CurrentCamera
-        if camera then
-            trackActive(camera.ChildAdded:Connect(function(child)
-                if watcherId ~= activeWatcherId then return end
-                if child:IsA("Model") and isHeldWeaponModel(child) then
-                    task.defer(function()
-                        if watcherId == activeWatcherId and activeTool == tool
-                            and tool.Parent == player.Character then
-                            pcall(applyPistolSkin, child, selectedPistolSkin, asset)
-                        end
-                    end)
-                end
-            end))
-        end
-
-        -- Ventana corta de alta frecuencia sólo mientras se está sacando el
-        -- arma. Esto evita esperar al final de la animación y no deja un loop
-        -- permanente cuando el arma está guardada.
-        task.spawn(function()
-            local started = os.clock()
-            while runtime.Alive and watcherId == activeWatcherId
-                and activeTool == tool and tool.Parent == player.Character
-                and myToken == transitionToken and os.clock() - started < 1.8 do
-                applyHeldVisuals(tool, asset)
-                task.wait(0.035)
-            end
-        end)
-    end
-
-    local function bindTool(tool)
-        if not runtime.Alive or not isPistolLikeTool(tool) then return end
-
-        if tool.Parent == player.Character then
-            beginEquippedWatcher(tool)
-        end
-
-        runtime.Track(tool.Equipped:Connect(function()
-            if runtime.Alive and tool.Parent == player.Character then
-                beginEquippedWatcher(tool)
-            end
-        end))
-
-        runtime.Track(tool.Unequipped:Connect(function()
-            if activeTool == tool then
-                disconnectActive()
-            end
-        end))
-    end
-
-    local function bindPistolCharacter(character)
-        skinBindGeneration = skinBindGeneration + 1
-        local generation = skinBindGeneration
-        disconnectActive()
-        if not character then return end
-
-        for _, child in ipairs(character:GetChildren()) do
-            if generation == skinBindGeneration and child:IsA("Tool") then
-                bindTool(child)
-            end
-        end
-
-        runtime.Track(character.ChildAdded:Connect(function(child)
-            if generation ~= skinBindGeneration or not runtime.Alive then return end
-            if child:IsA("Tool") then
-                -- Ocurre al empezar Backpack -> Character.
-                bindTool(child)
-            end
-        end))
-
-        runtime.Track(character.ChildRemoved:Connect(function(child)
-            if activeTool == child then
-                disconnectActive()
-            end
-        end))
-    end
-
-    runtime.Track(player.CharacterAdded:Connect(function(character)
-        task.defer(bindPistolCharacter, character)
-    end))
-
-    if player.Character then
-        task.defer(bindPistolCharacter, player.Character)
-    end
-
-    -- Preparamos la textura de la skin actual sin mostrar ningún modelo.
-    task.defer(function()
-        pcall(getCachedSkinAsset, selectedPistolSkin)
-    end)
-end
-
 function runtime.TrackDrawing(drawing)
     if drawing then table.insert(runtime.Drawings, drawing) end
     return drawing
@@ -1109,6 +900,132 @@ function runtime.RemoveDrawing(drawing)
     if not drawing then return end
     runtime.UntrackDrawing(drawing)
     pcall(function() drawing:Remove() end)
+end
+
+
+-- ==========================================
+-- CICLO DE VIDA DE SKIN: PRELOAD + EQUIP
+-- ==========================================
+local function bindPistolSkinLifecycle()
+    -- Prepara el asset aunque el Revolver Default siga guardado.
+    task.spawn(function()
+        task.wait(0.25)
+        preloadSelectedPistolSkin()
+    end)
+
+    local function watchBackpack(backpack)
+        if not backpack then return end
+
+        -- Prepara inmediatamente el Revolver Default mientras está guardado.
+        task.defer(function()
+            preloadSelectedPistolSkin()
+            applyStoredPistolSkin()
+        end)
+
+        runtime.Track(backpack.ChildAdded:Connect(function(child)
+            if not child:IsA("Tool") or not isRevolverDefaultTool(child) then
+                return
+            end
+
+            -- La Tool acaba de entrar al inventario: aplicar la skin antes
+            -- de que el jugador vuelva a equiparla.
+            task.defer(function()
+                preloadSelectedPistolSkin()
+                applyPistolSkin(child, selectedPistolSkin,
+                    SKIN_ASSET_CACHE[selectedPistolSkin])
+            end)
+        end))
+    end
+
+    local function watchCharacter(character)
+        if not character then return end
+
+        runtime.Track(character.ChildAdded:Connect(function(child)
+            if not child:IsA("Tool") then return end
+
+            -- El inventario muestra "Revolver Default". Usamos ese nombre
+            -- como objetivo principal, pero permitimos el fallback del juego
+            -- si internamente la Tool usa otro nombre.
+            local name = child.Name:lower()
+            local isRevolver = name == "revolver default"
+                or name:find("revolver") ~= nil
+                or name:find("gun") ~= nil
+                or name:find("pistol") ~= nil
+
+            if not isRevolver then return end
+
+            -- Primer intento inmediatamente.
+            task.defer(function()
+                local asset = SKIN_ASSET_CACHE[selectedPistolSkin]
+                applyPistolSkin(child, selectedPistolSkin, asset)
+            end)
+
+            -- Algunos juegos crean el modelo visual unas décimas después.
+            -- Reintentamos durante un periodo corto para capturar ese modelo,
+            -- sin crear una pistola falsa cuando está guardada.
+            task.spawn(function()
+                for _ = 1, 12 do
+                    if not child.Parent then break end
+                    task.wait(0.08)
+                    applyPistolSkin(child, selectedPistolSkin,
+                        SKIN_ASSET_CACHE[selectedPistolSkin])
+                end
+            end)
+        end))
+
+        -- El holster puede existir desde antes de equipar la Tool.
+        task.defer(function()
+            preloadSelectedPistolSkin()
+            applyHolsteredPistolSkin()
+        end)
+
+        runtime.Track(character.DescendantAdded:Connect(function(obj)
+            -- Si el holster aparece o se recrea, actualizamos su textura.
+            local objName = tostring(obj.Name or ""):lower()
+            if objName:find("revolver") then
+                task.defer(function()
+                    applyHolsteredPistolSkin()
+                end)
+            end
+
+            -- Si el arma visual aparece después del equipamiento, aplicamos
+            -- solamente cuando está dentro del personaje y parece pertenecer
+            -- al revolver/arma.
+            if not obj:IsA("Model") then return end
+
+            local n = obj.Name:lower()
+            if not (n:find("revolver") or n:find("viewmodel")
+                or n:find("gun") or n:find("pistol")) then
+                return
+            end
+
+            task.defer(function()
+                applyPistolSkin(obj, selectedPistolSkin,
+                    SKIN_ASSET_CACHE[selectedPistolSkin])
+            end)
+        end))
+    end
+
+    local backpack = player:FindFirstChildOfClass("Backpack")
+    if backpack then
+        watchBackpack(backpack)
+    end
+
+    if player.Character then
+        watchCharacter(player.Character)
+    end
+
+    runtime.Track(player.ChildAdded:Connect(function(child)
+        if child:IsA("Backpack") then
+            watchBackpack(child)
+        end
+    end))
+
+    runtime.Track(player.CharacterAdded:Connect(function(character)
+        task.wait(0.15)
+        watchCharacter(character)
+        preloadSelectedPistolSkin()
+    end))
 end
 
 function runtime.TrackInfectedText(textObject)
@@ -19164,6 +19081,9 @@ pcall(function()
 end)
 
 
+-- Activa el precargado de la skin y la aplicación al equipar.
+pcall(bindPistolSkinLifecycle)
+
 -- ==========================================
 -- SELECTOR DE SKIN DE PISTOLA
 -- ==========================================
@@ -19177,11 +19097,15 @@ pcall(function()
         Callback = function(value)
             selectedPistolSkin = value
             markAutoConfigChanged()
-            -- Preparar/descargar la textura mientras el arma está guardada.
-            -- Esto no crea ni muestra ninguna pistola.
+
+            -- La textura se descarga/prepara mientras el arma está guardada.
+            task.spawn(function()
+                preloadSelectedPistolSkin()
+            end)
+
+            -- Si ya está equipada, también la aplicamos inmediatamente.
             task.defer(function()
-                pcall(getCachedSkinAsset, selectedPistolSkin)
-                pcall(applySelectedPistolSkin)
+                applySelectedPistolSkin()
             end)
         end
     })
