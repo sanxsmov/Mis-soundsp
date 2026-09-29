@@ -18341,7 +18341,6 @@ local function loadSelectedConfig()
                     controllerInvertY = decoded.Extras["Invertir Stick"] == true
                     secureLoadToggle(UIElements.TogControllerInvert, controllerInvertY)
                 end
-                end
 
                 -- FIX AUTOLOAD: algunos builds de WindUI terminan de pintar los
                 -- toggles después de Set(). Reaplicamos el estado al siguiente frame
