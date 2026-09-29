@@ -124,10 +124,7 @@ local DUELS_BIMO_PLACE_ID = 116817810725116
 local macroActivo = false
 local macroEquipDelay = 0.04
 local macroShootDelay = 0.10
-local knifeMacroEnabled = false
 local triggerBotEnabled = false
-local knifeEquipDelay = 0.10
-local knifeThrowDelay = 0.10
 local selectedPistolSkin = "Floral"
 
 -- Soporte general de mando. La Dead Zone filtra el drift del stick derecho
@@ -220,7 +217,6 @@ local function buildAutoConfig()
     saveToggle("FPS Boost", fpsBoostEnabled)
     saveToggle("Activar Macro", macroActivo)
     saveToggle("Activar Trigger Bot", triggerBotEnabled)
-    saveToggle("Macro Cuchillo (L2)", knifeMacroEnabled)
     saveToggle("Aimbot Controller Support", controllerAimbotEnabled)
     saveToggle("Controller Support", controllerSupportEnabled)
     saveToggle("Compensación Drift L1/R1", controllerDriftAssistEnabled)
@@ -229,8 +225,6 @@ local function buildAutoConfig()
     saveSlider("Tamaño de Hitbox", hitboxSize, hitboxEnabled)
     saveSlider("Delay Equipar Macro", macroEquipDelay, macroActivo)
     saveSlider("Delay Disparo Macro", macroShootDelay, macroActivo)
-    saveSlider("Delay Equipar Cuchillo", knifeEquipDelay, knifeMacroEnabled)
-    saveSlider("Delay Lanzamiento Cuchillo", knifeThrowDelay, knifeMacroEnabled)
     saveSlider("Dead Zone Aimbot", controllerAimDeadZone * 100, controllerAimbotEnabled)
     saveSlider("Dead Zone del Stick", controllerDeadZone * 100, controllerSupportEnabled)
     saveSlider("Sensibilidad del Stick", controllerSensitivity * 100, controllerSupportEnabled)
@@ -3878,35 +3872,6 @@ UIElements.SliMacroShoot = Tabs.Aim:Slider({
     Callback = function(v) macroShootDelay = tonumber(v) or macroShootDelay; markAutoConfigChanged() end
 })
 
-Tabs.Aim:Section({Title = "Macro (Cuchillo)"})
-local knifeL2ActionName = "XeroHub_KnifeMacro_L2_Block"
-local knifeL2BlockBound = false
-
-local function setKnifeL2Block(enabled)
-    if enabled and not knifeL2BlockBound then
-        local ok = pcall(function()
-            ContextActionService:BindActionAtPriority(
-                knifeL2ActionName,
-                function()
-                    -- Consume L2 para que el juego no lo use para
-                    -- alternar Shift Lock mientras la macro está activa.
-                    return Enum.ContextActionResult.Sink
-                end,
-                false,
-                3000,
-                Enum.KeyCode.ButtonL2
-            )
-        end)
-        knifeL2BlockBound = ok
-    elseif not enabled and knifeL2BlockBound then
-        pcall(function()
-            ContextActionService:UnbindAction(knifeL2ActionName)
-        end)
-        knifeL2BlockBound = false
-    end
-end
-
-
 
 -- Trigger Bot
 -- Dispara automáticamente en cuanto un jugador enemigo cruza
@@ -4010,102 +3975,6 @@ UIElements.TogTriggerBot = Tabs.Aim:Toggle({
     end
 })
 
-UIElements.TogKnifeMacro = Tabs.Aim:Toggle({
-    Title = "Activar Macro Cuchillo (L2)",
-    Desc = "Un toque de L2 equipa y lanza el cuchillo.",
-    Callback = function(v)
-        knifeMacroEnabled = v == true
-        setKnifeL2Block(knifeMacroEnabled)
-        markAutoConfigChanged()
-    end
-})
-
-UIElements.SliKnifeEquip = Tabs.Aim:Slider({
-    Title = "Delay Equipar Cuchillo",
-    Desc = "Tiempo antes de lanzar. (Segundos)",
-    Step = 0.01,
-    Value = {Min = 0.01, Max = 0.50, Default = 0.10},
-    Callback = function(v) knifeEquipDelay = tonumber(v) or knifeEquipDelay; markAutoConfigChanged() end
-})
-
-UIElements.SliKnifeThrow = Tabs.Aim:Slider({
-    Title = "Delay Lanzamiento Cuchillo",
-    Desc = "Tiempo después del lanzamiento. (Segundos)",
-    Step = 0.01,
-    Value = {Min = 0.01, Max = 0.50, Default = 0.10},
-    Callback = function(v) knifeThrowDelay = tonumber(v) or knifeThrowDelay; markAutoConfigChanged() end
-})
-
--- L2 se usa como un solo toque. La macro no exige mantener el botón.
-local knifeMacroBusy = false
-
--- Busca el cuchillo por su estructura real, no por el nombre "Knife".
-local function obtenerCuchilloMacro()
-    local character = player.Character
-    local backpack = player:FindFirstChildOfClass("Backpack")
-
-    for _, container in ipairs({character, backpack}) do
-        if container then
-            for _, item in ipairs(container:GetChildren()) do
-                if item:IsA("Tool") and (
-                    item:FindFirstChild("Throw", true)
-                    or item:FindFirstChild("KnifeClient", true)
-                    or item:FindFirstChild("KnifeServer", true)
-                ) then
-                    return item
-                end
-            end
-        end
-    end
-
-    return nil
-end
-
-runtime.Track(UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    -- El propio juego procesa L2 para Throw, por eso NO bloqueamos
-    -- el macro cuando gameProcessed es true.
-    if knifeMacroBusy or not knifeMacroEnabled then return end
-    if input.KeyCode ~= Enum.KeyCode.ButtonL2 then return end
-
-    knifeMacroBusy = true
-
-    local ok, err = pcall(function()
-        local character = player.Character
-        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-        local knife = obtenerCuchilloMacro()
-
-        if not (knife and humanoid) then
-            return
-        end
-
-        -- Equipar y esperar a que Roblox confirme que el Tool ya está en el personaje.
-        humanoid:EquipTool(knife)
-        local equipDeadline = os.clock() + math.max(knifeEquipDelay, 0.05)
-        repeat
-            task.wait()
-        until knife.Parent == character or os.clock() >= equipDeadline
-
-        -- Un pequeño margen después de que el Tool entra al personaje ayuda a que
-        -- KnifeClient/LocalScripts terminen de inicializarse antes del lanzamiento.
-        task.wait(math.max(0, knifeEquipDelay))
-
-        -- Usamos la activación normal de la Tool. Esto deja que el propio
-        -- KnifeClient ejecute la secuencia correcta de lanzamiento y sus argumentos,
-        -- en vez de llamar a Throw:FireServer() sin los datos que el juego pueda exigir.
-        pcall(function()
-            knife:Activate()
-        end)
-
-        task.wait(knifeThrowDelay)
-        pcall(function()
-            if humanoid and humanoid.Parent then
-                humanoid:UnequipTools()
-            end
-        end)
-    end)
-
-    knifeMacroBusy = false
-end))
 
 local deadZoneFrame = Instance.new("Frame")
 deadZoneFrame.Size = UDim2.new(0, 150, 0, 150)
@@ -18318,7 +18187,6 @@ Tabs.Config:Button({ Title = "Guardar Configuración", Callback = function()
             ["FPS Boost"] = fpsBoostEnabled,
             ["Activar Macro"] = macroActivo,
             ["Activar Trigger Bot"] = triggerBotEnabled,
-            ["Macro Cuchillo (L2)"] = knifeMacroEnabled,
             ["Trigger Bot"] = triggerBotEnabled
         },
         Sliders = { 
@@ -18326,8 +18194,6 @@ Tabs.Config:Button({ Title = "Guardar Configuración", Callback = function()
             ["Tamaño de Hitbox"] = hitboxSize, 
             ["Delay Equipar Macro"] = macroEquipDelay,
             ["Delay Disparo Macro"] = macroShootDelay,
-            ["Delay Equipar Cuchillo"] = knifeEquipDelay,
-            ["Delay Lanzamiento Cuchillo"] = knifeThrowDelay,
             ["Dead Zone Aimbot"] = controllerAimDeadZone * 100
         },
         Colors = {
@@ -18454,13 +18320,6 @@ local function loadSelectedConfig()
                     macroActivo = decoded.Toggles["Activar Macro"] == true
                     secureLoadToggle(UIElements.TogMacro, macroActivo)
                 end
-                if decoded.Toggles["Macro Cuchillo (L2)"] ~= nil then
-                    knifeMacroEnabled = decoded.Toggles["Macro Cuchillo (L2)"] == true
-                    secureLoadToggle(UIElements.TogKnifeMacro, knifeMacroEnabled)
-                if decoded.Toggles["Trigger Bot"] ~= nil then
-                    triggerBotEnabled = decoded.Toggles["Trigger Bot"] == true
-                    secureLoadToggle(UIElements.TogTriggerBot, triggerBotEnabled)
-                end
                 if decoded.Toggles["Controller Support"] ~= nil then
                     controllerSupportEnabled = decoded.Toggles["Controller Support"] == true
                     secureLoadToggle(UIElements.TogControllerSupport, controllerSupportEnabled)
@@ -18484,7 +18343,6 @@ local function loadSelectedConfig()
                 -- toggles después de Set(). Reaplicamos el estado al siguiente frame
                 -- para que visual y variable queden sincronizados.
                 local savedMacroState = decoded.Toggles["Activar Macro"]
-                local savedKnifeMacroState = decoded.Toggles["Macro Cuchillo (L2)"]
                 local savedControllerSupportState = decoded.Toggles["Controller Support"]
                 local savedControllerDriftAssistState = decoded.Toggles["Compensación Drift L1/R1"]
                 local savedControllerAimbotState = decoded.Toggles["Aimbot Controller Support"]
@@ -18494,10 +18352,6 @@ local function loadSelectedConfig()
                     if savedMacroState ~= nil then
                         macroActivo = savedMacroState == true
                         pcall(function() UIElements.TogMacro:Set(macroActivo) end)
-                    end
-                    if savedKnifeMacroState ~= nil then
-                        knifeMacroEnabled = savedKnifeMacroState == true
-                        pcall(function() UIElements.TogKnifeMacro:Set(knifeMacroEnabled) end)
                     end
                     if savedControllerSupportState ~= nil then
                         controllerSupportEnabled = savedControllerSupportState == true
@@ -18527,8 +18381,6 @@ local function loadSelectedConfig()
                 if decoded.Sliders["Tamaño de Hitbox"] ~= nil then hitboxSize = decoded.Sliders["Tamaño de Hitbox"]; secureLoadToggle(UIElements.SliHitbox, hitboxSize) end
                 if decoded.Sliders["Delay Equipar Macro"] ~= nil then macroEquipDelay = decoded.Sliders["Delay Equipar Macro"]; secureLoadToggle(UIElements.SliMacroEquip, macroEquipDelay) end
                 if decoded.Sliders["Delay Disparo Macro"] ~= nil then macroShootDelay = decoded.Sliders["Delay Disparo Macro"]; secureLoadToggle(UIElements.SliMacroShoot, macroShootDelay) end
-                if decoded.Sliders["Delay Equipar Cuchillo"] ~= nil then knifeEquipDelay = decoded.Sliders["Delay Equipar Cuchillo"]; secureLoadToggle(UIElements.SliKnifeEquip, knifeEquipDelay) end
-                if decoded.Sliders["Delay Lanzamiento Cuchillo"] ~= nil then knifeThrowDelay = decoded.Sliders["Delay Lanzamiento Cuchillo"]; secureLoadToggle(UIElements.SliKnifeThrow, knifeThrowDelay) end
                 if decoded.Sliders["Dead Zone Aimbot"] ~= nil then
                     controllerAimDeadZone = (tonumber(decoded.Sliders["Dead Zone Aimbot"]) or 20) / 100
                     secureLoadToggle(UIElements.SliControllerAimDeadZone, decoded.Sliders["Dead Zone Aimbot"])
@@ -18938,7 +18790,6 @@ task.spawn(function()
                     UIElements.ToggleFPS,
                     UIElements.TogMacro,
                     UIElements.TogTriggerBot,
-                    UIElements.TogKnifeMacro,
                     UIElements.TogControllerAimbot,
                     UIElements.TogControllerSupport,
                     UIElements.TogControllerInvert,
@@ -18949,7 +18800,6 @@ task.spawn(function()
 
                 -- Estados internos que algunos controles no exponen directamente.
                 macroActivo = false
-                knifeMacroEnabled = false
                 triggerBotEnabled = false
                 controllerAimbotEnabled = false
                 controllerSupportEnabled = false
