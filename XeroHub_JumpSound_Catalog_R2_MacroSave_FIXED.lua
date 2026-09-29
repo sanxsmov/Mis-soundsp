@@ -1418,24 +1418,48 @@ end
 
 
 
-local MainSection = Window:Section({ Title = "PRINCIPAL", Opened = true })
-local TrollSection = Window:Section({ Title = "PERSONAL", Opened = true })
+local MainSection = Window:Section({ Title = "XERO HUB", Opened = true })
 
+-- Solo se muestran estas dos pestañas.
 local Tabs = {
     Inicio = MainSection:Tab({Title = "Inicio", Icon = "solar:home-bold"}),
-    Aim = MainSection:Tab({Title = "Aimbot", Icon = "solar:target-bold"}),
-    KillAll = MainSection:Tab({Title = "Kill All", Icon = "solar:target-bold"}), -- 🔥 NUEVA CATEGORÍA AGREGADA
-    Vis = MainSection:Tab({Title = "Visuales", Icon = "solar:eye-bold"}),
-    Mov = MainSection:Tab({Title = "Movimiento", Icon = "solar:running-bold"}),
-    Farm = MainSection:Tab({Title = "AutoFarm", Icon = "solar:dollar-bold"}),
-    Graficos = MainSection:Tab({Title = "Gráficos", Icon = "solar:palette-bold"}), -- 🔥 NUEVA PESTAÑA AQUÍ
     Sonidos = MainSection:Tab({Title = "Sonidos", Icon = "solar:volume-loud-bold"}),
-    Teclado = MainSection:Tab({Title = "Teclado", Icon = "solar:keyboard-bold"}),
-    Emotes = TrollSection:Tab({Title = "Animaciones", Icon = "solar:smile-circle-bold"}),
-    Apariencia = TrollSection:Tab({Title = "Apariencia", Icon = "solar:palette-bold"}),
-    Config = TrollSection:Tab({Title = "Configuración", Icon = "solar:settings-bold"}),
-    Creditos = TrollSection:Tab({Title = "Créditos", Icon = "solar:user-bold"})
 }
+
+-- Compatibilidad interna: el código antiguo todavía contiene bloques que
+-- apuntan a pestañas eliminadas. Estos objetos no crean UI ni ejecutan callbacks.
+-- Así podemos conservar el núcleo del script sin volver a mostrar las pestañas.
+local function hiddenControl()
+    local state = false
+    local value = nil
+    return {
+        Set = function(_, v) state = v; value = v end,
+        SetValue = function(_, v) state = v; value = v end,
+        GetState = function() return state end,
+        GetValue = function() return value end,
+        OnChanged = function() return { Disconnect = function() end } end,
+    }
+end
+
+local HiddenTab = setmetatable({}, {
+    __index = function()
+        return function()
+            return hiddenControl()
+        end
+    end
+})
+
+Tabs.Aim = HiddenTab
+Tabs.KillAll = HiddenTab
+Tabs.Vis = HiddenTab
+Tabs.Mov = HiddenTab
+Tabs.Farm = HiddenTab
+Tabs.Graficos = HiddenTab
+Tabs.Teclado = HiddenTab
+Tabs.Emotes = HiddenTab
+Tabs.Apariencia = HiddenTab
+Tabs.Config = HiddenTab
+Tabs.Creditos = HiddenTab
 
 -- ==========================================
 -- ⌨️ TECLADO VIRTUAL + DICTADO POR VOZ
@@ -18320,10 +18344,6 @@ local function loadSelectedConfig()
                     macroActivo = decoded.Toggles["Activar Macro"] == true
                     secureLoadToggle(UIElements.TogMacro, macroActivo)
                 end
-                if decoded.Toggles["Trigger Bot"] ~= nil then
-                    triggerBotEnabled = decoded.Toggles["Trigger Bot"] == true
-                    secureLoadToggle(UIElements.TogTriggerBot, triggerBotEnabled)
-                end
                 if decoded.Toggles["Controller Support"] ~= nil then
                     controllerSupportEnabled = decoded.Toggles["Controller Support"] == true
                     secureLoadToggle(UIElements.TogControllerSupport, controllerSupportEnabled)
@@ -18340,6 +18360,7 @@ local function loadSelectedConfig()
                 if decoded.Extras and decoded.Extras["Invertir Stick"] ~= nil then
                     controllerInvertY = decoded.Extras["Invertir Stick"] == true
                     secureLoadToggle(UIElements.TogControllerInvert, controllerInvertY)
+                end
                 end
 
                 -- FIX AUTOLOAD: algunos builds de WindUI terminan de pintar los
