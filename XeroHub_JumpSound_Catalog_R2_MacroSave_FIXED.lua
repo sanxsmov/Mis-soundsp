@@ -1429,24 +1429,18 @@ local Tabs = {
 -- Compatibilidad interna: el código antiguo todavía contiene bloques que
 -- apuntan a pestañas eliminadas. Estos objetos no crean UI ni ejecutan callbacks.
 -- Así podemos conservar el núcleo del script sin volver a mostrar las pestañas.
-local function hiddenControl()
-    local state = false
-    local value = nil
-    return {
-        Set = function(_, v) state = v; value = v end,
-        SetValue = function(_, v) state = v; value = v end,
-        GetState = function() return state end,
-        GetValue = function() return value end,
-        OnChanged = function() return { Disconnect = function() end } end,
-    }
-end
-
-local HiddenTab = setmetatable({}, {
-    __index = function()
-        return function()
-            return hiddenControl()
+-- Compatibilidad interna: el código antiguo todavía contiene bloques que
+-- apuntan a pestañas eliminadas. El proxy no crea UI y absorbe cualquier
+-- llamada de esos bloques para evitar errores por referencias Tabs.*.
+local HiddenTab = {}
+setmetatable(HiddenTab, {
+    __index = function(_, key)
+        if key == "Set" or key == "SetValue" or key == "GetState" or key == "GetValue" then
+            return function(...) return HiddenTab end
         end
-    end
+        return function(...) return HiddenTab end
+    end,
+    __newindex = function() end
 })
 
 Tabs.Aim = HiddenTab
