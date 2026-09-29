@@ -432,7 +432,7 @@ local player = Players.LocalPlayer
 -- ==========================================
 local PISTOL_SKINS = {
     ["Floral"] = {
-        url = "https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/textures/armaf.png",
+        url = "https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/textures/pistola_floral.png",
         ext = "png"
     },
     ["Haunted"] = {
@@ -446,25 +446,17 @@ local PISTOL_SKINS = {
 }
 
 
-local SKIN_ASSET_CACHE = {}
-local SKIN_PRELOAD_STATE = {}
-
 local function getSkinAsset(skinInfo, name)
     if type(skinInfo) ~= "table" or type(skinInfo.url) ~= "string" then
         return nil, "Ruta de skin inválida"
     end
 
-    if type(writefile) ~= "function" or type(getcustomasset) ~= "function" then
+    if type(writefile) ~= "function"
+        or type(getcustomasset) ~= "function" then
         return nil, "Falta writefile o getcustomasset"
     end
 
-    -- Si ya fue preparado, no volvemos a descargarlo al equipar.
-    local cachedAsset = SKIN_ASSET_CACHE[name]
-    if type(cachedAsset) == "string" and cachedAsset ~= "" then
-        return cachedAsset, "cache"
-    end
-
-    local folder = "XeroHub_Skins_V6"
+    local folder = "XeroHub_Skins_V5"
     pcall(function()
         if type(isfolder) == "function" and not isfolder(folder)
             and type(makefolder) == "function" then
@@ -484,28 +476,36 @@ local function getSkinAsset(skinInfo, name)
         if type(data) ~= "string" or #data < 64 then
             return false
         end
+
         local b1, b2, b3, b4 = data:byte(1, 4)
         local isPNG = b1 == 137 and b2 == 80 and b3 == 78 and b4 == 71
         local isJPG = b1 == 255 and b2 == 216 and b3 == 255
         return isPNG or isJPG
     end
 
-    local cached = nil
-    if type(readfile) == "function" then
-        pcall(function()
-            local data = readfile(path)
-            if validImageData(data) then cached = data end
+    local function readCached()
+        if type(readfile) ~= "function" then return nil end
+        local ok, data = pcall(function()
+            return readfile(path)
         end)
+        if ok and validImageData(data) then
+            return data
+        end
+        return nil
     end
 
+    -- Si hay una copia dañada, la eliminamos y descargamos de nuevo.
+    local cached = readCached()
     if not cached then
         if type(deletefile) == "function" then
             pcall(function() deletefile(path) end)
         end
 
         local data = nil
-        local requestFn = nil
 
+        -- request/http_request suele conservar mejor los bytes binarios que
+        -- algunas implementaciones de game:HttpGet.
+        local requestFn = nil
         if type(request) == "function" then
             requestFn = request
         elseif type(http_request) == "function" then
@@ -524,8 +524,7 @@ local function getSkinAsset(skinInfo, name)
 
             if ok and type(response) == "table"
                 and (response.StatusCode == nil or tonumber(response.StatusCode) == 200)
-                and type(response.Body) == "string"
-                and validImageData(response.Body) then
+                and type(response.Body) == "string" then
                 data = response.Body
             end
         end
@@ -549,7 +548,6 @@ local function getSkinAsset(skinInfo, name)
         if not okWrite then
             return nil, "No se pudo escribir " .. path
         end
-        cached = data
     end
 
     local ok, asset = pcall(function()
@@ -557,34 +555,10 @@ local function getSkinAsset(skinInfo, name)
     end)
 
     if ok and type(asset) == "string" and asset ~= "" then
-        SKIN_ASSET_CACHE[name] = asset
-        SKIN_PRELOAD_STATE[name] = true
         return asset, path
     end
 
     return nil, "getcustomasset no pudo convertir " .. path
-end
-
-local function preloadSelectedPistolSkin()
-    local skinName = selectedPistolSkin
-    local skinInfo = PISTOL_SKINS[skinName]
-    if not skinInfo then return false end
-
-    local asset = SKIN_ASSET_CACHE[skinName]
-    if type(asset) == "string" and asset ~= "" then
-        SKIN_PRELOAD_STATE[skinName] = true
-        return true
-    end
-
-    local ok, result = pcall(function()
-        return getSkinAsset(skinInfo, skinName)
-    end)
-
-    if ok and result then
-        return true
-    end
-
-    return false
 end
 
 local function trySetTextureProperty(obj, propertyName, asset)
@@ -594,10 +568,9 @@ local function trySetTextureProperty(obj, propertyName, asset)
     return ok
 end
 
-local function applyPistolSkin(tool, skinName, preloadedAsset)
-    if not tool or (not tool:IsA("Tool") and not tool:IsA("Model")
-        and not tool:IsA("BasePart")) then
-        return false, 0, "No hay un modelo de pistola/holster válido."
+local function applyPistolSkin(tool, skinName)
+    if not tool or (not tool:IsA("Tool") and not tool:IsA("Model")) then
+        return false, 0, "No hay un modelo de pistola equipado."
     end
 
     local skinInfo = PISTOL_SKINS[skinName]
@@ -605,36 +578,39 @@ local function applyPistolSkin(tool, skinName, preloadedAsset)
         return false, 0, "Skin desconocida: " .. tostring(skinName)
     end
 
-    local asset = preloadedAsset or SKIN_ASSET_CACHE[skinName]
-    local assetInfo = "cache"
-
-    if type(asset) ~= "string" or asset == "" then
-        asset, assetInfo = getSkinAsset(skinInfo, skinName)
-    end
-
+    local asset, assetInfo = getSkinAsset(skinInfo, skinName)
     if not asset then
         return false, 0, assetInfo or "No se pudo crear el asset."
     end
 
     local changed = 0
     local inspected = 0
+    local touched = {}
 
     for _, obj in ipairs(tool:GetDescendants()) do
         inspected = inspected + 1
         local ok = false
 
+        -- Texturas/decals clásicos.
         if obj:IsA("Texture") or obj:IsA("Decal") then
             ok = trySetTextureProperty(obj, "Texture", asset)
+
+        -- MeshPart.
         elseif obj:IsA("MeshPart") then
             ok = trySetTextureProperty(obj, "TextureID", asset)
+
+        -- SpecialMesh.
         elseif obj:IsA("SpecialMesh") then
             ok = trySetTextureProperty(obj, "TextureId", asset)
+
+        -- Algunos modelos usan SurfaceAppearance.
         elseif obj:IsA("SurfaceAppearance") then
             ok = trySetTextureProperty(obj, "ColorMap", asset)
         end
 
         if ok then
             changed = changed + 1
+            table.insert(touched, obj:GetFullName())
         end
     end
 
@@ -647,7 +623,6 @@ local function applyPistolSkin(tool, skinName, preloadedAsset)
         "Asset: " .. tostring(assetInfo) ..
         " | Revisados: " .. tostring(inspected)
 end
-
 
 local function findEquippedPistol()
     local character = player.Character
@@ -667,139 +642,29 @@ local function findEquippedPistol()
     return equipped
 end
 
-local function isRevolverDefaultTool(obj)
-    if not obj then return false end
-    local name = tostring(obj.Name or ""):lower()
-    return name == "revolver default"
-        or name:find("revolver") ~= nil
-end
-
-local function applyHolsteredPistolSkin()
-    -- Algunos juegos mantienen una copia VISUAL del arma en el personaje
-    -- mientras la Tool real permanece en Backpack. Esta es la pistola que
-    -- se ve en la cintura. No creamos ninguna copia: sólo modificamos la
-    -- copia que el propio juego ya está mostrando.
-    local character = player.Character
-    if not character then
-        return false, 0, "Character no encontrado"
-    end
-
-    local asset = SKIN_ASSET_CACHE[selectedPistolSkin]
-    if not asset then
-        preloadSelectedPistolSkin()
-        asset = SKIN_ASSET_CACHE[selectedPistolSkin]
-    end
-    if not asset then
-        return false, 0, "Skin todavía no preparada"
-    end
-
-    local total = 0
-
-    for _, obj in ipairs(character:GetDescendants()) do
-        local n = tostring(obj.Name or ""):lower()
-        local looksLikeRevolver =
-            n == "revolver default"
-            or n:find("revolver") ~= nil
-
-        if looksLikeRevolver and
-            (obj:IsA("Model") or obj:IsA("Tool") or obj:IsA("BasePart")) then
-            local ok, count = applyPistolSkin(obj, selectedPistolSkin, asset)
-            if ok and count > 0 then
-                total = total + count
-            end
-        end
-    end
-
-    if total > 0 then
-        return true, total, "Skin aplicada al Revolver Default/holster mientras está guardado."
-    end
-
-    return false, 0, "No se encontró el modelo visual del Revolver Default en la cintura."
-end
-
-local function applyStoredPistolSkin()
-    -- IMPORTANTE: la Tool puede seguir en Backpack. No hace falta tenerla
-    -- en la mano para preparar sus texturas. No se crea ninguna copia.
-    local backpack = player:FindFirstChildOfClass("Backpack")
-    if not backpack then
-        return false, 0, "Backpack no encontrada"
-    end
-
-    local asset = SKIN_ASSET_CACHE[selectedPistolSkin]
-    if not asset then
-        preloadSelectedPistolSkin()
-        asset = SKIN_ASSET_CACHE[selectedPistolSkin]
-    end
-    if not asset then
-        return false, 0, "Skin todavía no preparada"
-    end
-
-    local total = 0
-    local found = false
-
-    for _, child in ipairs(backpack:GetChildren()) do
-        if child:IsA("Tool") and isRevolverDefaultTool(child) then
-            found = true
-            local ok, count = applyPistolSkin(child, selectedPistolSkin, asset)
-            if ok and count > 0 then
-                total = total + count
-            end
-        end
-    end
-
-    if total > 0 then
-        return true, total, "Skin preparada mientras Revolver Default está guardado."
-    end
-
-    if found then
-        return false, 0,
-            "Revolver Default está guardado, pero su modelo visual no expone una textura modificable todavía."
-    end
-
-    return false, 0, "Revolver Default no está actualmente en Backpack."
-end
-
 local function applySelectedPistolSkin()
-    -- Primero preparamos el asset y la Tool aunque esté guardada.
-    preloadSelectedPistolSkin()
-    local preloadedAsset = SKIN_ASSET_CACHE[selectedPistolSkin]
-
-    -- Aplicar también al modelo visual que el juego deja en la cintura
-    -- mientras la Tool real permanece guardada.
-    local holsterOK, holsterCount, holsterDetail = applyHolsteredPistolSkin()
-    if holsterOK and holsterCount > 0 then
-        return holsterOK, holsterCount, holsterDetail
-    end
-
-    -- Aplicar directamente a la Tool que está en Backpack.
-    -- Así la textura queda lista antes de sacar el revolver.
-    local storedOK, storedCount, storedDetail = applyStoredPistolSkin()
-    if storedOK and storedCount > 0 then
-        return storedOK, storedCount, storedDetail
-    end
-
     local tool = findEquippedPistol()
     if tool then
-        local ok, count, detail = applyPistolSkin(tool, selectedPistolSkin, preloadedAsset)
+        local ok, count, detail = applyPistolSkin(tool, selectedPistolSkin)
         if ok and count > 0 then
             return ok, count, detail
         end
     end
 
-    -- ViewModels: primero modelos directos y después descendientes anidados.
+    -- Algunos juegos dibujan el arma en un ViewModel dentro de CurrentCamera
+    -- y no en la Tool del personaje. Intentamos modelos cuyo nombre identifica
+    -- razonablemente un arma, sin tocar toda la cámara.
     local camera = workspace.CurrentCamera
     if camera then
         local total = 0
         local lastDetail = nil
-
-        for _, obj in ipairs(camera:GetDescendants()) do
+        for _, obj in ipairs(camera:GetChildren()) do
             if obj:IsA("Model") then
                 local n = obj.Name:lower()
                 if n:find("pistol") or n:find("gun")
                     or n:find("revolver") or n:find("weapon")
                     or n:find("viewmodel") then
-                    local ok, count, detail =
-                        applyPistolSkin(obj, selectedPistolSkin, preloadedAsset)
+                    local ok, count, detail = applyPistolSkin(obj, selectedPistolSkin)
                     if ok and count > 0 then
                         total = total + count
                         lastDetail = detail
@@ -807,7 +672,6 @@ local function applySelectedPistolSkin()
                 end
             end
         end
-
         if total > 0 then
             return true, total, lastDetail
         end
@@ -900,132 +764,6 @@ function runtime.RemoveDrawing(drawing)
     if not drawing then return end
     runtime.UntrackDrawing(drawing)
     pcall(function() drawing:Remove() end)
-end
-
-
--- ==========================================
--- CICLO DE VIDA DE SKIN: PRELOAD + EQUIP
--- ==========================================
-local function bindPistolSkinLifecycle()
-    -- Prepara el asset aunque el Revolver Default siga guardado.
-    task.spawn(function()
-        task.wait(0.25)
-        preloadSelectedPistolSkin()
-    end)
-
-    local function watchBackpack(backpack)
-        if not backpack then return end
-
-        -- Prepara inmediatamente el Revolver Default mientras está guardado.
-        task.defer(function()
-            preloadSelectedPistolSkin()
-            applyStoredPistolSkin()
-        end)
-
-        runtime.Track(backpack.ChildAdded:Connect(function(child)
-            if not child:IsA("Tool") or not isRevolverDefaultTool(child) then
-                return
-            end
-
-            -- La Tool acaba de entrar al inventario: aplicar la skin antes
-            -- de que el jugador vuelva a equiparla.
-            task.defer(function()
-                preloadSelectedPistolSkin()
-                applyPistolSkin(child, selectedPistolSkin,
-                    SKIN_ASSET_CACHE[selectedPistolSkin])
-            end)
-        end))
-    end
-
-    local function watchCharacter(character)
-        if not character then return end
-
-        runtime.Track(character.ChildAdded:Connect(function(child)
-            if not child:IsA("Tool") then return end
-
-            -- El inventario muestra "Revolver Default". Usamos ese nombre
-            -- como objetivo principal, pero permitimos el fallback del juego
-            -- si internamente la Tool usa otro nombre.
-            local name = child.Name:lower()
-            local isRevolver = name == "revolver default"
-                or name:find("revolver") ~= nil
-                or name:find("gun") ~= nil
-                or name:find("pistol") ~= nil
-
-            if not isRevolver then return end
-
-            -- Primer intento inmediatamente.
-            task.defer(function()
-                local asset = SKIN_ASSET_CACHE[selectedPistolSkin]
-                applyPistolSkin(child, selectedPistolSkin, asset)
-            end)
-
-            -- Algunos juegos crean el modelo visual unas décimas después.
-            -- Reintentamos durante un periodo corto para capturar ese modelo,
-            -- sin crear una pistola falsa cuando está guardada.
-            task.spawn(function()
-                for _ = 1, 12 do
-                    if not child.Parent then break end
-                    task.wait(0.08)
-                    applyPistolSkin(child, selectedPistolSkin,
-                        SKIN_ASSET_CACHE[selectedPistolSkin])
-                end
-            end)
-        end))
-
-        -- El holster puede existir desde antes de equipar la Tool.
-        task.defer(function()
-            preloadSelectedPistolSkin()
-            applyHolsteredPistolSkin()
-        end)
-
-        runtime.Track(character.DescendantAdded:Connect(function(obj)
-            -- Si el holster aparece o se recrea, actualizamos su textura.
-            local objName = tostring(obj.Name or ""):lower()
-            if objName:find("revolver") then
-                task.defer(function()
-                    applyHolsteredPistolSkin()
-                end)
-            end
-
-            -- Si el arma visual aparece después del equipamiento, aplicamos
-            -- solamente cuando está dentro del personaje y parece pertenecer
-            -- al revolver/arma.
-            if not obj:IsA("Model") then return end
-
-            local n = obj.Name:lower()
-            if not (n:find("revolver") or n:find("viewmodel")
-                or n:find("gun") or n:find("pistol")) then
-                return
-            end
-
-            task.defer(function()
-                applyPistolSkin(obj, selectedPistolSkin,
-                    SKIN_ASSET_CACHE[selectedPistolSkin])
-            end)
-        end))
-    end
-
-    local backpack = player:FindFirstChildOfClass("Backpack")
-    if backpack then
-        watchBackpack(backpack)
-    end
-
-    if player.Character then
-        watchCharacter(player.Character)
-    end
-
-    runtime.Track(player.ChildAdded:Connect(function(child)
-        if child:IsA("Backpack") then
-            watchBackpack(child)
-        end
-    end))
-
-    runtime.Track(player.CharacterAdded:Connect(function(character)
-        task.wait(0.15)
-        watchCharacter(character)
-        preloadSelectedPistolSkin()
-    end))
 end
 
 function runtime.TrackInfectedText(textObject)
@@ -12861,102 +12599,139 @@ runtime.Track(RunService.Heartbeat:Connect(function(deltaTime)
     end
 
     -- ==========================================
-    -- 4. SILENT AIM (0.03s · ~33 Hz)
+    -- 4. SILENT AIM NUEVO (selección por centro de mira)
     -- ==========================================
     if silentAimPistolaEnabled or silentAimCuchilloEnabled then
         mState.saAct = true
         mState.tSA = mState.tSA + deltaTime
+
         if mState.tSA >= 0.03 then
             mState.tSA = 0
+
             if not enLobby then
                 local char = player.Character
-                local localCore = char and getCharCore(char) or nil
+                local localCore = char and getCharCore(char)
                 local hrp = localCore and localCore.HRP
+
                 if hrp then
                     local arma = char:FindFirstChildOfClass("Tool")
                     local allowedWeapon = false
+
                     if arma then
                         local esGun = esLaPistola(arma)
-                        if (esGun and silentAimPistolaEnabled) or (not esGun and silentAimCuchilloEnabled) then
-                            allowedWeapon = true
-                        end
+                        allowedWeapon =
+                            (esGun and silentAimPistolaEnabled)
+                            or ((not esGun) and silentAimCuchilloEnabled)
                     end
 
                     if allowedWeapon then
-                        local closestTargetPart = nil
-                        local shortestDistToCenter = math.huge 
-                        local shortestDistanceFisica = math.huge 
-                        local myPos = hrp.Position
-                        local headPos = (localCore and localCore.Head and localCore.Head.Position) or myPos
                         local viewport = camera.ViewportSize
-                        if viewport.X ~= mState.vpX or viewport.Y ~= mState.vpY then
-                            mState.vpX, mState.vpY = viewport.X, viewport.Y
-                            mState.centerX, mState.centerY = viewport.X * 0.5, viewport.Y * 0.5
-                        end
-                        local centerX, centerY = mState.centerX, mState.centerY
+                        local centerX = viewport.X * 0.5
+                        local centerY = viewport.Y * 0.5
                         local fovSq = fovRadius * fovRadius
-                        local broadFov = fovRadius + 150
-                        local broadFovSq = broadFov * broadFov
-                        
+
+                        local closestTargetPart = nil
+                        local closestScreenDist = math.huge
+                        local closestWorldDist = math.huge
+
+                        local myPos = hrp.Position
+                        local headPos = (localCore.Head and localCore.Head.Position) or myPos
+
                         mState.igSA[1] = char
 
-                        for i = 1, #listaJugadores do 
+                        for i = 1, #listaJugadores do
                             local p = listaJugadores[i]
-                            local enemyChar = p ~= player and p.Character or nil
+                            local enemyChar = (p ~= player) and p.Character or nil
+
                             if enemyChar and isEnemy(p) then
                                 local enemyCore = getCharCore(enemyChar)
                                 local enemyHum = enemyCore and enemyCore.Humanoid
                                 local enemyHrp = enemyCore and enemyCore.HRP
-                                local enemyDelta = enemyHrp and (enemyHrp.Position - myPos) or nil
-                                if enemyHum and enemyHum.Health > 0 and enemyDelta and enemyDelta:Dot(enemyDelta) <= 640000 then
-                                    if silentAimFovEnabled then
-                                        local hrpPos2D, onScreen = camera:WorldToViewportPoint(enemyHrp.Position)
-                                        local dx, dy = hrpPos2D.X - centerX, hrpPos2D.Y - centerY
-                                        if not onScreen or (dx * dx + dy * dy) > broadFovSq then continue end
-                                    end
 
-                                    runtime.CollectTargetParts(enemyChar, "SilentAim", mState.scSA, mState.seenSA)
+                                if enemyHum and enemyHum.Health > 0 and enemyHrp then
+                                    local delta = enemyHrp.Position - myPos
+                                    local worldDist = delta:Dot(delta)
 
-                                    mState.igSA[2] = enemyChar 
-                                    mState.pSA.FilterDescendantsInstances = mState.igSA
-                                    
-                                    for j = 1, #mState.scSA do
-                                        local part = mState.scSA[j]
-                                        local pasaFiltro = false
-                                        local candidateDistance = math.huge
-                                        
-                                        if silentAimFovEnabled then
-                                            local hrpPos2D, onScreen = camera:WorldToViewportPoint(part.Position)
+                                    if worldDist <= 640000 then
+                                        runtime.CollectTargetParts(
+                                            enemyChar,
+                                            "SilentAim",
+                                            mState.scSA,
+                                            mState.seenSA
+                                        )
+
+                                        mState.igSA[2] = enemyChar
+                                        mState.pSA.FilterDescendantsInstances = mState.igSA
+
+                                        for j = 1, #mState.scSA do
+                                            local part = mState.scSA[j]
+                                            local screenPos, onScreen =
+                                                camera:WorldToViewportPoint(part.Position)
+
                                             if onScreen then
-                                                -- Cambiamos pos2D por hrpPos2D
-                                                local dx, dy = hrpPos2D.X - centerX, hrpPos2D.Y - centerY 
-                                                candidateDistance = dx * dx + dy * dy
-                                                if candidateDistance <= fovSq and candidateDistance < shortestDistToCenter then pasaFiltro = true end
+                                                local dx = screenPos.X - centerX
+                                                local dy = screenPos.Y - centerY
+                                                local screenDist = dx * dx + dy * dy
+
+                                                local insideFov =
+                                                    (not silentAimFovEnabled)
+                                                    or screenDist <= fovSq
+
+                                                if insideFov then
+                                                    local betterTarget
+
+                                                    if silentAimFovEnabled then
+                                                        betterTarget =
+                                                            screenDist < closestScreenDist
+                                                    else
+                                                        betterTarget =
+                                                            screenDist < closestScreenDist
+                                                            or (
+                                                                screenDist == closestScreenDist
+                                                                and worldDist < closestWorldDist
+                                                            )
+                                                    end
+
+                                                    if betterTarget then
+                                                        if not ws_Raycast(
+                                                            workspace,
+                                                            headPos,
+                                                            part.Position - headPos,
+                                                            mState.pSA
+                                                        ) then
+                                                            closestScreenDist = screenDist
+                                                            closestWorldDist = worldDist
+                                                            closestTargetPart = part
+                                                        end
+                                                    end
+                                                end
                                             end
-                                        else
-                                            local partDelta = part.Position - myPos
-                                            candidateDistance = partDelta:Dot(partDelta)
-                                            if candidateDistance < shortestDistanceFisica then pasaFiltro = true end
-                                        end
-                                        
-                                        if pasaFiltro and not ws_Raycast(workspace, headPos, part.Position - headPos, mState.pSA) then
-                                            if silentAimFovEnabled then shortestDistToCenter = candidateDistance else shortestDistanceFisica = candidateDistance end
-                                            closestTargetPart = part
                                         end
                                     end
                                 end
                             end
                         end
-                        if closestTargetPart then aimHookState.Target = closestTargetPart
-                        elseif not autoShootEnabled and not autoShootCuchilloEnabled then aimHookState.Target = nil end
-                    elseif not autoShootEnabled and not autoShootCuchilloEnabled then aimHookState.Target = nil end
-                elseif not autoShootEnabled and not autoShootCuchilloEnabled then aimHookState.Target = nil end
+
+                        if closestTargetPart then
+                            aimHookState.Target = closestTargetPart
+                        elseif not autoShootEnabled and not autoShootCuchilloEnabled then
+                            aimHookState.Target = nil
+                        end
+                    elseif not autoShootEnabled and not autoShootCuchilloEnabled then
+                        aimHookState.Target = nil
+                    end
+                elseif not autoShootEnabled and not autoShootCuchilloEnabled then
+                    aimHookState.Target = nil
+                end
             end
         end
     elseif mState.saAct then
         mState.saAct = false
         mState.tSA = 0
-        if not autoShootEnabled and not autoShootCuchilloEnabled then aimHookState.Target = nil end
+
+        if not autoShootEnabled and not autoShootCuchilloEnabled then
+            aimHookState.Target = nil
+        end
     end
 end))
 
@@ -19081,9 +18856,6 @@ pcall(function()
 end)
 
 
--- Activa el precargado de la skin y la aplicación al equipar.
-pcall(bindPistolSkinLifecycle)
-
 -- ==========================================
 -- SELECTOR DE SKIN DE PISTOLA
 -- ==========================================
@@ -19097,13 +18869,6 @@ pcall(function()
         Callback = function(value)
             selectedPistolSkin = value
             markAutoConfigChanged()
-
-            -- La textura se descarga/prepara mientras el arma está guardada.
-            task.spawn(function()
-                preloadSelectedPistolSkin()
-            end)
-
-            -- Si ya está equipada, también la aplicamos inmediatamente.
             task.defer(function()
                 applySelectedPistolSkin()
             end)
