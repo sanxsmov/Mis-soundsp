@@ -18320,6 +18320,10 @@ local function loadSelectedConfig()
                     macroActivo = decoded.Toggles["Activar Macro"] == true
                     secureLoadToggle(UIElements.TogMacro, macroActivo)
                 end
+                if decoded.Toggles["Trigger Bot"] ~= nil then
+                    triggerBotEnabled = decoded.Toggles["Trigger Bot"] == true
+                    secureLoadToggle(UIElements.TogTriggerBot, triggerBotEnabled)
+                end
                 if decoded.Toggles["Controller Support"] ~= nil then
                     controllerSupportEnabled = decoded.Toggles["Controller Support"] == true
                     secureLoadToggle(UIElements.TogControllerSupport, controllerSupportEnabled)
