@@ -1119,20 +1119,57 @@ local WindUI
 -- UI separada: se conserva toda la lógica original, pero R3 hace la carga más tolerante.
 -- Orden de carga: archivo local XeroHub_UI.lua -> URL RAW oficial de XeroHub.
 local XeroEnv = ((getgenv and getgenv()) or _G)
-local NOX_UI_URL = XeroEnv.NOX_UI_URL or "https://raw.githubusercontent.com/OnyxDevv/Onyx-web/refs/heads/main/main%20(3).lua"
+local NOX_UI_URL = XeroEnv.NOX_UI_URL or "https://raw.githubusercontent.com/OnyxDevv/Onyx-web/main/main%20(3).lua"
+
+local function fetchXeroUISource(url)
+    if type(request) == "function" then
+        local ok, response = pcall(function()
+            return request({Url = url, Method = "GET", Headers = { ["User-Agent"] = "XeroHub/3.0" }})
+        end)
+        if ok and type(response) == "table" then
+            local status = tonumber(response.StatusCode or response.Status or 200) or 200
+            local body = response.Body or response.body
+            if status >= 200 and status < 300 and type(body) == "string" and #body > 100 then
+                return body
+            end
+        end
+    end
+    if type(http_request) == "function" then
+        local ok, response = pcall(function()
+            return http_request({Url = url, Method = "GET", Headers = { ["User-Agent"] = "XeroHub/3.0" }})
+        end)
+        if ok and type(response) == "table" then
+            local status = tonumber(response.StatusCode or response.Status or 200) or 200
+            local body = response.Body or response.body
+            if status >= 200 and status < 300 and type(body) == "string" and #body > 100 then
+                return body
+            end
+        end
+    end
+    local ok, body = pcall(function() return game:HttpGet(url) end)
+    if ok and type(body) == "string" and #body > 100 then
+        return body
+    end
+    local okHttp, bodyHttp = pcall(function()
+        return game:GetService("HttpService"):GetAsync(url)
+    end)
+    if okHttp and type(bodyHttp) == "string" and #bodyHttp > 100 then
+        return bodyHttp
+    end
+    return nil
+end
 
 local function loadXeroUI()
     local source
     if type(isfile) == "function" and type(readfile) == "function" and isfile("XeroHub_UI.lua") then
-        source = readfile("XeroHub_UI.lua")
-    elseif tostring(NOX_UI_URL) ~= "" then
-        source = game:HttpGet(NOX_UI_URL)
-    else
-        error("Falta XeroHub_UI.lua o getgenv().NOX_UI_URL")
+        local okRead, localSource = pcall(readfile, "XeroHub_UI.lua")
+        if okRead and type(localSource) == "string" then source = localSource end
     end
-
+    if not source and tostring(NOX_UI_URL) ~= "" then
+        source = fetchXeroUISource(NOX_UI_URL)
+    end
     if type(source) ~= "string" or #source < 100 then
-        error("La interfaz descargada está vacía o incompleta")
+        error("No se pudo descargar XeroHub_UI.lua desde: " .. tostring(NOX_UI_URL))
     end
 
     -- Mantener el parche existente para la pestaña Sonidos.
