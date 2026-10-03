@@ -837,381 +837,31 @@ end
 
 runtimeEnv.__ILUNX_RUNTIME = runtime
 
-function AstraRequest(ruta)
-    local req = (syn and syn.request) or (http and http.request) or http_request or request
-    if req then
-        local success, response = pcall(function()
-            return req({
-                Url = "https://hub.onyx-scripts.com" .. ruta,
-                Method = "GET",
-                Headers = {
-                    ["Astra-Auth"] = "OnyxHub!", 
-                    ["User-Agent"] = "Roblox/iLunXHub"
-                }
-            })
-        end)
-        if success and response then return response.Body end
-    end
-    return nil
-end
-
-task.spawn(function()
-    local banStatus = AstraRequest("/check_ban")
-    if banStatus == "BANNED" then
-        player:Kick("\nXeroHub SECURITY\nTu red (IP) está baneada permanentemente del Hub por intento de robo o violación de reglas.\n\n.")
-    end
-end)
-
-
-
 -- ==========================================
---  VARIABLES GLOBALES DE CONFIGURACIÓN 
--- ==========================================
-_G.AstraBotonesOcultos = false
-fovVisiblePreference = false
-fovRadius = 120
-fovFollowsCursor = false
-activeTouches = {}
-extraFovCircles = {}
-aimbotEnabled = false
-autoShootEnabled = false
-fullAimbotEnabled = false
-hitboxEnabled = false
-hitboxInvisible = false 
-hitboxTransparency = 0.6
-hitboxSize = 10
-hitboxColor = Color3.fromRGB(255, 255, 255)
-teamCheckEnabled = true
-espEnabled = false
-espColor = Color3.fromRGB(255, 255, 255)
-espSettings = { Glow = true, Name = true, Distance = true, Box = false, HealthBar = false }
-espLinesEnabled = false
-gunKillEnabled = false
-knifeKillEnabled = false
-flying = false
-flySpeed = 50
-emoteWalkEnabled = false 
-currentEmoteTrack = nil
-allEmotes = {}
-filteredEmotes = {}
-currentPage = 1
-emotesPerPage = 12
-hideNameEnabled = false
-fakeNameEnabled = false
-rainbowEnabled = false
-creatorTagEnabled = false 
-spoofNameText = "Nombre falso"
-aimbotTargetPart = "Cabeza"
-
-local UIElements = {} -- Tabla para guardar referencias
-
-local playerGui = player:WaitForChild("PlayerGui")
-local previousOverlay = playerGui:FindFirstChild("XeroHub_Overlays") or playerGui:FindFirstChild("iLunXHub_Overlays")
-if previousOverlay then
-    previousOverlay:Destroy()
-end
-
--- ==========================================
--- ÚNICA ANIMACIÓN: SPLASH REAL AL EJECUTAR
--- ==========================================
-local startupSplashState = {}
-
-do
-    -- Splash: negro real, nítido y cubriendo todo el viewport.
-    local splashParent = playerGui
-    pcall(function()
-        if gethui then splashParent = gethui() else splashParent = game:GetService("CoreGui") end
-    end)
-
-    local previousSplash = splashParent and (splashParent:FindFirstChild("XeroHub_Startup") or splashParent:FindFirstChild("iLunXHub_Startup"))
-    if previousSplash then previousSplash:Destroy() end
-
-    local startupGui = Instance.new("ScreenGui")
-    startupGui.Name = "XeroHub_Startup"
-    startupGui.ResetOnSpawn = false
-    startupGui.IgnoreGuiInset = true
-    startupGui.DisplayOrder = 2147483647
-    startupGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    pcall(function() startupGui.ScreenInsets = Enum.ScreenInsets.None end)
-    pcall(function() startupGui.ClipToDeviceSafeArea = false end)
-
-    pcall(function()
-        if syn and syn.protect_gui then syn.protect_gui(startupGui) end
-    end)
-
-    local parented = pcall(function() startupGui.Parent = splashParent end)
-    if not parented then startupGui.Parent = playerGui end
-    runtime.StartupGui = startupGui
-
-    local splash = Instance.new("CanvasGroup")
-    splash.Name = "Splash"
-    splash.Size = UDim2.fromScale(1, 1)
-    splash.Position = UDim2.fromScale(0, 0)
-    splash.BackgroundColor3 = Color3.new(0, 0, 0)
-    splash.BackgroundTransparency = 0
-    splash.BorderSizePixel = 0
-    splash.GroupTransparency = 0
-    splash.Active = true
-    splash.ZIndex = 1
-    splash.Parent = startupGui
-
-    local content = Instance.new("Frame")
-    content.Name = "LoaderContent"
-    content.AnchorPoint = Vector2.new(0.5, 0.5)
-    content.Position = UDim2.fromScale(0.5, 0.5)
-    content.Size = UDim2.fromOffset(460, 128)
-    content.BackgroundTransparency = 1
-    content.ZIndex = 2
-    content.Parent = splash
-
-    local contentScale = Instance.new("UIScale")
-    contentScale.Scale = 1
-    contentScale.Parent = content
-
-    local brand = Instance.new("TextLabel")
-    brand.AnchorPoint = Vector2.new(0.5, 0)
-    brand.Size = UDim2.new(1, 0, 0, 46)
-    brand.Position = UDim2.new(0.5, 0, 0, 10)
-    brand.BackgroundTransparency = 1
-    brand.RichText = true
-    brand.Text = '<font color="#FFFFFF">XERO</font><font color="#A7A7A7"> HUB</font>'
-    brand.TextColor3 = Color3.new(1, 1, 1)
-    brand.TextTransparency = 0
-    brand.Font = Enum.Font.GothamBold
-    brand.TextSize = 32
-    brand.TextXAlignment = Enum.TextXAlignment.Center
-    brand.ZIndex = 3
-    brand.Parent = content
-
-    local status = Instance.new("TextLabel")
-    status.AnchorPoint = Vector2.new(0.5, 0)
-    status.Size = UDim2.new(1, -48, 0, 22)
-    status.Position = UDim2.new(0.5, 0, 0, 62)
-    status.BackgroundTransparency = 1
-    status.Text = "Cargando XeroHub..."
-    status.TextColor3 = Color3.fromHex("#9B9B9B")
-    status.Font = Enum.Font.GothamMedium
-    status.TextSize = 13
-    status.TextXAlignment = Enum.TextXAlignment.Center
-    status.ZIndex = 3
-    status.Parent = content
-
-    local progressTrack = Instance.new("Frame")
-    progressTrack.AnchorPoint = Vector2.new(0.5, 0)
-    progressTrack.Size = UDim2.fromOffset(230, 2)
-    progressTrack.Position = UDim2.new(0.5, 0, 0, 98)
-    progressTrack.BackgroundColor3 = Color3.fromHex("#242424")
-    progressTrack.BorderSizePixel = 0
-    progressTrack.ZIndex = 3
-    progressTrack.Parent = content
-    Instance.new("UICorner", progressTrack).CornerRadius = UDim.new(1, 0)
-
-    local progress = Instance.new("Frame")
-    progress.Size = UDim2.fromScale(0.04, 1)
-    progress.BackgroundColor3 = Color3.fromHex("#E7E7E7")
-    progress.BorderSizePixel = 0
-    progress.ZIndex = 4
-    progress.Parent = progressTrack
-    Instance.new("UICorner", progress).CornerRadius = UDim.new(1, 0)
-
-    startupSplashState.Gui = startupGui
-    startupSplashState.Group = splash
-    startupSplashState.Card = content
-    startupSplashState.Status = status
-
-    startupSplashState.Progress = progress
-end
-
-function startupSplashState.Finish(message)
-    local startupGui = startupSplashState.Gui
-    if not startupGui or not startupGui.Parent then return end
-
-    -- Sólo los errores conservan un momento de lectura. La carga correcta
-    -- termina inmediatamente, sin duración mínima ni esperar animaciones.
-    if message and startupSplashState.Status then
-        startupSplashState.Status.Text = message
-        task.wait(0.65)
-    end
-    if startupSplashState.Progress then
-        startupSplashState.Progress.Size = UDim2.fromScale(1, 1)
-    end
-    if startupGui.Parent then startupGui:Destroy() end
-    runtime.StartupGui = nil
-    startupSplashState.Gui = nil
-    startupSplashState.Group = nil
-    startupSplashState.Card = nil
-    startupSplashState.Status = nil
-    startupSplashState.Progress = nil
-end
-
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "XeroHub_Overlays"
-screenGui.ResetOnSpawn = false
-screenGui.IgnoreGuiInset = true 
-screenGui.DisplayOrder = 999 
-screenGui.Parent = playerGui
-runtime.ScreenGui = screenGui
-
-local espFolder = Instance.new("Folder")
-espFolder.Name = "iLunXESPFolder"
-espFolder.Parent = screenGui
-
-local activeDrag = nil
-
--- Una sola conexión global mueve todos los botones arrastrables. Esto evita
--- acumular listeners cada vez que se crea un nuevo botón flotante.
-runtime.Track(UserInputService.InputChanged:Connect(function(input)
-    local drag = activeDrag
-    if not drag or input ~= drag.Input then return end
-    if not drag.Object or not drag.Object.Parent then
-        activeDrag = nil
-        return
-    end
-
-    local delta = input.Position - drag.Start
-    drag.Object.Position = UDim2.new(
-        drag.Position.X.Scale,
-        drag.Position.X.Offset + delta.X,
-        drag.Position.Y.Scale,
-        drag.Position.Y.Offset + delta.Y
-    )
-end))
-
-local function makeDraggable(guiObject, objectToMove)
-    guiObject.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            activeDrag = {
-                Source = guiObject,
-                Object = objectToMove,
-                Input = input.UserInputType == Enum.UserInputType.Touch and input or nil,
-                Start = input.Position,
-                Position = objectToMove.Position,
-            }
-
-            local endedConnection
-            endedConnection = input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    if activeDrag and activeDrag.Source == guiObject then
-                        activeDrag = nil
-                    end
-                    if endedConnection then
-                        endedConnection:Disconnect()
-                        endedConnection = nil
-                    end
-                end
-            end)
-        end
-    end)
-
-    guiObject.InputChanged:Connect(function(input)
-        if activeDrag and activeDrag.Source == guiObject
-            and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            activeDrag.Input = input
-        end
-    end)
-end
-
--- ==========================================
--- NOXHUB / UI SEPARADA
--- La lógica carga XeroHub_UI.lua por archivo local o URL RAW.
+-- XEROHUB UI
+-- Usa WindUI oficial; no depende de WindUI oficial.
 -- ==========================================
 local WindUI
--- UI separada: se conserva toda la lógica original, pero R3 hace la carga más tolerante.
--- Orden de carga: archivo local XeroHub_UI.lua -> URL RAW oficial de XeroHub.
-local XeroEnv = ((getgenv and getgenv()) or _G)
-local NOX_UI_URL = XeroEnv.NOX_UI_URL or "https://raw.githubusercontent.com/OnyxDevv/Onyx-web/main/main%20(3).lua"
+local ok, result = pcall(function()
+    local uiSource = game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua")
+    local uiChunk, uiCompileError = loadstring(uiSource)
+    if not uiChunk then
+        error("No se pudo compilar WindUI: " .. tostring(uiCompileError))
+    end
+    local uiResult = uiChunk()
+    if type(uiResult) ~= "table" then
+        error("WindUI no devolvio una libreria valida")
+    end
+    return uiResult
+end)
 
-local function fetchXeroUISource(url)
-    if type(request) == "function" then
-        local ok, response = pcall(function()
-            return request({Url = url, Method = "GET", Headers = { ["User-Agent"] = "XeroHub/3.0" }})
-        end)
-        if ok and type(response) == "table" then
-            local status = tonumber(response.StatusCode or response.Status or 200) or 200
-            local body = response.Body or response.body
-            if status >= 200 and status < 300 and type(body) == "string" and #body > 100 then
-                return body
-            end
-        end
-    end
-    if type(http_request) == "function" then
-        local ok, response = pcall(function()
-            return http_request({Url = url, Method = "GET", Headers = { ["User-Agent"] = "XeroHub/3.0" }})
-        end)
-        if ok and type(response) == "table" then
-            local status = tonumber(response.StatusCode or response.Status or 200) or 200
-            local body = response.Body or response.body
-            if status >= 200 and status < 300 and type(body) == "string" and #body > 100 then
-                return body
-            end
-        end
-    end
-    local ok, body = pcall(function() return game:HttpGet(url) end)
-    if ok and type(body) == "string" and #body > 100 then
-        return body
-    end
-    local okHttp, bodyHttp = pcall(function()
-        return game:GetService("HttpService"):GetAsync(url)
-    end)
-    if okHttp and type(bodyHttp) == "string" and #bodyHttp > 100 then
-        return bodyHttp
-    end
-    return nil
-end
-
-local function loadXeroUI()
-    local source
-    if type(isfile) == "function" and type(readfile) == "function" and isfile("XeroHub_UI.lua") then
-        local okRead, localSource = pcall(readfile, "XeroHub_UI.lua")
-        if okRead and type(localSource) == "string" then source = localSource end
-    end
-    if not source and tostring(NOX_UI_URL) ~= "" then
-        source = fetchXeroUISource(NOX_UI_URL)
-    end
-    if type(source) ~= "string" or #source < 100 then
-        error("No se pudo descargar XeroHub_UI.lua desde: " .. tostring(NOX_UI_URL))
-    end
-
-    -- Mantener el parche existente para la pestaña Sonidos.
-    source = source:gsub(
-        'AutoFarm="06",%["Gráficos"%]="07",Animaciones="08",Apariencia="09",%["Generar Armas"%]="10",%["Configuración"%]="11",%["Créditos"%]="12"',
-        'AutoFarm="06",["Gráficos"]="07",Sonidos="08",Animaciones="09",Apariencia="10",["Generar Armas"]="11",["Configuración"]="12",["Créditos"]="13"',
-        1
-    )
-    source = source:gsub(
-        '%["Gráficos"%]="Ajusta el ambiente, la iluminación y los efectos%.",',
-        '["Gráficos"]="Ajusta el ambiente, la iluminación y los efectos.", Sonidos="Personaliza los sonidos de disparo y muerte.",',
-        1
-    )
-
-    local compiler = loadstring or load
-    if type(compiler) ~= "function" then
-        error("Este ejecutor no proporciona loadstring/load")
-    end
-
-    local chunk, compileError = compiler(source)
-    if not chunk then
-        error("No se pudo compilar la UI: " .. tostring(compileError))
-    end
-
-    local okRun, result = pcall(chunk)
-    if not okRun then
-        error("Falló la ejecución de la UI: " .. tostring(result))
-    end
-    if type(result) ~= "table" then
-        error("La UI no devolvió su objeto WindUI")
-    end
-    return result
-end
-
-local uiOk, uiResult = pcall(loadXeroUI)
-if uiOk and uiResult then
-    WindUI = uiResult
+if ok and result then
+    WindUI = result
 else
-    local msg = "[XeroHub R3] No se pudo iniciar la UI: " .. tostring(uiResult)
-    warn(msg)
-    pcall(function() startupSplashState.Finish("Error UI: " .. tostring(uiResult)) end)
-    error(msg)
+    warn("[XeroHub] No se pudo iniciar WindUI oficial: " .. tostring(result))
+    startupSplashState.Finish("No se pudo cargar WindUI")
+    runtime.Cleanup()
+    return
 end
 
 local Window = WindUI:CreateWindow({
@@ -1235,38 +885,6 @@ pcall(function()
     Window:OnDestroy(runtime.Cleanup)
 end)
 
-
--- ==========================================
--- CONTADOR DE USUARIOS ACTIVOS (CACHÉ OPTIMIZADO)
--- ==========================================
-task.spawn(function()
-    -- Obtenemos la función HTTP compatible con el ejecutor
-    local req = (syn and syn.request) or (http and http.request) or http_request or request
-    if not req then return end
-    local lastActiveUsersCount = nil
-    
-    while runtime.Alive do
-        local success, response = pcall(function()
-            return req({
-                Url = "https://hub.onyx-scripts.com/ping?user=" .. tostring(player.Name) .. "&jobid=" .. tostring(game.JobId),
-                Method = "GET",
-                Headers = {
-                    ["Astra-Auth"] = "OnyxHub!", 
-                    ["User-Agent"] = "Roblox/iLunXHub"
-                }
-            })
-        end)
-        
-        if success and response and response.StatusCode == 200 then
-            local vivos = tonumber(response.Body)
-            if vivos and vivos ~= lastActiveUsersCount then
-                lastActiveUsersCount = vivos
-                Window:SetTitle("XERO | DUELS · " .. tostring(vivos) .. " activos")
-            end
-        end
-        if runtime.Alive then task.wait(10) end
-    end
-end)
 
 -- ==========================================
 -- NOTIFICACIONES XERO: tarjetas monocromáticas desde la derecha
@@ -1478,36 +1096,40 @@ end
 
 local MainSection = Window:Section({ Title = "XERO HUB", Opened = true })
 
--- Las pestañas siguen existiendo internamente porque el resto del código
--- todavía usa sus controles. Solo se ocultan visualmente las que no queremos
--- mostrar, evitando romper referencias, callbacks y guardado/carga.
-local TrollSection = Window:Section({ Title = "PERSONAL", Opened = true })
-
+-- Solo se muestran estas dos pestañas.
 local Tabs = {
     Inicio = MainSection:Tab({Title = "Inicio", Icon = "solar:home-bold"}),
-    Aim = MainSection:Tab({Title = "Aimbot", Icon = "solar:target-bold"}),
-    KillAll = MainSection:Tab({Title = "Kill All", Icon = "solar:target-bold"}),
-    Vis = MainSection:Tab({Title = "Visuales", Icon = "solar:eye-bold"}),
-    Mov = MainSection:Tab({Title = "Movimiento", Icon = "solar:running-bold"}),
-    Farm = MainSection:Tab({Title = "AutoFarm", Icon = "solar:dollar-bold"}),
-    Graficos = MainSection:Tab({Title = "Gráficos", Icon = "solar:palette-bold"}),
     Sonidos = MainSection:Tab({Title = "Sonidos", Icon = "solar:volume-loud-bold"}),
-    Teclado = MainSection:Tab({Title = "Teclado", Icon = "solar:keyboard-bold"}),
-    Emotes = TrollSection:Tab({Title = "Animaciones", Icon = "solar:smile-circle-bold"}),
-    Apariencia = TrollSection:Tab({Title = "Apariencia", Icon = "solar:palette-bold"}),
-    Config = TrollSection:Tab({Title = "Configuración", Icon = "solar:settings-bold"}),
-    Creditos = TrollSection:Tab({Title = "Créditos", Icon = "solar:user-bold"})
 }
 
--- Solo Inicio y Sonidos quedan visibles en el menú.
--- Las pestañas ocultas siguen siendo reales para que el código existente
--- pueda crear sus controles y no falle durante el arranque.
-local visibleTabs = { Inicio = true, Sonidos = true }
-for name, tab in pairs(Tabs) do
-    if not visibleTabs[name] and tab.NavButton then
-        tab.NavButton.Visible = false
-    end
-end
+-- Compatibilidad interna: el código antiguo todavía contiene bloques que
+-- apuntan a pestañas eliminadas. Estos objetos no crean UI ni ejecutan callbacks.
+-- Así podemos conservar el núcleo del script sin volver a mostrar las pestañas.
+-- Compatibilidad interna: el código antiguo todavía contiene bloques que
+-- apuntan a pestañas eliminadas. El proxy no crea UI y absorbe cualquier
+-- llamada de esos bloques para evitar errores por referencias Tabs.*.
+local HiddenTab = {}
+setmetatable(HiddenTab, {
+    __index = function(_, key)
+        if key == "Set" or key == "SetValue" or key == "GetState" or key == "GetValue" then
+            return function(...) return HiddenTab end
+        end
+        return function(...) return HiddenTab end
+    end,
+    __newindex = function() end
+})
+
+Tabs.Aim = HiddenTab
+Tabs.KillAll = HiddenTab
+Tabs.Vis = HiddenTab
+Tabs.Mov = HiddenTab
+Tabs.Farm = HiddenTab
+Tabs.Graficos = HiddenTab
+Tabs.Teclado = HiddenTab
+Tabs.Emotes = HiddenTab
+Tabs.Apariencia = HiddenTab
+Tabs.Config = HiddenTab
+Tabs.Creditos = HiddenTab
 
 -- ==========================================
 -- ⌨️ TECLADO VIRTUAL + DICTADO POR VOZ
@@ -15466,7 +15088,7 @@ function safeReplace(str, find, replace) local safeFind = find:gsub("[%-%^%$%(%)
 function processText(v, myName, myDisp)
     -- 🔥 ANTI-LAG: Evitamos que el sistema hackee los textos del propio Hub
     local parentGui = v:FindFirstAncestorWhichIsA("ScreenGui")
-    if parentGui and (string.find(parentGui.Name, "WindUI") or string.find(parentGui.Name, "iLunX") or string.find(parentGui.Name, "Onyx")) then return end
+    if parentGui and (string.find(parentGui.Name, "WindUI") or string.find(parentGui.Name, "iLunX")) then return end
 
     if v:IsA("TextLabel") or v:IsA("TextBox") or v:IsA("TextButton") then
         local txt = v.Text local hasName = false
@@ -15535,7 +15157,7 @@ function updateSystem()
             
             function infectarTextoSeguro(v)
                 local parentGui = v:FindFirstAncestorWhichIsA("ScreenGui")
-                if parentGui and (string.find(parentGui.Name, "WindUI") or string.find(parentGui.Name, "iLunX") or string.find(parentGui.Name, "Onyx")) then return end
+                if parentGui and (string.find(parentGui.Name, "WindUI") or string.find(parentGui.Name, "iLunX")) then return end
 
                 if v:IsA("TextLabel") or v:IsA("TextBox") or v:IsA("TextButton") then
                     processText(v, myName, myDisp) 
@@ -16421,7 +16043,7 @@ modes.presets = {
 skyEnv = (getgenv and getgenv()) or _G
 SKYBOX_REPO_BASE = tostring(
     skyEnv.XERO_SKYBOX_BASE_URL
-    or "https://raw.githubusercontent.com/OnyxDevv/Onyx-web/refs/heads/main/skyboxes"
+    or "https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/skyboxes"
 ):gsub("/+$", "")
 
 customAsset = getcustomasset
@@ -18082,7 +17704,7 @@ Tabs.Config:Toggle({
 -- ==========================================
 Tabs.Config:Section({ Title = "Gestor de Configs" })
 local configFolder = "iLunXHub_Configs_Duels_WindUI"
-local legacyConfigFolder = "OnyxHub_Configs_Duels_WindUI"
+local legacyConfigFolder = "XeroHub_Legacy_Configs_Duels_WindUI"
 if isfolder and not isfolder(configFolder) then pcall(function() makefolder(configFolder) end) end
 
 local availableConfigs = {"Ninguna"}
