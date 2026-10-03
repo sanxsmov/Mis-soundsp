@@ -1116,44 +1116,65 @@ end
 -- La lógica carga XeroHub_UI.lua por archivo local o URL RAW.
 -- ==========================================
 local WindUI
--- UI separada: puedes ofuscar este archivo sin mezclar las ~1k líneas visuales.
+-- UI separada: se conserva toda la lógica original, pero R3 hace la carga más tolerante.
 -- Orden de carga: archivo local XeroHub_UI.lua -> URL RAW oficial de XeroHub.
-local NOX_UI_URL = ((getgenv and getgenv()) or _G).NOX_UI_URL or "https://raw.githubusercontent.com/OnyxDevv/Onyx-web/refs/heads/main/main%20(3).lua"
-local ok, result = pcall(function()
+local XeroEnv = ((getgenv and getgenv()) or _G)
+local NOX_UI_URL = XeroEnv.NOX_UI_URL or "https://raw.githubusercontent.com/OnyxDevv/Onyx-web/refs/heads/main/main%20(3).lua"
+
+local function loadXeroUI()
     local source
-    if isfile and readfile and isfile("XeroHub_UI.lua") then
+    if type(isfile) == "function" and type(readfile) == "function" and isfile("XeroHub_UI.lua") then
         source = readfile("XeroHub_UI.lua")
-    elseif NOX_UI_URL ~= "" then
+    elseif tostring(NOX_UI_URL) ~= "" then
         source = game:HttpGet(NOX_UI_URL)
     else
         error("Falta XeroHub_UI.lua o getgenv().NOX_UI_URL")
     end
-    -- XeroHub UI patch: el main remoto actual no tiene numeración para Sonidos.
-    -- Se corrige en memoria antes de compilar para no requerir otro archivo UI local.
-    if type(source) == "string" then
-        source = source:gsub(
-            'AutoFarm="06",%["Gráficos"%]="07",Animaciones="08",Apariencia="09",%["Generar Armas"%]="10",%["Configuración"%]="11",%["Créditos"%]="12"',
-            'AutoFarm="06",["Gráficos"]="07",Sonidos="08",Animaciones="09",Apariencia="10",["Generar Armas"]="11",["Configuración"]="12",["Créditos"]="13"',
-            1
-        )
-        source = source:gsub(
-            '%["Gráficos"%]="Ajusta el ambiente, la iluminación y los efectos%.",',
-            '["Gráficos"]="Ajusta el ambiente, la iluminación y los efectos.", Sonidos="Personaliza los sonidos de disparo y muerte.",',
-            1
-        )
-    end
-    local chunk, compileError = loadstring(source)
-    if not chunk then error("No se pudo compilar: " .. tostring(compileError)) end
-    return chunk()
-end)
 
-if ok and result then
-    WindUI = result
+    if type(source) ~= "string" or #source < 100 then
+        error("La interfaz descargada está vacía o incompleta")
+    end
+
+    -- Mantener el parche existente para la pestaña Sonidos.
+    source = source:gsub(
+        'AutoFarm="06",%["Gráficos"%]="07",Animaciones="08",Apariencia="09",%["Generar Armas"%]="10",%["Configuración"%]="11",%["Créditos"%]="12"',
+        'AutoFarm="06",["Gráficos"]="07",Sonidos="08",Animaciones="09",Apariencia="10",["Generar Armas"]="11",["Configuración"]="12",["Créditos"]="13"',
+        1
+    )
+    source = source:gsub(
+        '%["Gráficos"%]="Ajusta el ambiente, la iluminación y los efectos%.",',
+        '["Gráficos"]="Ajusta el ambiente, la iluminación y los efectos.", Sonidos="Personaliza los sonidos de disparo y muerte.",',
+        1
+    )
+
+    local compiler = loadstring or load
+    if type(compiler) ~= "function" then
+        error("Este ejecutor no proporciona loadstring/load")
+    end
+
+    local chunk, compileError = compiler(source)
+    if not chunk then
+        error("No se pudo compilar la UI: " .. tostring(compileError))
+    end
+
+    local okRun, result = pcall(chunk)
+    if not okRun then
+        error("Falló la ejecución de la UI: " .. tostring(result))
+    end
+    if type(result) ~= "table" then
+        error("La UI no devolvió su objeto WindUI")
+    end
+    return result
+end
+
+local uiOk, uiResult = pcall(loadXeroUI)
+if uiOk and uiResult then
+    WindUI = uiResult
 else
-    warn("[XeroHub] No se pudo iniciar la UI: " .. tostring(result))
-    startupSplashState.Finish("No se pudo cargar XeroHub")
-    runtime.Cleanup()
-    return
+    local msg = "[XeroHub R3] No se pudo iniciar la UI: " .. tostring(uiResult)
+    warn(msg)
+    pcall(function() startupSplashState.Finish("Error UI: " .. tostring(uiResult)) end)
+    error(msg)
 end
 
 local Window = WindUI:CreateWindow({
