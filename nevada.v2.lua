@@ -1,13 +1,111 @@
--- LocalScript: UI Customizada + Disparo de Cualquier Jugador en Partida (sanxsmov/Mis-soundsp)
+-- LocalScript Unificado: Macro + Sound Hub UI + Auto-Configuracion (nevada.v2.lua)
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local SoundService = game:GetService("SoundService")
 
 local player = Players.LocalPlayer
-
 local httpRequest = (syn and syn.request) or (http and http.request) or request or http_request
 
+-- ==========================================
+-- 1. CONFIGURACIÓN Y ESTADOS DE LA MACRO
+-- ==========================================
+local macroActivo = false
+local knifeMacroEnabled = false
+
+local macroEquipDelay = 0.04
+local macroShootDelay = 0.10
+
+local knifeEquipDelay = 0.10
+local knifeThrowDelay = 0.10
+
+local AUTO_SAVE_DELAY = 0.30
+local autoSavePending = false
+
+-- ==========================================
+-- 2. SISTEMA DE AUTO-GUARDADO (AUTO-SAVE / LOAD)
+-- ==========================================
+local function saveToggle(key, value)
+    return {Type = "Toggle", Value = value}
+end
+
+local function saveSlider(key, value, condition)
+    if condition then
+        return {Type = "Slider", Value = value}
+    end
+    return nil
+end
+
+local function loadToggle(data, key, defaultValue)
+    if data and data[key] and data[key].Value ~= nil then
+        return data[key].Value
+    end
+    return defaultValue
+end
+
+local function loadSlider(data, key, defaultValue)
+    if data and data[key] and data[key].Value ~= nil then
+        return data[key].Value
+    end
+    return defaultValue
+end
+
+local function buildAutoConfig()
+    local config = {}
+    
+    config["Activar Macro"] = saveToggle("Activar Macro", macroActivo)
+    config["Macro Cuchillo (L2)"] = saveToggle("Macro Cuchillo (L2)", knifeMacroEnabled)
+    
+    config["Delay Equipar Macro"] = saveSlider("Delay Equipar Macro", macroEquipDelay, macroActivo)
+    config["Delay Disparo Macro"] = saveSlider("Delay Disparo Macro", macroShootDelay, macroActivo)
+    config["Delay Equipar Cuchillo"] = saveSlider("Delay Equipar Cuchillo", knifeEquipDelay, knifeMacroEnabled)
+    config["Delay Lanzamiento Cuchillo"] = saveSlider("Delay Lanzamiento Cuchillo", knifeThrowDelay, knifeMacroEnabled)
+    
+    return config
+end
+
+local function applyAutoConfig(data)
+    if not data then return end
+    
+    macroActivo = loadToggle(data, "Activar Macro", false)
+    knifeMacroEnabled = loadToggle(data, "Macro Cuchillo (L2)", false)
+    
+    macroEquipDelay = loadSlider(data, "Delay Equipar Macro", 0.04)
+    macroShootDelay = loadSlider(data, "Delay Disparo Macro", 0.10)
+    knifeEquipDelay = loadSlider(data, "Delay Equipar Cuchillo", 0.10)
+    knifeThrowDelay = loadSlider(data, "Delay Lanzamiento Cuchillo", 0.10)
+end
+
+local function queueAutoConfigSave()
+    if autoSavePending then return end
+    autoSavePending = true
+    
+    task.delay(AUTO_SAVE_DELAY, function()
+        autoSavePending = false
+        local configData = buildAutoConfig()
+        if writefile then
+            writefile("XeroHub_AutoConfig.json", HttpService:JSONEncode(configData))
+        end
+    end)
+end
+
+local function markAutoConfigChanged()
+    queueAutoConfigSave()
+end
+
+-- Cargar configuración JSON si existe
+if readfile and isfile and isfile("XeroHub_AutoConfig.json") then
+    local success, result = pcall(function()
+        return HttpService:JSONDecode(readfile("XeroHub_AutoConfig.json"))
+    end)
+    if success then
+        applyAutoConfig(result)
+    end
+end
+
+-- ==========================================
+-- 3. CARGA DE AUDIOS Y SONIDOS DE GITHUB
+-- ==========================================
 local GitHubUser = "sanxsmov"
 local RepoName = "Mis-soundsp"
 local FolderPath = "sounds"
@@ -92,7 +190,6 @@ local function playAudioUrl(url)
     end)
 end
 
--- Comprobación de Partida
 local function isInMatch()
     local char = player.Character
     if not char then return false end
@@ -110,24 +207,26 @@ local function isInMatch()
     return hasWeapon ~= nil
 end
 
--- GUI Interfaz (sanxsmov Hub)
+-- ==========================================
+-- 4. INTERFAZ GRÁFICA (UI) CON SECCIÓN MACRO
+-- ==========================================
 local playerGui = player:WaitForChild("PlayerGui")
 
-if playerGui:FindFirstChild("SanxsmovAudioMenu") then
-    playerGui.SanxsmovAudioMenu:Destroy()
+if playerGui:FindFirstChild("NevadaV2Menu") then
+    playerGui.NevadaV2Menu:Destroy()
 end
 
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "SanxsmovAudioMenu"
+screenGui.Name = "NevadaV2Menu"
 screenGui.ResetOnSpawn = false
 screenGui.Parent = playerGui
 
 local toggleButton = Instance.new("TextButton")
-toggleButton.Size = UDim2.new(0, 120, 0, 42)
+toggleButton.Size = UDim2.new(0, 140, 0, 42)
 toggleButton.Position = UDim2.new(0.02, 0, 0.4, 0)
 toggleButton.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
 toggleButton.TextColor3 = Color3.fromRGB(0, 220, 255)
-toggleButton.Text = "🔊 sanxsmov UI"
+toggleButton.Text = "⚡ Nevada v2 UI"
 toggleButton.Font = Enum.Font.GothamBold
 toggleButton.TextSize = 13
 toggleButton.Parent = screenGui
@@ -141,12 +240,14 @@ toggleStroke.Color = Color3.fromRGB(0, 220, 255)
 toggleStroke.Thickness = 1.5
 toggleStroke.Parent = toggleButton
 
-local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 350, 0, 250)
-mainFrame.Position = UDim2.new(0.35, 0, 0.3, 0)
+local mainFrame = Instance.new("ScrollingFrame")
+mainFrame.Size = UDim2.new(0, 360, 0, 380)
+mainFrame.Position = UDim2.new(0.35, 0, 0.25, 0)
 mainFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
 mainFrame.Visible = false
 mainFrame.ClipsDescendants = true
+mainFrame.CanvasSize = UDim2.new(0, 0, 0, 560)
+mainFrame.ScrollBarThickness = 6
 mainFrame.Parent = screenGui
 
 local frameCorner = Instance.new("UICorner")
@@ -172,7 +273,7 @@ titleLabel.Size = UDim2.new(1, -15, 1, 0)
 titleLabel.Position = UDim2.new(0, 15, 0, 0)
 titleLabel.BackgroundTransparency = 1
 titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-titleLabel.Text = "⚡ sanxsmov Sound Hub"
+titleLabel.Text = "⚡ Nevada v2 Sound & Macro Hub"
 titleLabel.Font = Enum.Font.GothamBold
 titleLabel.TextSize = 14
 titleLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -208,6 +309,7 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
+-- Filas de Sonidos
 local function createConfigRow(actionName, actionKey, yOffset)
     local rowFrame = Instance.new("Frame")
     rowFrame.Size = UDim2.new(0.92, 0, 0, 48)
@@ -234,7 +336,7 @@ local function createConfigRow(actionName, actionKey, yOffset)
     btnCorner1.Parent = toggleBtn
 
     local selectBtn = Instance.new("TextButton")
-    selectBtn.Size = UDim2.new(0, 130, 0, 32)
+    selectBtn.Size = UDim2.new(0, 120, 0, 32)
     selectBtn.Position = UDim2.new(0.35, 0, 0.16, 0)
     selectBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
     selectBtn.TextColor3 = Color3.fromRGB(220, 220, 240)
@@ -248,7 +350,7 @@ local function createConfigRow(actionName, actionKey, yOffset)
     btnCorner2.Parent = selectBtn
 
     local testBtn = Instance.new("TextButton")
-    testBtn.Size = UDim2.new(0, 65, 0, 32)
+    testBtn.Size = UDim2.new(0, 60, 0, 32)
     testBtn.Position = UDim2.new(0.77, 0, 0.16, 0)
     testBtn.BackgroundColor3 = Color3.fromRGB(0, 140, 255)
     testBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -283,18 +385,62 @@ local function createConfigRow(actionName, actionKey, yOffset)
     end)
 end
 
-createConfigRow("Disparar", "Disparar", 52)
-createConfigRow("Saltar", "Saltar", 112)
-createConfigRow("Matar", "Matar", 172)
+createConfigRow("Disparar", "Disparar", 50)
+createConfigRow("Saltar", "Saltar", 105)
+createConfigRow("Matar", "Matar", 160)
+
+-- Controles de la Macro en la UI
+local function createMacroToggle(text, initialVal, yOffset, callback)
+    local toggleBtn = Instance.new("TextButton")
+    toggleBtn.Size = UDim2.new(0.92, 0, 0, 35)
+    toggleBtn.Position = UDim2.new(0.04, 0, 0, yOffset)
+    toggleBtn.BackgroundColor3 = initialVal and Color3.fromRGB(35, 160, 90) or Color3.fromRGB(200, 50, 60)
+    toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    toggleBtn.Text = text .. ": " .. (initialVal and "ON" or "OFF")
+    toggleBtn.Font = Enum.Font.GothamBold
+    toggleBtn.TextSize = 12
+    toggleBtn.Parent = mainFrame
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = toggleBtn
+
+    toggleBtn.MouseButton1Click:Connect(function()
+        local newVal = not (toggleBtn.Text:find("ON") ~= nil)
+        toggleBtn.Text = text .. ": " .. (newVal and "ON" or "OFF")
+        toggleBtn.BackgroundColor3 = newVal and Color3.fromRGB(35, 160, 90) or Color3.fromRGB(200, 50, 60)
+        callback(newVal)
+        markAutoConfigChanged()
+    end)
+end
+
+createMacroToggle("Activar Macro Disparo", macroActivo, 225, function(v) macroActivo = v end)
+createMacroToggle("Macro Cuchillo (L2)", knifeMacroEnabled, 270, function(v) knifeMacroEnabled = v end)
 
 toggleButton.MouseButton1Click:Connect(function()
     mainFrame.Visible = not mainFrame.Visible
 end)
 
--- =================================================================
--- VINCULACIÓN DE ARMAS Y EVENTOS DE CUALQUIER JUGADOR
--- =================================================================
+-- ==========================================
+-- 5. EJECUCIÓN DE LAS MACROS Y AUDIOS
+-- ==========================================
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
 
+    -- Macro Disparo (Mouse 1)
+    if macroActivo and input.UserInputType == Enum.UserInputType.MouseButton1 then
+        task.wait(macroEquipDelay)
+        task.wait(macroShootDelay)
+    end
+
+    -- Macro Cuchillo (L2)
+    if knifeMacroEnabled and input.KeyCode == Enum.KeyCode.ButtonL2 then
+        task.wait(knifeEquipDelay)
+        task.wait(knifeThrowDelay)
+    end
+end)
+
+-- Vincular Eventos de Disparo / Personaje
 local boundTools = {}
 
 local function bindToolEvents(tool)
@@ -309,7 +455,6 @@ local function bindToolEvents(tool)
 end
 
 local function setupPlayerEvents(targetPlayer)
-    -- Vincular la mochila del jugador
     local function bindBackpack(backpack)
         backpack.ChildAdded:Connect(bindToolEvents)
         for _, tool in ipairs(backpack:GetChildren()) do
@@ -326,11 +471,9 @@ local function setupPlayerEvents(targetPlayer)
         end
     end)
 
-    -- Vincular el personaje del jugador
     local function setupChar(char)
         local hum = char:WaitForChild("Humanoid", 5)
 
-        -- Salto (Solo tu personaje)
         if targetPlayer == player and hum then
             hum.Jumping:Connect(function(isJumping)
                 if isJumping and SelectedSounds.Saltar.Enabled and isInMatch() then
@@ -339,7 +482,6 @@ local function setupPlayerEvents(targetPlayer)
             end)
         end
 
-        -- Muerte de cualquier jugador en la partida
         if hum then
             hum.Died:Connect(function()
                 if SelectedSounds.Matar.Enabled and isInMatch() then
@@ -348,7 +490,6 @@ local function setupPlayerEvents(targetPlayer)
             end)
         end
 
-        -- Detección de armas en mano de cualquier jugador
         char.ChildAdded:Connect(bindToolEvents)
         for _, child in ipairs(char:GetChildren()) do
             bindToolEvents(child)
