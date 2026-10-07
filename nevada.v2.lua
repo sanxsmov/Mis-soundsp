@@ -1,12 +1,10 @@
--- LocalScript: UI Customizada + Disparo de Cualquier Jugador en Partida + Macro Funcional (nevada.v2.lua)
+-- LocalScript: UI Customizada + Disparo + Macro Corregida (nevada.v2.lua)
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local SoundService = game:GetService("SoundService")
-local VirtualInputManager = game:GetService("VirtualInputManager")
 
 local player = Players.LocalPlayer
-
 local httpRequest = (syn and syn.request) or (http and http.request) or request or http_request
 
 local GitHubUser = "sanxsmov"
@@ -57,8 +55,8 @@ local SelectedSounds = {
 
 -- Configuración de Macros
 local SelectedMacros = {
-    Pistola  = { Enabled = false, EquipDelay = 0.04, ShootDelay = 0.05 },
-    Cuchillo = { Enabled = false, EquipDelay = 0.05, ThrowDelay = 0.05 }
+    Pistola  = { Enabled = false, EquipDelay = 0.02, ShootDelay = 0.05 },
+    Cuchillo = { Enabled = false, EquipDelay = 0.02, ThrowDelay = 0.05 }
 }
 
 local SoundCache = {}
@@ -117,7 +115,7 @@ local function isInMatch()
     return hasWeapon ~= nil
 end
 
--- LÓGICA DE EJECUCIÓN REAL DE MACRO
+-- LÓGICA DIRECTA Y COMPATIBLE DE MACRO
 local isMacroRunning = false
 
 local function executeGunMacro()
@@ -128,10 +126,11 @@ local function executeGunMacro()
     local backpack = player:FindFirstChild("Backpack")
     local hum = char and char:FindFirstChildOfClass("Humanoid")
 
-    if char and hum and backpack then
-        -- Buscar arma si no se tiene equipada
+    if char and hum then
         local currentTool = char:FindFirstChildOfClass("Tool")
-        if not currentTool then
+        
+        -- Si no la tiene equipada, la equipa desde el inventario
+        if not currentTool and backpack then
             local toolInBackpack = backpack:FindFirstChildOfClass("Tool")
             if toolInBackpack then
                 hum:EquipTool(toolInBackpack)
@@ -140,12 +139,10 @@ local function executeGunMacro()
             end
         end
 
-        -- Forzar la activación (disparo/ataque)
+        -- Activa la herramienta
         if currentTool then
             currentTool:Activate()
-            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
             task.wait(SelectedMacros.Pistola.ShootDelay)
-            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
         end
     end
 
@@ -161,7 +158,6 @@ local function executeKnifeMacro()
     local hum = char and char:FindFirstChildOfClass("Humanoid")
 
     if char and hum and backpack then
-        -- Buscar Cuchillo o herramienta secundaria
         local knife = backpack:FindFirstChild("Knife") or backpack:FindFirstChild("Cuchillo") or backpack:FindFirstChildOfClass("Tool")
         if knife then
             hum:EquipTool(knife)
@@ -174,7 +170,7 @@ local function executeKnifeMacro()
     isMacroRunning = false
 end
 
--- GUI Interfaz (sanxsmov Hub Original)
+-- GUI Interfaz (sanxsmov Hub)
 local playerGui = player:WaitForChild("PlayerGui")
 
 if playerGui:FindFirstChild("SanxsmovAudioMenu") then
@@ -272,7 +268,7 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- Creador de filas de Sonido (Estructura idéntica)
+-- Creador de filas de Sonido
 local function createConfigRow(actionName, actionKey, yOffset)
     local rowFrame = Instance.new("Frame")
     rowFrame.Size = UDim2.new(0.92, 0, 0, 48)
@@ -348,7 +344,7 @@ local function createConfigRow(actionName, actionKey, yOffset)
     end)
 end
 
--- Creador de filas para Macro (Estructura idéntica a la UI original)
+-- Creador de filas para Macro
 local function createMacroRow(macroName, macroKey, yOffset)
     local rowFrame = Instance.new("Frame")
     rowFrame.Size = UDim2.new(0.92, 0, 0, 48)
@@ -379,7 +375,7 @@ local function createMacroRow(macroName, macroKey, yOffset)
     statusLabel.Position = UDim2.new(0.5, 0, 0.16, 0)
     statusLabel.BackgroundTransparency = 1
     statusLabel.TextColor3 = Color3.fromRGB(0, 220, 255)
-    statusLabel.Text = (macroKey == "Pistola" and "[M1 / Click]" or "[L2 / Tecla]")
+    statusLabel.Text = (macroKey == "Pistola" and "[Click Izq]" or "[Tecla E]")
     statusLabel.Font = Enum.Font.Gotham
     statusLabel.TextSize = 11
     statusLabel.Parent = rowFrame
@@ -397,7 +393,7 @@ createConfigRow("Disparar", "Disparar", 52)
 createConfigRow("Saltar", "Saltar", 112)
 createConfigRow("Matar", "Matar", 172)
 
--- Secciones Macro Integradas
+-- Secciones Macro
 createMacroRow("Macro Disparo", "Pistola", 232)
 createMacroRow("Macro Cuchillo", "Cuchillo", 292)
 
@@ -413,15 +409,12 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         executeGunMacro()
     end
 
-    if SelectedMacros.Cuchillo.Enabled and (input.KeyCode == Enum.KeyCode.ButtonL2 or input.KeyCode == Enum.KeyCode.E) then
+    if SelectedMacros.Cuchillo.Enabled and (input.KeyCode == Enum.KeyCode.E or input.KeyCode == Enum.KeyCode.ButtonL2) then
         executeKnifeMacro()
     end
 end)
 
--- =================================================================
--- VINCULACIÓN DE ARMAS Y EVENTOS DE CUALQUIER JUGADOR
--- =================================================================
-
+-- Vincular Eventos de Sonido en Jugadores
 local boundTools = {}
 
 local function bindToolEvents(tool)
@@ -477,7 +470,9 @@ local function setupPlayerEvents(targetPlayer)
         end
     end
 
-    if targetPlayer.Character me setupChar(targetPlayer.Character) end
+    if targetPlayer.Character then 
+        setupChar(targetPlayer.Character) 
+    end
     targetPlayer.CharacterAdded:Connect(setupChar)
 end
 
