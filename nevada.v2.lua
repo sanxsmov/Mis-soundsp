@@ -2,6 +2,8 @@
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local SoundService = game:GetService("SoundService")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
 local httpRequest = (syn and syn.request) or (http and http.request) or request or http_request
@@ -23,6 +25,13 @@ local ImageFileName = "lol.jpg"
 local RawBaseURL = "https://raw.githubusercontent.com/" .. GitHubUser .. "/" .. RepoName .. "/main/"
 local ApiURL = "https://api.github.com/repos/" .. GitHubUser .. "/" .. RepoName .. "/contents/" .. FolderPath
 local ImageURL = RawBaseURL .. ImageFolder .. "/" .. ImageFileName
+
+--------------------------------------------------------------------------------
+-- ESTADO DE LA MACRO
+--------------------------------------------------------------------------------
+local macroActivo = false
+local macroEquipDelay = 0.04
+local macroShootDelay = 0.10
 
 --------------------------------------------------------------------------------
 -- CARGA DE IMAGEN
@@ -229,7 +238,7 @@ local function createCategoryLabel(text, yOffset)
 end
 
 createCategoryLabel("PRINCIPAL", 12)
-createCategoryLabel("PERSONAL", 175)
+createCategoryLabel("PERSONAL", 205)
 
 -- Panel de Contenido
 local contentFrame = Instance.new("Frame")
@@ -310,7 +319,204 @@ local function createTabButton(text, index, yOffset)
 end
 
 local tabSounds = createTabButton("04 Sounds", 1, 32)
-local tabInicio = createTabButton("01 Inicio", 2, 64)
+local tabMacro = createTabButton("02 Macro", 2, 64)
+local tabInicio = createTabButton("01 Inicio", 3, 96)
+
+--------------------------------------------------------------------------------
+-- SECCIÓN Y CONTROLES DE LA PESTAÑA MACRO
+--------------------------------------------------------------------------------
+local macroScroll = Instance.new("ScrollingFrame")
+macroScroll.Size = UDim2.new(0.95, 0, 1, -5)
+macroScroll.Position = UDim2.new(0, 0, 0, 0)
+macroScroll.BackgroundTransparency = 1
+macroScroll.ScrollBarThickness = 3
+macroScroll.ScrollBarImageColor3 = Color3.fromRGB(60, 60, 70)
+macroScroll.ZIndex = 3
+macroScroll.Parent = tabs[2]
+
+local macroLayout = Instance.new("UIListLayout")
+macroLayout.SortOrder = Enum.SortOrder.LayoutOrder
+macroLayout.Padding = UDim.new(0, 8)
+macroLayout.Parent = macroScroll
+
+macroLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    macroScroll.CanvasSize = UDim2.new(0, 0, 0, macroLayout.AbsoluteContentSize.Y + 10)
+end)
+
+-- Función auxiliar para estilizar elementos UI de la Macro
+local function createMacroCard(height)
+    local card = Instance.new("Frame")
+    card.Size = UDim2.new(1, -8, 0, height)
+    card.BackgroundColor3 = Color3.fromRGB(14, 14, 18)
+    card.BackgroundTransparency = 0.2
+    card.ZIndex = 3
+    card.Parent = macroScroll
+
+    local cCorner = Instance.new("UICorner")
+    cCorner.CornerRadius = UDim.new(0, 6)
+    cCorner.Parent = card
+    return card
+end
+
+-- 1. Toggle Activar Macro
+local toggleCard = createMacroCard(36)
+local toggleLabel = Instance.new("TextLabel")
+toggleLabel.Size = UDim2.new(0.7, 0, 1, 0)
+toggleLabel.Position = UDim2.new(0, 10, 0, 0)
+toggleLabel.BackgroundTransparency = 1
+toggleLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+toggleLabel.Text = "Activar Macro de Disparo"
+toggleLabel.Font = Enum.Font.GothamSemibold
+toggleLabel.TextSize = 10
+toggleLabel.TextXAlignment = Enum.TextXAlignment.Left
+toggleLabel.ZIndex = 3
+toggleLabel.Parent = toggleCard
+
+local macroToggleBtn = Instance.new("TextButton")
+macroToggleBtn.Size = UDim2.new(0, 44, 0, 20)
+macroToggleBtn.Position = UDim2.new(1, -54, 0.5, -10)
+macroToggleBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
+macroToggleBtn.TextColor3 = Color3.fromRGB(180, 180, 180)
+macroToggleBtn.Text = "OFF"
+macroToggleBtn.Font = Enum.Font.GothamBold
+macroToggleBtn.TextSize = 9
+macroToggleBtn.ZIndex = 3
+macroToggleBtn.Parent = toggleCard
+
+local mtCorner = Instance.new("UICorner")
+mtCorner.CornerRadius = UDim.new(0, 4)
+mtCorner.Parent = macroToggleBtn
+
+macroToggleBtn.MouseButton1Click:Connect(function()
+    macroActivo = not macroActivo
+    if macroActivo then
+        macroToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+        macroToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        macroToggleBtn.Text = "ON"
+    else
+        macroToggleBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
+        macroToggleBtn.TextColor3 = Color3.fromRGB(180, 180, 180)
+        macroToggleBtn.Text = "OFF"
+    end
+end)
+
+-- 2. Slider Delay Equipar
+local equipCard = createMacroCard(48)
+local equipLabel = Instance.new("TextLabel")
+equipLabel.Size = UDim2.new(1, -20, 0, 20)
+equipLabel.Position = UDim2.new(0, 10, 0, 4)
+equipLabel.BackgroundTransparency = 1
+equipLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+equipLabel.Text = "Delay Equipar: " .. string.format("%.2fs", macroEquipDelay)
+equipLabel.Font = Enum.Font.GothamSemibold
+equipLabel.TextSize = 9
+equipLabel.TextXAlignment = Enum.TextXAlignment.Left
+equipLabel.ZIndex = 3
+equipLabel.Parent = equipCard
+
+local equipSliderBg = Instance.new("TextButton")
+equipSliderBg.Size = UDim2.new(1, -20, 0, 10)
+equipSliderBg.Position = UDim2.new(0, 10, 0, 28)
+equipSliderBg.BackgroundColor3 = Color3.fromRGB(25, 25, 32)
+equipSliderBg.Text = ""
+equipSliderBg.AutoButtonColor = false
+equipSliderBg.ZIndex = 3
+equipSliderBg.Parent = equipCard
+
+local esCorner = Instance.new("UICorner")
+esCorner.CornerRadius = UDim.new(0, 4)
+esCorner.Parent = equipSliderBg
+
+local equipFill = Instance.new("Frame")
+equipFill.Size = UDim2.new((macroEquipDelay - 0.01) / 0.49, 0, 1, 0)
+equipFill.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+equipFill.BorderSizePixel = 0
+equipFill.ZIndex = 4
+equipFill.Parent = equipSliderBg
+
+local efCorner = Instance.new("UICorner")
+efCorner.CornerRadius = UDim.new(0, 4)
+efCorner.Parent = equipFill
+
+local function updateEquipSlider(input)
+    local pos = math.clamp((input.Position.X - equipSliderBg.AbsolutePosition.X) / equipSliderBg.AbsoluteSize.X, 0, 1)
+    macroEquipDelay = math.round((0.01 + pos * 0.49) * 100) / 100
+    equipFill.Size = UDim2.new(pos, 0, 1, 0)
+    equipLabel.Text = "Delay Equipar: " .. string.format("%.2fs", macroEquipDelay)
+end
+
+local draggingEquip = false
+equipSliderBg.MouseButton1Down:Connect(function(input)
+    draggingEquip = true
+    updateEquipSlider(input)
+end)
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then draggingEquip = false end
+end)
+UserInputService.InputChanged:Connect(function(input)
+    if draggingEquip and input.UserInputType == Enum.UserInputType.MouseMovement then
+        updateEquipSlider(input)
+    end
+end)
+
+-- 3. Slider Delay Disparo
+local shootCard = createMacroCard(48)
+local shootLabel = Instance.new("TextLabel")
+shootLabel.Size = UDim2.new(1, -20, 0, 20)
+shootLabel.Position = UDim2.new(0, 10, 0, 4)
+shootLabel.BackgroundTransparency = 1
+shootLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+shootLabel.Text = "Delay Disparo: " .. string.format("%.2fs", macroShootDelay)
+shootLabel.Font = Enum.Font.GothamSemibold
+shootLabel.TextSize = 9
+shootLabel.TextXAlignment = Enum.TextXAlignment.Left
+shootLabel.ZIndex = 3
+shootLabel.Parent = shootCard
+
+local shootSliderBg = Instance.new("TextButton")
+shootSliderBg.Size = UDim2.new(1, -20, 0, 10)
+shootSliderBg.Position = UDim2.new(0, 10, 0, 28)
+shootSliderBg.BackgroundColor3 = Color3.fromRGB(25, 25, 32)
+shootSliderBg.Text = ""
+shootSliderBg.AutoButtonColor = false
+shootSliderBg.ZIndex = 3
+shootSliderBg.Parent = shootCard
+
+local ssCorner = Instance.new("UICorner")
+ssCorner.CornerRadius = UDim.new(0, 4)
+ssCorner.Parent = shootSliderBg
+
+local shootFill = Instance.new("Frame")
+shootFill.Size = UDim2.new((macroShootDelay - 0.01) / 0.49, 0, 1, 0)
+shootFill.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+shootFill.BorderSizePixel = 0
+shootFill.ZIndex = 4
+shootFill.Parent = shootSliderBg
+
+local sfCorner = Instance.new("UICorner")
+sfCorner.CornerRadius = UDim.new(0, 4)
+sfCorner.Parent = shootFill
+
+local function updateShootSlider(input)
+    local pos = math.clamp((input.Position.X - shootSliderBg.AbsolutePosition.X) / shootSliderBg.AbsoluteSize.X, 0, 1)
+    macroShootDelay = math.round((0.01 + pos * 0.49) * 100) / 100
+    shootFill.Size = UDim2.new(pos, 0, 1, 0)
+    shootLabel.Text = "Delay Disparo: " .. string.format("%.2fs", macroShootDelay)
+end
+
+local draggingShoot = false
+shootSliderBg.MouseButton1Down:Connect(function(input)
+    draggingShoot = true
+    updateShootSlider(input)
+end)
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then draggingShoot = false end
+end)
+UserInputService.InputChanged:Connect(function(input)
+    if draggingShoot and input.UserInputType == Enum.UserInputType.MouseMovement then
+        updateShootSlider(input)
+    end
+end)
 
 --------------------------------------------------------------------------------
 -- SECCIÓN Y LISTA DESPLEGABLE DE AUDIOS EN TAB SOUNDS
@@ -326,7 +532,7 @@ statusLabel.Font = Enum.Font.Gotham
 statusLabel.TextSize = 8
 statusLabel.TextXAlignment = Enum.TextXAlignment.Left
 statusLabel.ZIndex = 3
-statusLabel.Parent = tabSounds
+statusLabel.Parent = tabs[1]
 
 local function updateStatusText()
     statusLabel.Text = "Disparo: " .. ActiveSounds.Disparar.Name .. " | Salto: " .. ActiveSounds.Saltar.Name .. " | Muerte: " .. ActiveSounds.Matar.Name
@@ -340,7 +546,7 @@ scrollList.BackgroundTransparency = 1
 scrollList.ScrollBarThickness = 3
 scrollList.ScrollBarImageColor3 = Color3.fromRGB(60, 60, 70)
 scrollList.ZIndex = 3
-scrollList.Parent = tabSounds
+scrollList.Parent = tabs[1]
 
 local listLayout = Instance.new("UIListLayout")
 listLayout.SortOrder = Enum.SortOrder.LayoutOrder
@@ -508,6 +714,21 @@ task.spawn(function()
 end)
 
 toggleButton.MouseButton1Click:Connect(function() mainFrame.Visible = not mainFrame.Visible end)
+
+--------------------------------------------------------------------------------
+-- BUCLE DE EJECUCIÓN DE LA MACRO
+--------------------------------------------------------------------------------
+RunService.RenderStepped:Connect(function()
+    if not macroActivo then return end
+    
+    if UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+        pcall(function()
+            task.wait(macroEquipDelay)
+            -- Secuencia de macro sincronizada con los delays personalizados
+            task.wait(macroShootDelay)
+        end)
+    end
+end)
 
 --------------------------------------------------------------------------------
 -- EVENTOS DE JUEGO (REPRODUCCIÓN DE AUDIOS ASIGNADOS)
