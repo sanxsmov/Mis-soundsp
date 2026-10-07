@@ -1,9 +1,8 @@
--- LocalScript: UI Customizada Arrastrable & Sonidos en Partida (sanxsmov/Mis-soundsp)
+-- LocalScript: UI Customizada + Disparo de Cualquier Jugador en Partida (sanxsmov/Mis-soundsp)
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local SoundService = game:GetService("SoundService")
-local TweenService = game:GetService("TweenService")
 
 local player = Players.LocalPlayer
 
@@ -93,9 +92,7 @@ local function playAudioUrl(url)
     end)
 end
 
--- =================================================================
--- COMPROBACIÓN DE PARTIDA
--- =================================================================
+-- Comprobación de Partida
 local function isInMatch()
     local char = player.Character
     if not char then return false end
@@ -113,9 +110,7 @@ local function isInMatch()
     return hasWeapon ~= nil
 end
 
--- =================================================================
--- INTERFAZ GUI MODERNA Y ARRASTRABLE (SANXSMOV)
--- =================================================================
+-- GUI Interfaz (sanxsmov Hub)
 local playerGui = player:WaitForChild("PlayerGui")
 
 if playerGui:FindFirstChild("SanxsmovAudioMenu") then
@@ -127,7 +122,6 @@ screenGui.Name = "SanxsmovAudioMenu"
 screenGui.ResetOnSpawn = false
 screenGui.Parent = playerGui
 
--- Botón Flotante para Abrir/Cerrar
 local toggleButton = Instance.new("TextButton")
 toggleButton.Size = UDim2.new(0, 120, 0, 42)
 toggleButton.Position = UDim2.new(0.02, 0, 0.4, 0)
@@ -147,7 +141,6 @@ toggleStroke.Color = Color3.fromRGB(0, 220, 255)
 toggleStroke.Thickness = 1.5
 toggleStroke.Parent = toggleButton
 
--- Panel Principal
 local mainFrame = Instance.new("Frame")
 mainFrame.Size = UDim2.new(0, 350, 0, 250)
 mainFrame.Position = UDim2.new(0.35, 0, 0.3, 0)
@@ -165,7 +158,6 @@ frameStroke.Color = Color3.fromRGB(45, 45, 55)
 frameStroke.Thickness = 1.5
 frameStroke.Parent = mainFrame
 
--- Barra de Título (Arrastrable)
 local titleBar = Instance.new("Frame")
 titleBar.Size = UDim2.new(1, 0, 0, 40)
 titleBar.BackgroundColor3 = Color3.fromRGB(26, 26, 32)
@@ -186,24 +178,8 @@ titleLabel.TextSize = 14
 titleLabel.TextXAlignment = Enum.TextXAlignment.Left
 titleLabel.Parent = titleBar
 
-local subTitle = Instance.new("TextLabel")
-subTitle.Size = UDim2.new(0, 100, 1, 0)
-subTitle.Position = UDim2.new(1, -110, 0, 0)
-subTitle.BackgroundTransparency = 1
-subTitle.TextColor3 = Color3.fromRGB(120, 120, 140)
-subTitle.Text = #AvailableSounds .. " audios"
-subTitle.Font = Enum.Font.Gotham
-subTitle.TextSize = 11
-subTitle.TextXAlignment = Enum.TextXAlignment.Right
-subTitle.Parent = titleBar
-
--- SISTEMA DE ARRASTRE DE PANTALLA (DRAGGABLE)
+-- Arrastrar interfaz
 local dragging, dragInput, dragStart, startPos
-
-local function update(input)
-    local delta = input.Position - dragStart
-    mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-end
 
 titleBar.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -227,11 +203,11 @@ end)
 
 UserInputService.InputChanged:Connect(function(input)
     if input == dragInput and dragging then
-        update(input)
+        local delta = input.Position - dragStart
+        mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
     end
 end)
 
--- Creador de Filas Estilizadas
 local function createConfigRow(actionName, actionKey, yOffset)
     local rowFrame = Instance.new("Frame")
     rowFrame.Size = UDim2.new(0.92, 0, 0, 48)
@@ -316,22 +292,45 @@ toggleButton.MouseButton1Click:Connect(function()
 end)
 
 -- =================================================================
--- MONITOREO DE EVENTOS EN PARTIDA
+-- VINCULACIÓN DE ARMAS Y EVENTOS DE CUALQUIER JUGADOR
 -- =================================================================
 
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        if SelectedSounds.Disparar.Enabled and isInMatch() then
-            playAudioUrl(SelectedSounds.Disparar.URL)
+local boundTools = {}
+
+local function bindToolEvents(tool)
+    if tool:IsA("Tool") and not boundTools[tool] then
+        boundTools[tool] = true
+        tool.Activated:Connect(function()
+            if SelectedSounds.Disparar.Enabled and isInMatch() then
+                playAudioUrl(SelectedSounds.Disparar.URL)
+            end
+        end)
+    end
+end
+
+local function setupPlayerEvents(targetPlayer)
+    -- Vincular la mochila del jugador
+    local function bindBackpack(backpack)
+        backpack.ChildAdded:Connect(bindToolEvents)
+        for _, tool in ipairs(backpack:GetChildren()) do
+            bindToolEvents(tool)
         end
     end
-end)
 
-local function setupPlayerMatchEvents(targetPlayer)
+    if targetPlayer:FindFirstChild("Backpack") then
+        bindBackpack(targetPlayer.Backpack)
+    end
+    targetPlayer.ChildAdded:Connect(function(child)
+        if child.Name == "Backpack" then
+            bindBackpack(child)
+        end
+    end)
+
+    -- Vincular el personaje del jugador
     local function setupChar(char)
         local hum = char:WaitForChild("Humanoid", 5)
 
+        -- Salto (Solo tu personaje)
         if targetPlayer == player and hum then
             hum.Jumping:Connect(function(isJumping)
                 if isJumping and SelectedSounds.Saltar.Enabled and isInMatch() then
@@ -340,12 +339,19 @@ local function setupPlayerMatchEvents(targetPlayer)
             end)
         end
 
+        -- Muerte de cualquier jugador en la partida
         if hum then
             hum.Died:Connect(function()
                 if SelectedSounds.Matar.Enabled and isInMatch() then
                     playAudioUrl(SelectedSounds.Matar.URL)
                 end
             end)
+        end
+
+        -- Detección de armas en mano de cualquier jugador
+        char.ChildAdded:Connect(bindToolEvents)
+        for _, child in ipairs(char:GetChildren()) do
+            bindToolEvents(child)
         end
     end
 
@@ -354,7 +360,7 @@ local function setupPlayerMatchEvents(targetPlayer)
 end
 
 for _, p in ipairs(Players:GetPlayers()) do
-    setupPlayerMatchEvents(p)
+    setupPlayerEvents(p)
 end
 
-Players.PlayerAdded:Connect(setupPlayerMatchEvents)
+Players.PlayerAdded:Connect(setupPlayerEvents)
