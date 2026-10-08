@@ -10,7 +10,7 @@ local player = Players.LocalPlayer
 local httpRequest = (syn and syn.request) or (http and http.request) or request or http_request
 
 --------------------------------------------------------------------------------
--- CONFIGURACIÓN DE GITHUB
+-- CONFIGURACIÓN DE GITHUB (Carpeta exacta: "sounds")
 --------------------------------------------------------------------------------
 local GitHubUser = "sanxsmov"
 local RepoName = "Mis-soundsp"
@@ -443,17 +443,31 @@ toggleButton.MouseButton1Click:Connect(function()
 end)
 
 --------------------------------------------------------------------------------
--- LÓGICA DE MACRO Y EVENTOS
+-- LÓGICA DE MACRO Y EVENTOS (Actualizada con verificación de arma)
 --------------------------------------------------------------------------------
+local function getEquippedWeapon()
+    local character = player.Character
+    if not character then return nil end
+    for _, item in ipairs(character:GetChildren()) do
+        if item:IsA("Tool") then
+            return item
+        end
+    end
+    return nil
+end
+
 RunService.RenderStepped:Connect(function()
     if not macroEnabled then return end
     
     if UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
         pcall(function()
-            task.wait(equipDelay)
-            VirtualUser:Button1Down(Vector2.new(0,0))
-            task.wait(shootDelay)
-            VirtualUser:Button1Up(Vector2.new(0,0))
+            local weapon = getEquippedWeapon()
+            if weapon then
+                task.wait(equipDelay)
+                VirtualUser:Button1Down(Vector2.new(0,0))
+                task.wait(shootDelay)
+                VirtualUser:Button1Up(Vector2.new(0,0))
+            end
         end)
     end
 end)
