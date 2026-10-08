@@ -1,4 +1,4 @@
--- LocalScript: NEVADA HUB (Con Macro Original de XeroHub y Sonidos)
+-- LocalScript: NEVADA HUB (Con Macro y Sonidos originales de XeroHub)
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local SoundService = game:GetService("SoundService")
@@ -28,27 +28,27 @@ local ApiURL = "https://api.github.com/repos/" .. GitHubUser .. "/" .. RepoName 
 local ImageURL = RawBaseURL .. ImageFolder .. "/" .. ImageFileName
 
 --------------------------------------------------------------------------------
--- ESTADO DE LA MACRO Y SONIDOS (Lógica XeroHub)
+-- ESTADO DE XEROHUB (Macro y Sonidos)
 --------------------------------------------------------------------------------
-local macroActivo = false
-local macroEquipDelay = 0.04
-local macroShootDelay = 0.10
+local xeroMacroEnabled = false
+local xeroEquipDelay = 0.05
+local xeroShootDelay = 0.10
 
 local SoundList = {} 
-local ActiveSounds = {
+local XeroSounds = {
     Disparar = { Name = "Ninguno", URL = "" },
     Saltar   = { Name = "Ninguno", URL = "" },
     Matar    = { Name = "Ninguno", URL = "" }
 }
 
 local SoundCache = {}
-local function playAudioUrl(url)
+local function playXeroSound(url)
     if not url or url == "" then return end
     local soundAssetId = SoundCache[url]
 
     if not soundAssetId then
         local sanitizeName = url:match("([^/]+)%.mp3$") or ("sound_" .. tick())
-        local fileName = "sanxsmov_" .. sanitizeName .. ".mp3"
+        local fileName = "xerohub_" .. sanitizeName .. ".mp3"
 
         if writefile and readfile and getcustomasset then
             if not isfile(fileName) then
@@ -136,7 +136,7 @@ local backgroundImage = Instance.new("ImageLabel")
 backgroundImage.Size = UDim2.new(0.6, 0, 1, 0)
 backgroundImage.Position = UDim2.new(0.4, 0, 0, 0)
 backgroundImage.BackgroundTransparency = 1
-backgroundImage.Image = getCustomAssetImage(ImageURL, "sanxsmov_" .. ImageFileName)
+backgroundImage.Image = getCustomAssetImage(ImageURL, "xerohub_" .. ImageFileName)
 backgroundImage.ImageTransparency = 0.4
 backgroundImage.ScaleType = Enum.ScaleType.Fit
 backgroundImage.ZIndex = 1
@@ -313,14 +313,13 @@ local tabMacro = createTabButton("02 Macro", 2, 64)
 local tabInicio = createTabButton("01 Inicio", 3, 96)
 
 --------------------------------------------------------------------------------
--- PESTAÑA MACRO (XeroHub Style)
+-- PESTAÑA MACRO (XeroHub Original)
 --------------------------------------------------------------------------------
 local macroScroll = Instance.new("ScrollingFrame")
 macroScroll.Size = UDim2.new(0.95, 0, 1, -5)
 macroScroll.Position = UDim2.new(0, 0, 0, 0)
 macroScroll.BackgroundTransparency = 1
 macroScroll.ScrollBarThickness = 3
-macroScroll.ScrollBarImageColor3 = Color3.fromRGB(60, 60, 70)
 macroScroll.ZIndex = 3
 macroScroll.Parent = tabs[2]
 
@@ -347,14 +346,14 @@ local function createMacroCard(height)
     return card
 end
 
--- Toggle Macro
+-- Toggle Macro Xero
 local toggleCard = createMacroCard(36)
 local toggleLabel = Instance.new("TextLabel")
 toggleLabel.Size = UDim2.new(0.7, 0, 1, 0)
 toggleLabel.Position = UDim2.new(0, 10, 0, 0)
 toggleLabel.BackgroundTransparency = 1
 toggleLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
-toggleLabel.Text = "Activar Macro"
+toggleLabel.Text = "XeroHub Macro"
 toggleLabel.Font = Enum.Font.GothamSemibold
 toggleLabel.TextSize = 10
 toggleLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -377,8 +376,8 @@ mtCorner.CornerRadius = UDim.new(0, 4)
 mtCorner.Parent = macroToggleBtn
 
 macroToggleBtn.MouseButton1Click:Connect(function()
-    macroActivo = not macroActivo
-    if macroActivo then
+    xeroMacroEnabled = not xeroMacroEnabled
+    if xeroMacroEnabled then
         macroToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
         macroToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
         macroToggleBtn.Text = "ON"
@@ -389,14 +388,14 @@ macroToggleBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- Slider Equipar
+-- Slider Equipar Xero
 local equipCard = createMacroCard(48)
 local equipLabel = Instance.new("TextLabel")
 equipLabel.Size = UDim2.new(1, -20, 0, 20)
 equipLabel.Position = UDim2.new(0, 10, 0, 4)
 equipLabel.BackgroundTransparency = 1
 equipLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-equipLabel.Text = "Delay Equipar: " .. string.format("%.2fs", macroEquipDelay)
+equipLabel.Text = "Equip Delay: " .. string.format("%.2fs", xeroEquipDelay)
 equipLabel.Font = Enum.Font.GothamSemibold
 equipLabel.TextSize = 9
 equipLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -417,7 +416,7 @@ esCorner.CornerRadius = UDim.new(0, 4)
 esCorner.Parent = equipSliderBg
 
 local equipFill = Instance.new("Frame")
-equipFill.Size = UDim2.new((macroEquipDelay - 0.01) / 0.49, 0, 1, 0)
+equipFill.Size = UDim2.new((xeroEquipDelay - 0.01) / 0.49, 0, 1, 0)
 equipFill.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
 equipFill.BorderSizePixel = 0
 equipFill.ZIndex = 4
@@ -429,9 +428,9 @@ efCorner.Parent = equipFill
 
 local function updateEquipSlider(input)
     local pos = math.clamp((input.Position.X - equipSliderBg.AbsolutePosition.X) / equipSliderBg.AbsoluteSize.X, 0, 1)
-    macroEquipDelay = math.round((0.01 + pos * 0.49) * 100) / 100
+    xeroEquipDelay = math.round((0.01 + pos * 0.49) * 100) / 100
     equipFill.Size = UDim2.new(pos, 0, 1, 0)
-    equipLabel.Text = "Delay Equipar: " .. string.format("%.2fs", macroEquipDelay)
+    equipLabel.Text = "Equip Delay: " .. string.format("%.2fs", xeroEquipDelay)
 end
 
 local draggingEquip = false
@@ -439,14 +438,14 @@ equipSliderBg.MouseButton1Down:Connect(function(input) draggingEquip = true; upd
 UserInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then draggingEquip = false end end)
 UserInputService.InputChanged:Connect(function(input) if draggingEquip and input.UserInputType == Enum.UserInputType.MouseMovement then updateEquipSlider(input) end end)
 
--- Slider Disparo
+-- Slider Disparo Xero
 local shootCard = createMacroCard(48)
 local shootLabel = Instance.new("TextLabel")
 shootLabel.Size = UDim2.new(1, -20, 0, 20)
 shootLabel.Position = UDim2.new(0, 10, 0, 4)
 shootLabel.BackgroundTransparency = 1
 shootLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-shootLabel.Text = "Delay Disparo: " .. string.format("%.2fs", macroShootDelay)
+shootLabel.Text = "Shoot Delay: " .. string.format("%.2fs", xeroShootDelay)
 shootLabel.Font = Enum.Font.GothamSemibold
 shootLabel.TextSize = 9
 shootLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -467,7 +466,7 @@ ssCorner.CornerRadius = UDim.new(0, 4)
 ssCorner.Parent = shootSliderBg
 
 local shootFill = Instance.new("Frame")
-shootFill.Size = UDim2.new((macroShootDelay - 0.01) / 0.49, 0, 1, 0)
+shootFill.Size = UDim2.new((xeroShootDelay - 0.01) / 0.49, 0, 1, 0)
 shootFill.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
 shootFill.BorderSizePixel = 0
 shootFill.ZIndex = 4
@@ -479,9 +478,9 @@ sfCorner.Parent = shootFill
 
 local function updateShootSlider(input)
     local pos = math.clamp((input.Position.X - shootSliderBg.AbsolutePosition.X) / shootSliderBg.AbsoluteSize.X, 0, 1)
-    macroShootDelay = math.round((0.01 + pos * 0.49) * 100) / 100
+    xeroShootDelay = math.round((0.01 + pos * 0.49) * 100) / 100
     shootFill.Size = UDim2.new(pos, 0, 1, 0)
-    shootLabel.Text = "Delay Disparo: " .. string.format("%.2fs", macroShootDelay)
+    shootLabel.Text = "Shoot Delay: " .. string.format("%.2fs", xeroShootDelay)
 end
 
 local draggingShoot = false
@@ -490,7 +489,7 @@ UserInputService.InputEnded:Connect(function(input) if input.UserInputType == En
 UserInputService.InputChanged:Connect(function(input) if draggingShoot and input.UserInputType == Enum.UserInputType.MouseMovement then updateShootSlider(input) end end)
 
 --------------------------------------------------------------------------------
--- PESTAÑA SOUNDS (XeroHub Style)
+-- PESTAÑA SOUNDS (XeroHub Original)
 --------------------------------------------------------------------------------
 local soundsContainer = Instance.new("Frame")
 soundsContainer.Size = UDim2.new(0.95, 0, 1, -5)
@@ -503,7 +502,7 @@ soundsLayout.SortOrder = Enum.SortOrder.LayoutOrder
 soundsLayout.Padding = UDim.new(0, 8)
 soundsLayout.Parent = soundsContainer
 
-local function createDropdownSelector(labelName, soundKey)
+local function createXeroDropdown(labelName, soundKey)
     local card = Instance.new("Frame")
     card.Size = UDim2.new(1, -8, 0, 46)
     card.BackgroundColor3 = Color3.fromRGB(14, 14, 18)
@@ -563,7 +562,7 @@ local function createDropdownSelector(labelName, soundKey)
     searchBox.Position = UDim2.new(0, 5, 0, 5)
     searchBox.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
     searchBox.TextColor3 = Color3.fromRGB(220, 220, 220)
-    searchBox.PlaceholderText = "Buscar sonido..."
+    searchBox.PlaceholderText = "Search sound..."
     searchBox.PlaceholderColor3 = Color3.fromRGB(100, 100, 110)
     searchBox.Text = ""
     searchBox.Font = Enum.Font.Gotham
@@ -603,7 +602,7 @@ local function createDropdownSelector(labelName, soundKey)
                 optBtn.Size = UDim2.new(1, 0, 0, 24)
                 optBtn.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
                 optBtn.TextColor3 = Color3.fromRGB(200, 200, 210)
-                optBtn.Text = "  " .. soundData.Name .. ((ActiveSounds[soundKey].Name == soundData.Name) and "  ✓" or "")
+                optBtn.Text = "  " .. soundData.Name .. ((XeroSounds[soundKey].Name == soundData.Name) and "  ✓" or "")
                 optBtn.Font = Enum.Font.Gotham
                 optBtn.TextSize = 8
                 optBtn.TextXAlignment = Enum.TextXAlignment.Left
@@ -615,10 +614,10 @@ local function createDropdownSelector(labelName, soundKey)
                 oCorner.Parent = optBtn
 
                 optBtn.MouseButton1Click:Connect(function()
-                    ActiveSounds[soundKey] = { Name = soundData.Name, URL = soundData.URL }
+                    XeroSounds[soundKey] = { Name = soundData.Name, URL = soundData.URL }
                     dropBtn.Text = soundData.Name .. " ▾"
                     dropListFrame.Visible = false
-                    playAudioUrl(soundData.URL)
+                    playXeroSound(soundData.URL)
                 end)
             end
         end
@@ -639,12 +638,12 @@ local function createDropdownSelector(labelName, soundKey)
     return dropBtn
 end
 
-createDropdownSelector("Sonido Disparo:", "Disparar")
-createDropdownSelector("Sonido Salto:", "Saltar")
-createDropdownSelector("Sonido Matar:", "Matar")
+createXeroDropdown("Kill Sound:", "Matar")
+createXeroDropdown("Shoot Sound:", "Disparar")
+createXeroDropdown("Jump Sound:", "Saltar")
 
 --------------------------------------------------------------------------------
--- CARGA DE AUDIOS DESDE GITHUB
+-- CARGA DE AUDIOS DESDE GITHUB (XeroHub Style)
 --------------------------------------------------------------------------------
 task.spawn(function()
     if httpRequest then
@@ -679,16 +678,16 @@ end)
 toggleButton.MouseButton1Click:Connect(function() mainFrame.Visible = not mainFrame.Visible end)
 
 --------------------------------------------------------------------------------
--- BUCLE DE LA MACRO Y DETECCIÓN DE EVENTOS (XeroHub Engine)
+-- BUCLE DE MACRO Y GESTIÓN DE EVENTOS DE XEROHUB
 --------------------------------------------------------------------------------
 RunService.RenderStepped:Connect(function()
-    if not macroActivo then return end
+    if not xeroMacroEnabled then return end
     
     if UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
         pcall(function()
-            task.wait(macroEquipDelay)
+            task.wait(xeroEquipDelay)
             VirtualUser:Button1Down(Vector2.new(0,0))
-            task.wait(macroShootDelay)
+            task.wait(xeroShootDelay)
             VirtualUser:Button1Up(Vector2.new(0,0))
         end)
     end
@@ -699,8 +698,8 @@ local function bindTool(tool)
     if tool:IsA("Tool") and not boundTools[tool] then
         boundTools[tool] = true
         tool.Activated:Connect(function()
-            if ActiveSounds.Disparar.URL ~= "" then
-                playAudioUrl(ActiveSounds.Disparar.URL)
+            if XeroSounds.Disparar.URL ~= "" then
+                playXeroSound(XeroSounds.Disparar.URL)
             end
         end)
     end
@@ -710,8 +709,8 @@ local function setupCharacter(char)
     local hum = char:WaitForChild("Humanoid", 5)
     if hum then
         hum.Jumping:Connect(function(isJumping)
-            if isJumping and ActiveSounds.Saltar.URL ~= "" then
-                playAudioUrl(ActiveSounds.Saltar.URL)
+            if isJumping and XeroSounds.Saltar.URL ~= "" then
+                playXeroSound(XeroSounds.Saltar.URL)
             end
         end)
     end
