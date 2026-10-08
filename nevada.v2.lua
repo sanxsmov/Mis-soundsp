@@ -1,9 +1,10 @@
--- LocalScript: NEVADA HUB (Con lista de audios desplegable/scroll)
+-- LocalScript: NEVADA HUB (Con Macro Original e Interfaz Limpia)
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local SoundService = game:GetService("SoundService")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local VirtualUser = game:GetService("VirtualUser")
 
 local player = Players.LocalPlayer
 local httpRequest = (syn and syn.request) or (http and http.request) or request or http_request
@@ -27,32 +28,13 @@ local ApiURL = "https://api.github.com/repos/" .. GitHubUser .. "/" .. RepoName 
 local ImageURL = RawBaseURL .. ImageFolder .. "/" .. ImageFileName
 
 --------------------------------------------------------------------------------
--- ESTADO DE LA MACRO
+-- ESTADO DE LA MACRO Y SONIDOS (Lógica de tu archivo macro)
 --------------------------------------------------------------------------------
 local macroActivo = false
 local macroEquipDelay = 0.04
 local macroShootDelay = 0.10
 
---------------------------------------------------------------------------------
--- CARGA DE IMAGEN
---------------------------------------------------------------------------------
-local function getCustomAssetImage(url, localName)
-    if writefile and readfile and getcustomasset then
-        if not isfile(localName) then
-            local success, data = pcall(function() return game:HttpGet(url) end)
-            if success and data then
-                pcall(function() writefile(localName, data) end)
-            end
-        end
-        return getcustomasset(localName)
-    end
-    return url
-end
-
---------------------------------------------------------------------------------
--- ESTRUCTURA DE SONIDOS Y REPRODUCCIÓN
---------------------------------------------------------------------------------
-local SoundList = {} -- Contendrá {Name = "Nombre", URL = "https://..."}
+local SoundList = {} 
 local ActiveSounds = {
     Disparar = { Name = "Ninguno", URL = "" },
     Saltar   = { Name = "Ninguno", URL = "" },
@@ -101,7 +83,7 @@ screenGui.Name = "XeroStyleNevadaUI"
 screenGui.ResetOnSpawn = false
 screenGui.Parent = playerGui
 
--- Botón Flotante Abrir/Cerrar
+-- Botón Flotante
 local toggleButton = Instance.new("TextButton")
 toggleButton.Size = UDim2.new(0, 110, 0, 36)
 toggleButton.Position = UDim2.new(0.02, 0, 0.3, 0)
@@ -138,7 +120,18 @@ frameStroke.Color = Color3.fromRGB(30, 30, 35)
 frameStroke.Thickness = 1.2
 frameStroke.Parent = mainFrame
 
--- Imagen de Fondo (lol.jpg)
+-- Imagen de Fondo
+local function getCustomAssetImage(url, localName)
+    if writefile and readfile and getcustomasset then
+        if not isfile(localName) then
+            local success, data = pcall(function() return game:HttpGet(url) end)
+            if success and data then pcall(function() writefile(localName, data) end) end
+        end
+        return getcustomasset(localName)
+    end
+    return url
+end
+
 local backgroundImage = Instance.new("ImageLabel")
 backgroundImage.Size = UDim2.new(0.6, 0, 1, 0)
 backgroundImage.Position = UDim2.new(0.4, 0, 0, 0)
@@ -149,7 +142,7 @@ backgroundImage.ScaleType = Enum.ScaleType.Fit
 backgroundImage.ZIndex = 1
 backgroundImage.Parent = mainFrame
 
--- Texto Watermark Central
+-- Watermark
 local watermarkText = Instance.new("TextLabel")
 watermarkText.Size = UDim2.new(0, 260, 0, 40)
 watermarkText.Position = UDim2.new(0.35, 0, 0.42, 0)
@@ -173,7 +166,7 @@ subWatermark.TextSize = 8
 subWatermark.ZIndex = 1
 subWatermark.Parent = mainFrame
 
--- Topbar Superior
+-- Topbar
 local topBar = Instance.new("Frame")
 topBar.Size = UDim2.new(1, 0, 0, 45)
 topBar.BackgroundTransparency = 1
@@ -190,7 +183,6 @@ closeBtn.Font = Enum.Font.GothamBold
 closeBtn.TextSize = 14
 closeBtn.ZIndex = 3
 closeBtn.Parent = topBar
-
 closeBtn.MouseButton1Click:Connect(function() mainFrame.Visible = false end)
 
 local titleLabel = Instance.new("TextLabel")
@@ -206,7 +198,7 @@ titleLabel.TextXAlignment = Enum.TextXAlignment.Left
 titleLabel.ZIndex = 3
 titleLabel.Parent = topBar
 
--- Sidebar (Navegación Izquierda)
+-- Sidebar
 local sidebar = Instance.new("Frame")
 sidebar.Size = UDim2.new(0, 140, 1, -55)
 sidebar.Position = UDim2.new(0, 12, 0, 45)
@@ -261,9 +253,7 @@ tabTitle.TextXAlignment = Enum.TextXAlignment.Left
 tabTitle.ZIndex = 3
 tabTitle.Parent = contentFrame
 
---------------------------------------------------------------------------------
--- PESTAÑAS
---------------------------------------------------------------------------------
+-- Pestañas
 local tabs = {}
 local tabButtons = {}
 
@@ -323,7 +313,7 @@ local tabMacro = createTabButton("02 Macro", 2, 64)
 local tabInicio = createTabButton("01 Inicio", 3, 96)
 
 --------------------------------------------------------------------------------
--- SECCIÓN Y CONTROLES DE LA PESTAÑA MACRO
+-- PESTAÑA MACRO (Integrando tu lógica exacta optimizada)
 --------------------------------------------------------------------------------
 local macroScroll = Instance.new("ScrollingFrame")
 macroScroll.Size = UDim2.new(0.95, 0, 1, -5)
@@ -343,7 +333,6 @@ macroLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
     macroScroll.CanvasSize = UDim2.new(0, 0, 0, macroLayout.AbsoluteContentSize.Y + 10)
 end)
 
--- Función auxiliar para estilizar elementos UI de la Macro
 local function createMacroCard(height)
     local card = Instance.new("Frame")
     card.Size = UDim2.new(1, -8, 0, height)
@@ -358,14 +347,14 @@ local function createMacroCard(height)
     return card
 end
 
--- 1. Toggle Activar Macro
+-- Toggle Macro
 local toggleCard = createMacroCard(36)
 local toggleLabel = Instance.new("TextLabel")
 toggleLabel.Size = UDim2.new(0.7, 0, 1, 0)
 toggleLabel.Position = UDim2.new(0, 10, 0, 0)
 toggleLabel.BackgroundTransparency = 1
 toggleLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
-toggleLabel.Text = "Activar Macro de Disparo"
+toggleLabel.Text = "Activar Macro"
 toggleLabel.Font = Enum.Font.GothamSemibold
 toggleLabel.TextSize = 10
 toggleLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -400,7 +389,7 @@ macroToggleBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- 2. Slider Delay Equipar
+-- Slider Equipar
 local equipCard = createMacroCard(48)
 local equipLabel = Instance.new("TextLabel")
 equipLabel.Size = UDim2.new(1, -20, 0, 20)
@@ -446,20 +435,11 @@ local function updateEquipSlider(input)
 end
 
 local draggingEquip = false
-equipSliderBg.MouseButton1Down:Connect(function(input)
-    draggingEquip = true
-    updateEquipSlider(input)
-end)
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then draggingEquip = false end
-end)
-UserInputService.InputChanged:Connect(function(input)
-    if draggingEquip and input.UserInputType == Enum.UserInputType.MouseMovement then
-        updateEquipSlider(input)
-    end
-end)
+equipSliderBg.MouseButton1Down:Connect(function(input) draggingEquip = true; updateEquipSlider(input) end)
+UserInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then draggingEquip = false end end)
+UserInputService.InputChanged:Connect(function(input) if draggingEquip and input.UserInputType == Enum.UserInputType.MouseMovement then updateEquipSlider(input) end end)
 
--- 3. Slider Delay Disparo
+-- Slider Disparo
 local shootCard = createMacroCard(48)
 local shootLabel = Instance.new("TextLabel")
 shootLabel.Size = UDim2.new(1, -20, 0, 20)
@@ -505,174 +485,166 @@ local function updateShootSlider(input)
 end
 
 local draggingShoot = false
-shootSliderBg.MouseButton1Down:Connect(function(input)
-    draggingShoot = true
-    updateShootSlider(input)
-end)
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then draggingShoot = false end
-end)
-UserInputService.InputChanged:Connect(function(input)
-    if draggingShoot and input.UserInputType == Enum.UserInputType.MouseMovement then
-        updateShootSlider(input)
+shootSliderBg.MouseButton1Down:Connect(function(input) draggingShoot = true; updateShootSlider(input) end)
+UserInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then draggingShoot = false end end)
+UserInputService.InputChanged:Connect(function(input) if draggingShoot and input.UserInputType == Enum.UserInputType.MouseMovement then updateShootSlider(input) end end)
+
+--------------------------------------------------------------------------------
+-- PESTAÑA SOUNDS (Limpieza de audios con menús desplegables y buscador)
+--------------------------------------------------------------------------------
+local soundsContainer = Instance.new("Frame")
+soundsContainer.Size = UDim2.new(0.95, 0, 1, -5)
+soundsContainer.BackgroundTransparency = 1
+soundsContainer.ZIndex = 3
+soundsContainer.Parent = tabs[1]
+
+local soundsLayout = Instance.new("UIListLayout")
+soundsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+soundsLayout.Padding = UDim.new(0, 8)
+soundsLayout.Parent = soundsContainer
+
+local function createDropdownSelector(labelName, soundKey)
+    local card = Instance.new("Frame")
+    card.Size = UDim2.new(1, -8, 0, 46)
+    card.BackgroundColor3 = Color3.fromRGB(14, 14, 18)
+    card.BackgroundTransparency = 0.2
+    card.ZIndex = 3
+    card.Parent = soundsContainer
+
+    local cCorner = Instance.new("UICorner")
+    cCorner.CornerRadius = UDim.new(0, 6)
+    cCorner.Parent = card
+
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(0.4, 0, 1, 0)
+    lbl.Position = UDim2.new(0, 10, 0, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.TextColor3 = Color3.fromRGB(200, 200, 200)
+    lbl.Text = labelName
+    lbl.Font = Enum.Font.GothamSemibold
+    lbl.TextSize = 10
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.ZIndex = 3
+    lbl.Parent = card
+
+    local dropBtn = Instance.new("TextButton")
+    dropBtn.Size = UDim2.new(0, 180, 0, 28)
+    dropBtn.Position = UDim2.new(1, -190, 0.5, -14)
+    dropBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+    dropBtn.TextColor3 = Color3.fromRGB(240, 240, 240)
+    dropBtn.Text = "Ninguno ▾"
+    dropBtn.Font = Enum.Font.Gotham
+    dropBtn.TextSize = 9
+    dropBtn.ZIndex = 3
+    dropBtn.Parent = card
+
+    local dCorner = Instance.new("UICorner")
+    dCorner.CornerRadius = UDim.new(0, 6)
+    dCorner.Parent = dropBtn
+
+    local dropListFrame = Instance.new("Frame")
+    dropListFrame.Size = UDim2.new(0, 180, 0, 140)
+    dropListFrame.Position = UDim2.new(1, -190, 1, 4)
+    dropListFrame.BackgroundColor3 = Color3.fromRGB(16, 16, 20)
+    dropListFrame.Visible = false
+    dropListFrame.ZIndex = 10
+    dropListFrame.Parent = card
+
+    local dlCorner = Instance.new("UICorner")
+    dlCorner.CornerRadius = UDim.new(0, 6)
+    dlCorner.Parent = dropListFrame
+
+    local dlStroke = Instance.new("UIStroke")
+    dlStroke.Color = Color3.fromRGB(40, 40, 50)
+    dlStroke.Parent = dropListFrame
+
+    local searchBox = Instance.new("TextBox")
+    searchBox.Size = UDim2.new(1, -10, 0, 26)
+    searchBox.Position = UDim2.new(0, 5, 0, 5)
+    searchBox.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
+    searchBox.TextColor3 = Color3.fromRGB(220, 220, 220)
+    searchBox.PlaceholderText = "Buscar sonido..."
+    searchBox.PlaceholderColor3 = Color3.fromRGB(100, 100, 110)
+    searchBox.Text = ""
+    searchBox.Font = Enum.Font.Gotham
+    searchBox.TextSize = 8
+    searchBox.ZIndex = 11
+    searchBox.Parent = dropListFrame
+
+    local sbCorner = Instance.new("UICorner")
+    sbCorner.CornerRadius = UDim.new(0, 4)
+    sbCorner.Parent = searchBox
+
+    local optionScroll = Instance.new("ScrollingFrame")
+    optionScroll.Size = UDim2.new(1, -6, 1, -38)
+    optionScroll.Position = UDim2.new(0, 3, 0, 34)
+    optionScroll.BackgroundTransparency = 1
+    optionScroll.ScrollBarThickness = 3
+    optionScroll.ZIndex = 11
+    optionScroll.Parent = dropListFrame
+
+    local optLayout = Instance.new("UIListLayout")
+    optLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    optLayout.Padding = UDim.new(0, 3)
+    optLayout.Parent = optionScroll
+
+    optLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        optionScroll.CanvasSize = UDim2.new(0, 0, 0, optLayout.AbsoluteContentSize.Y + 5)
+    end)
+
+    local function populateOptions(filter)
+        for _, child in ipairs(optionScroll:GetChildren()) do
+            if child:IsA("TextButton") then child:Destroy() end
+        end
+
+        for _, soundData in ipairs(SoundList) do
+            if not filter or filter == "" or soundData.Name:lower():find(filter:lower()) then
+                local optBtn = Instance.new("TextButton")
+                optBtn.Size = UDim2.new(1, 0, 0, 24)
+                optBtn.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
+                optBtn.TextColor3 = Color3.fromRGB(200, 200, 210)
+                optBtn.Text = "  " .. soundData.Name .. ((ActiveSounds[soundKey].Name == soundData.Name) and "  ✓" or "")
+                optBtn.Font = Enum.Font.Gotham
+                optBtn.TextSize = 8
+                optBtn.TextXAlignment = Enum.TextXAlignment.Left
+                optBtn.ZIndex = 12
+                optBtn.Parent = optionScroll
+
+                local oCorner = Instance.new("UICorner")
+                oCorner.CornerRadius = UDim.new(0, 4)
+                oCorner.Parent = optBtn
+
+                optBtn.MouseButton1Click:Connect(function()
+                    ActiveSounds[soundKey] = { Name = soundData.Name, URL = soundData.URL }
+                    dropBtn.Text = soundData.Name .. " ▾"
+                    dropListFrame.Visible = false
+                    playAudioUrl(soundData.URL)
+                end)
+            end
+        end
     end
-end)
 
---------------------------------------------------------------------------------
--- SECCIÓN Y LISTA DESPLEGABLE DE AUDIOS EN TAB SOUNDS
---------------------------------------------------------------------------------
--- Indicadores de estado actual
-local statusLabel = Instance.new("TextLabel")
-statusLabel.Size = UDim2.new(1, -20, 0, 20)
-statusLabel.Position = UDim2.new(0, 0, 0, 0)
-statusLabel.BackgroundTransparency = 1
-statusLabel.TextColor3 = Color3.fromRGB(140, 140, 150)
-statusLabel.Text = "Disparo: Ninguno | Salto: Ninguno | Muerte: Ninguno"
-statusLabel.Font = Enum.Font.Gotham
-statusLabel.TextSize = 8
-statusLabel.TextXAlignment = Enum.TextXAlignment.Left
-statusLabel.ZIndex = 3
-statusLabel.Parent = tabs[1]
+    dropBtn.MouseButton1Click:Connect(function()
+        dropListFrame.Visible = not dropListFrame.Visible
+        if dropListFrame.Visible then
+            populateOptions("")
+            searchBox.Text = ""
+        end
+    end)
 
-local function updateStatusText()
-    statusLabel.Text = "Disparo: " .. ActiveSounds.Disparar.Name .. " | Salto: " .. ActiveSounds.Saltar.Name .. " | Muerte: " .. ActiveSounds.Matar.Name
+    searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+        populateOptions(searchBox.Text)
+    end)
+
+    return dropBtn
 end
 
--- Contenedor con Scroll para la Lista
-local scrollList = Instance.new("ScrollingFrame")
-scrollList.Size = UDim2.new(0.95, 0, 1, -28)
-scrollList.Position = UDim2.new(0, 0, 0, 24)
-scrollList.BackgroundTransparency = 1
-scrollList.ScrollBarThickness = 3
-scrollList.ScrollBarImageColor3 = Color3.fromRGB(60, 60, 70)
-scrollList.ZIndex = 3
-scrollList.Parent = tabs[1]
-
-local listLayout = Instance.new("UIListLayout")
-listLayout.SortOrder = Enum.SortOrder.LayoutOrder
-listLayout.Padding = UDim.new(0, 5)
-listLayout.Parent = scrollList
-
-listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-    scrollList.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 10)
-end)
-
-local function populateSoundList()
-    for _, child in ipairs(scrollList:GetChildren()) do
-        if child:IsA("Frame") then child:Destroy() end
-    end
-
-    for _, soundData in ipairs(SoundList) do
-        local row = Instance.new("Frame")
-        row.Size = UDim2.new(1, -8, 0, 32)
-        row.BackgroundColor3 = Color3.fromRGB(14, 14, 18)
-        row.BackgroundTransparency = 0.2
-        row.ZIndex = 3
-        row.Parent = scrollList
-
-        local rCorner = Instance.new("UICorner")
-        rCorner.CornerRadius = UDim.new(0, 6)
-        rCorner.Parent = row
-
-        local nameLabel = Instance.new("TextLabel")
-        nameLabel.Size = UDim2.new(0, 140, 1, 0)
-        nameLabel.Position = UDim2.new(0, 8, 0, 0)
-        nameLabel.BackgroundTransparency = 1
-        nameLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
-        nameLabel.Text = soundData.Name
-        nameLabel.Font = Enum.Font.GothamSemibold
-        nameLabel.TextSize = 9
-        nameLabel.TextXAlignment = Enum.TextXAlignment.Left
-        nameLabel.ZIndex = 3
-        nameLabel.Parent = row
-
-        -- Botón Probar ▶
-        local playBtn = Instance.new("TextButton")
-        playBtn.Size = UDim2.new(0, 24, 0, 20)
-        playBtn.Position = UDim2.new(1, -150, 0.2, 0)
-        playBtn.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
-        playBtn.TextColor3 = Color3.fromRGB(0, 170, 255)
-        playBtn.Text = "▶"
-        playBtn.Font = Enum.Font.GothamBold
-        playBtn.TextSize = 8
-        playBtn.ZIndex = 3
-        playBtn.Parent = row
-
-        local pCorner = Instance.new("UICorner")
-        pCorner.CornerRadius = UDim.new(0, 4)
-        pCorner.Parent = playBtn
-
-        playBtn.MouseButton1Click:Connect(function()
-            playAudioUrl(soundData.URL)
-        end)
-
-        -- Botón Asignar Disparo
-        local gunBtn = Instance.new("TextButton")
-        gunBtn.Size = UDim2.new(0, 38, 0, 20)
-        gunBtn.Position = UDim2.new(1, -122, 0.2, 0)
-        gunBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 32)
-        gunBtn.TextColor3 = Color3.fromRGB(180, 180, 190)
-        gunBtn.Text = "Disparo"
-        gunBtn.Font = Enum.Font.Gotham
-        gunBtn.TextSize = 7
-        gunBtn.ZIndex = 3
-        gunBtn.Parent = row
-
-        local gCorner = Instance.new("UICorner")
-        gCorner.CornerRadius = UDim.new(0, 4)
-        gCorner.Parent = gunBtn
-
-        gunBtn.MouseButton1Click:Connect(function()
-            ActiveSounds.Disparar = { Name = soundData.Name, URL = soundData.URL }
-            updateStatusText()
-        end)
-
-        -- Botón Asignar Salto
-        local jumpBtn = Instance.new("TextButton")
-        jumpBtn.Size = UDim2.new(0, 38, 0, 20)
-        jumpBtn.Position = UDim2.new(1, -80, 0.2, 0)
-        jumpBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 32)
-        jumpBtn.TextColor3 = Color3.fromRGB(180, 180, 190)
-        jumpBtn.Text = "Salto"
-        jumpBtn.Font = Enum.Font.Gotham
-        jumpBtn.TextSize = 7
-        jumpBtn.ZIndex = 3
-        jumpBtn.Parent = row
-
-        local jCorner = Instance.new("UICorner")
-        jCorner.CornerRadius = UDim.new(0, 4)
-        jCorner.Parent = jumpBtn
-
-        jumpBtn.MouseButton1Click:Connect(function()
-            ActiveSounds.Saltar = { Name = soundData.Name, URL = soundData.URL }
-            updateStatusText()
-        end)
-
-        -- Botón Asignar Matar
-        local killBtn = Instance.new("TextButton")
-        killBtn.Size = UDim2.new(0, 38, 0, 20)
-        killBtn.Position = UDim2.new(1, -38, 0.2, 0)
-        killBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 32)
-        killBtn.TextColor3 = Color3.fromRGB(180, 180, 190)
-        killBtn.Text = "Matar"
-        killBtn.Font = Enum.Font.Gotham
-        killBtn.TextSize = 7
-        killBtn.ZIndex = 3
-        killBtn.Parent = row
-
-        local kCorner = Instance.new("UICorner")
-        kCorner.CornerRadius = UDim.new(0, 4)
-        kCorner.Parent = killBtn
-
-        killBtn.MouseButton1Click:Connect(function()
-            ActiveSounds.Matar = { Name = soundData.Name, URL = soundData.URL }
-            updateStatusText()
-        end)
-    end
-end
+createDropdownSelector("Sonido Disparo:", "Disparar")
+createDropdownSelector("Sonido Salto:", "Saltar")
+createDropdownSelector("Sonido Matar:", "Matar")
 
 --------------------------------------------------------------------------------
--- ESCANEO AUTOMÁTICO DE AUDIOS EN GITHUB
+-- CARGA DE AUDIOS DESDE GITHUB
 --------------------------------------------------------------------------------
 task.spawn(function()
     if httpRequest then
@@ -696,27 +668,18 @@ task.spawn(function()
         end)
     end
 
-    -- Si por red falla la API, asigna lista base
     if #SoundList == 0 then
         local defaults = {"Rust", "Skeet", "Hitmarker", "TF2", "Neverlose"}
         for _, name in ipairs(defaults) do
             table.insert(SoundList, { Name = name, URL = RawBaseURL .. FolderPath .. "/" .. name .. ".mp3" })
         end
     end
-
-    -- Asignar el primer audio detectado por defecto si existe
-    if #SoundList > 0 then
-        ActiveSounds.Disparar = { Name = SoundList[1].Name, URL = SoundList[1].URL }
-        updateStatusText()
-    end
-
-    populateSoundList()
 end)
 
 toggleButton.MouseButton1Click:Connect(function() mainFrame.Visible = not mainFrame.Visible end)
 
 --------------------------------------------------------------------------------
--- BUCLE DE EJECUCIÓN DE LA MACRO
+-- BUCLE DE LA MACRO Y DETECCIÓN DE DISPAROS / SALTOS
 --------------------------------------------------------------------------------
 RunService.RenderStepped:Connect(function()
     if not macroActivo then return end
@@ -724,15 +687,13 @@ RunService.RenderStepped:Connect(function()
     if UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
         pcall(function()
             task.wait(macroEquipDelay)
-            -- Secuencia de macro sincronizada con los delays personalizados
+            VirtualUser:Button1Down(Vector2.new(0,0))
             task.wait(macroShootDelay)
+            VirtualUser:Button1Up(Vector2.new(0,0))
         end)
     end
 end)
 
---------------------------------------------------------------------------------
--- EVENTOS DE JUEGO (REPRODUCCIÓN DE AUDIOS ASIGNADOS)
---------------------------------------------------------------------------------
 local boundTools = {}
 local function bindTool(tool)
     if tool:IsA("Tool") and not boundTools[tool] then
