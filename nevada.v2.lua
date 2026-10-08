@@ -1,4 +1,4 @@
--- LocalScript: NEVADA HUB (Con Macro Original e Interfaz Limpia)
+-- LocalScript: NEVADA HUB (Con Macro Original de XeroHub y Sonidos)
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local SoundService = game:GetService("SoundService")
@@ -28,7 +28,7 @@ local ApiURL = "https://api.github.com/repos/" .. GitHubUser .. "/" .. RepoName 
 local ImageURL = RawBaseURL .. ImageFolder .. "/" .. ImageFileName
 
 --------------------------------------------------------------------------------
--- ESTADO DE LA MACRO Y SONIDOS (Lógica de tu archivo macro)
+-- ESTADO DE LA MACRO Y SONIDOS (Lógica XeroHub)
 --------------------------------------------------------------------------------
 local macroActivo = false
 local macroEquipDelay = 0.04
@@ -313,7 +313,7 @@ local tabMacro = createTabButton("02 Macro", 2, 64)
 local tabInicio = createTabButton("01 Inicio", 3, 96)
 
 --------------------------------------------------------------------------------
--- PESTAÑA MACRO (Integrando tu lógica exacta optimizada)
+-- PESTAÑA MACRO (XeroHub Style)
 --------------------------------------------------------------------------------
 local macroScroll = Instance.new("ScrollingFrame")
 macroScroll.Size = UDim2.new(0.95, 0, 1, -5)
@@ -490,7 +490,7 @@ UserInputService.InputEnded:Connect(function(input) if input.UserInputType == En
 UserInputService.InputChanged:Connect(function(input) if draggingShoot and input.UserInputType == Enum.UserInputType.MouseMovement then updateShootSlider(input) end end)
 
 --------------------------------------------------------------------------------
--- PESTAÑA SOUNDS (Limpieza de audios con menús desplegables y buscador)
+-- PESTAÑA SOUNDS (XeroHub Style)
 --------------------------------------------------------------------------------
 local soundsContainer = Instance.new("Frame")
 soundsContainer.Size = UDim2.new(0.95, 0, 1, -5)
@@ -679,7 +679,7 @@ end)
 toggleButton.MouseButton1Click:Connect(function() mainFrame.Visible = not mainFrame.Visible end)
 
 --------------------------------------------------------------------------------
--- BUCLE DE LA MACRO Y DETECCIÓN DE DISPAROS / SALTOS
+-- BUCLE DE LA MACRO Y DETECCIÓN DE EVENTOS (XeroHub Engine)
 --------------------------------------------------------------------------------
 RunService.RenderStepped:Connect(function()
     if not macroActivo then return end
