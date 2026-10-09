@@ -316,7 +316,8 @@ end
 if player.Character then setupCharacter(player.Character) end
 player.CharacterAdded:Connect(setupCharacter)
 
--- Sustituye los sonidos originales conocidos de XeroHub cuando el juego los crea.
+-- Sustituye el sonido original de disparo de XeroHub (mismo ID: 10209603).
+-- Se vigila todo el juego porque XeroHub puede crear el Sound fuera de Workspace/PlayerGui.
 local ORIGINAL_SHOT="10209603"
 local ORIGINAL_KILL="296102734"
 local watchedSounds=setmetatable({}, {__mode="k"})
@@ -343,10 +344,8 @@ local function watchNativeSound(obj)
   obj.Played:Connect(function() task.defer(check) end)
   obj:GetPropertyChangedSignal("SoundId"):Connect(function() task.defer(check) end)
 end
-for _,root in ipairs({workspace,SoundService,playerGui}) do
-  for _,obj in ipairs(root:GetDescendants()) do watchNativeSound(obj) end
-  root.DescendantAdded:Connect(watchNativeSound)
-end
+for _,obj in ipairs(game:GetDescendants()) do watchNativeSound(obj) end
+game.DescendantAdded:Connect(watchNativeSound)
 
 -- Macro por toque (Android), clic izquierdo o R2.
 -- Equipa temporalmente el arma, dispara con los tiempos configurados y la guarda de nuevo.
