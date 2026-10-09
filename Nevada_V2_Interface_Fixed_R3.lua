@@ -1,4 +1,4 @@
--- NEVADA V2 R7 | Macro conservada y corrección de sonido de disparo
+-- NEVADA V2 R5 | Macro con guardado de arma y delays configurables
 -- La sustitución de disparo/kill depende de los IDs de sonido usados por el juego.
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
@@ -281,34 +281,20 @@ refreshCatalog=function()
 end
 task.spawn(refreshCatalog)
 
--- Eventos locales: salto, sustitución de sonidos nativos y macro compatible con toque.
+-- Sonidos independientes de la macro: salto y reemplazo global de disparos estilo XeroHub.
 local boundTools={}
 local lastCustomShot=0
-local shotFallbackToken=0
 local function bindTool(tool)
   if not tool:IsA("Tool") or boundTools[tool] then return end
   boundTools[tool]=true
-  -- Solo respaldo: la sustitución principal se hace al detectar el Sound nativo.
-  tool.Activated:Connect(function()
-    -- Respaldo para juegos que no usan el SoundId nativo conocido.
-    -- Espera un instante por si el juego sí dispara el sonido original; así evita duplicados.
-    if not state.enabled.Arma or state.muted.Arma or state.selected.Arma.URL=="" then return end
-    shotFallbackToken=shotFallbackToken+1
-    local token=shotFallbackToken
-    task.delay(0.16,function()
-      if token~=shotFallbackToken then return end
-      if not state.enabled.Arma or state.muted.Arma then return end
-      if os.clock()-lastCustomShot>=0.15 then
-        lastCustomShot=os.clock()
-        playSound(state.selected.Arma.URL)
-      end
-    end)
-  end)
+  -- NO reproducir el sonido desde Tool.Activated: el sonido se detecta globalmente.
 end
 local function setupCharacter(char)
   local hum=char:WaitForChild("Humanoid",5)
   if hum then hum.Jumping:Connect(function(jumping)
-    if jumping and state.enabled.Saltar and not state.muted.Saltar then playSound(state.selected.Saltar.URL) end
+    if jumping and state.enabled.Saltar and not state.muted.Saltar and state.selected.Saltar.URL~="" then
+      playSound(state.selected.Saltar.URL)
+    end
   end) end
   char.ChildAdded:Connect(bindTool)
   for _,obj in ipairs(char:GetChildren()) do bindTool(obj) end
@@ -316,36 +302,64 @@ end
 if player.Character then setupCharacter(player.Character) end
 player.CharacterAdded:Connect(setupCharacter)
 
--- Sustituye el sonido original de disparo de XeroHub (mismo ID: 10209603).
--- Se vigila todo el juego porque XeroHub puede crear el Sound fuera de Workspace/PlayerGui.
+-- Reutiliza el enfoque de XeroHub: observar globalmente sonidos nativos,
+-- silenciar cada Sound original una sola vez y reproducir el MP3 en CADA evento.
 local ORIGINAL_SHOT="10209603"
 local ORIGINAL_KILL="296102734"
 local watchedSounds=setmetatable({}, {__mode="k"})
-local recentlyReplaced=setmetatable({}, {__mode="k"})
+local mutedOriginals=setmetatable({}, {__mode="k"})
 local function soundDigits(sound)
   return tostring(sound.SoundId or ""):match("(%d+)")
+end
+local function isTargetShot(obj)
+  local id=soundDigits(obj)
+  if id==ORIGINAL_SHOT then return true end
+  return obj.Name:lower()=="gunshot" and obj:FindFirstAncestorWhichIsA("Tool")~=nil
 end
 local function watchNativeSound(obj)
   if not obj:IsA("Sound") or watchedSounds[obj] then return end
   watchedSounds[obj]=true
   local function check()
+    if not obj.Parent then return end
     local id=soundDigits(obj)
-    local category=(id==ORIGINAL_SHOT) and "Arma" or ((id==ORIGINAL_KILL or obj.Name:lower()=="gunkill") and "Matar" or nil)
-    if not category or not obj.IsPlaying then return end
-    if not state.enabled[category] or state.muted[category] then return end
+    local category=(isTargetShot(obj) and "Arma") or ((id==ORIGINAL_KILL or obj.Name:lower()=="gunkill") and "Matar" or nil)
+    if not category then return end
     local custom=state.selected[category]
-    if not custom or custom.URL=="" then return end
-    if recentlyReplaced[obj] and os.clock()-recentlyReplaced[obj]<0.12 then return end
-    recentlyReplaced[obj]=os.clock()
+    if not state.enabled[category] or state.muted[category] or not custom or custom.URL=="" then return end
+    -- Silencia el sonido nativo persistentemente, pero conserva los listeners
+    -- para que el reemplazo se reproduzca de nuevo en disparos posteriores.
+    if not mutedOriginals[obj] then
+      mutedOriginals[obj]=obj.Volume
+      pcall(function() obj.Volume=0 end)
+    elseif obj.Volume~=0 then
+      pcall(function() obj.Volume=0 end)
+    end
     if category=="Arma" then lastCustomShot=os.clock() end
-    pcall(function() obj:Stop() end)
     playSound(custom.URL)
   end
   obj.Played:Connect(function() task.defer(check) end)
+  obj:GetPropertyChangedSignal("Playing"):Connect(function()
+    if obj.Playing or obj.IsPlaying then task.defer(check) end
+  end)
   obj:GetPropertyChangedSignal("SoundId"):Connect(function() task.defer(check) end)
+  obj:GetPropertyChangedSignal("Name"):Connect(function() task.defer(check) end)
+  obj:GetPropertyChangedSignal("Volume"):Connect(function()
+    if mutedOriginals[obj]~=nil and obj.Parent and obj.Volume~=0 then pcall(function() obj.Volume=0 end) end
+  end)
+  -- Si el objeto ya estaba sonando cuando se detectó, procesa ese disparo.
+  if obj.IsPlaying or obj.Playing then task.defer(check) end
 end
-for _,obj in ipairs(game:GetDescendants()) do watchNativeSound(obj) end
-game.DescendantAdded:Connect(watchNativeSound)
+local function scanSoundTree(root)
+  if not root then return end
+  if root:IsA("Sound") then watchNativeSound(root) end
+  for _,obj in ipairs(root:GetDescendants()) do if obj:IsA("Sound") then watchNativeSound(obj) end end
+  root.DescendantAdded:Connect(watchNativeSound)
+end
+scanSoundTree(workspace)
+scanSoundTree(SoundService)
+scanSoundTree(playerGui)
+scanSoundTree(workspace.CurrentCamera)
+workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function() scanSoundTree(workspace.CurrentCamera) end)
 
 -- Macro por toque (Android), clic izquierdo o R2.
 -- Equipa temporalmente el arma, dispara con los tiempos configurados y la guarda de nuevo.
