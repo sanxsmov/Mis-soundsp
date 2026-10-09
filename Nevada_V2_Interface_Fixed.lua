@@ -1,4 +1,5 @@
 -- NEVADA V2 | Interfaz, catálogo GitHub, sonidos y configuración
+-- Si la interfaz no aparece, revisa la consola del ejecutor (F9 si está disponible).
 -- Nota: los eventos de disparo/muerte dependen de cómo el juego exponga esas acciones.
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
@@ -238,7 +239,7 @@ end)
 actionCard(configPage,"Actualizar catálogo","Vuelve a consultar los archivos MP3 de GitHub","Actualizar",function() task.spawn(function() end) end)
 
 local navNames={"Inicio","Macro","Sonidos","Configuración"}
-local navIcons={Inicio="⌂",Macro="◎",Sonidos="♫",Configuración="⚙"}
+local navIcons={Inicio="⌂",Macro="◎",Sonidos="♫",["Configuración"]="⚙"}
 showPage=function(name)
   activeTab=name
   for n,p in pairs(pages) do p.Visible=(n==name) end
