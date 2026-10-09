@@ -1,4 +1,4 @@
--- NEVADA V2 R4 | Macro táctil y sustitución de sonidos nativos
+-- NEVADA V2 R5 | Macro con guardado de arma y delays configurables
 -- La sustitución de disparo/kill depende de los IDs de sonido usados por el juego.
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
@@ -283,14 +283,26 @@ task.spawn(refreshCatalog)
 
 -- Eventos locales: salto, sustitución de sonidos nativos y macro compatible con toque.
 local boundTools={}
+local lastCustomShot=0
+local shotFallbackToken=0
 local function bindTool(tool)
   if not tool:IsA("Tool") or boundTools[tool] then return end
   boundTools[tool]=true
   -- Solo respaldo: la sustitución principal se hace al detectar el Sound nativo.
   tool.Activated:Connect(function()
-    if state.enabled.Arma and not state.muted.Arma and state.selected.Arma.URL~="" then
-      -- No reproducir duplicado si el juego expone el sonido original.
-    end
+    -- Respaldo para juegos que no usan el SoundId nativo conocido.
+    -- Espera un instante por si el juego sí dispara el sonido original; así evita duplicados.
+    if not state.enabled.Arma or state.muted.Arma or state.selected.Arma.URL=="" then return end
+    shotFallbackToken=shotFallbackToken+1
+    local token=shotFallbackToken
+    task.delay(0.16,function()
+      if token~=shotFallbackToken then return end
+      if not state.enabled.Arma or state.muted.Arma then return end
+      if os.clock()-lastCustomShot>=0.15 then
+        lastCustomShot=os.clock()
+        playSound(state.selected.Arma.URL)
+      end
+    end)
   end)
 end
 local function setupCharacter(char)
@@ -321,6 +333,7 @@ local function watchNativeSound(obj)
     local custom=state.selected[category]
     if not custom or custom.URL=="" then return end
     replacedSounds[obj]=true
+    if category=="Arma" then lastCustomShot=os.clock() end
     pcall(function() obj:Stop() end)
     playSound(custom.URL)
   end
@@ -332,32 +345,54 @@ for _,root in ipairs({workspace,SoundService,playerGui}) do
   root.DescendantAdded:Connect(watchNativeSound)
 end
 
--- Macro por toque (Android), clic izquierdo o R2. Equipa un Tool disponible y activa una vez.
+-- Macro por toque (Android), clic izquierdo o R2.
+-- Equipa temporalmente el arma, dispara con los tiempos configurados y la guarda de nuevo.
 local macroBusy=false
 local lastMacro=0
 local function runMacro()
-  if not state.macro or macroBusy or os.clock()-lastMacro<0.12 then return end
+  if not state.macro or macroBusy then return end
   local char=player.Character; if not char then return end
   local hum=char:FindFirstChildOfClass("Humanoid"); if not hum or hum.Health<=0 then return end
   local backpack=player:FindFirstChildOfClass("Backpack")
+  if not backpack then return end
+
   local tool=char:FindFirstChildOfClass("Tool")
-  if not tool and backpack then
+  local wasEquipped=(tool~=nil)
+  if not tool then
     for _,item in ipairs(backpack:GetChildren()) do
-      if item:IsA("Tool") and (item.Name:lower():find("pistol") or item.Name:lower():find("gun") or item.Name:lower():find("sheriff") or item.Name:lower():find("revolver")) then tool=item; break end
+      if item:IsA("Tool") and (item.Name:lower():find("pistol") or item.Name:lower():find("gun") or item.Name:lower():find("sheriff") or item.Name:lower():find("revolver")) then
+        tool=item; break
+      end
     end
   end
   if not tool then return end
-  macroBusy=true; lastMacro=os.clock()
+
+  -- No usar un cooldown fijo: el tiempo de disparo seleccionado controla el ciclo.
+  local now=os.clock()
+  local requiredGap=math.max(0.01, tonumber(state.shootDelay) or 0.10)
+  if now-lastMacro<requiredGap then return end
+  macroBusy=true
+  lastMacro=now
   task.spawn(function()
-    pcall(function()
-      if tool.Parent==backpack then hum:EquipTool(tool) end
-      task.wait(state.equipDelay)
-      if state.macro and player.Character==char and tool.Parent==char then
+    local shouldHolster=false
+    local ok,err=pcall(function()
+      if not state.macro or player.Character~=char then return end
+      if tool.Parent==backpack then
+        hum:EquipTool(tool)
+        shouldHolster=true
+      end
+      task.wait(math.max(0.01, tonumber(state.equipDelay) or 0.05))
+      if state.macro and player.Character==char and hum.Health>0 and tool.Parent==char then
+        shouldHolster=true
         tool:Activate()
-        task.wait(state.shootDelay)
+        task.wait(math.max(0.01, tonumber(state.shootDelay) or 0.10))
         pcall(function() tool:Deactivate() end)
       end
     end)
+    -- Guardar el arma después del ciclo, incluso si ya estaba en la mano.
+    if shouldHolster and player.Character==char and hum.Parent==char then
+      pcall(function() hum:UnequipTools() end)
+    end
     macroBusy=false
   end)
 end
