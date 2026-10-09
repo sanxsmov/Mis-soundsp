@@ -1,5 +1,5 @@
--- NEVADA V2 R3 | Corrección de sintaxis y botón minimizado
--- Nota: los eventos de disparo/muerte dependen de cómo el juego exponga esas acciones.
+-- NEVADA V2 R4 | Macro táctil y sustitución de sonidos nativos
+-- La sustitución de disparo/kill depende de los IDs de sonido usados por el juego.
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
@@ -281,13 +281,16 @@ refreshCatalog=function()
 end
 task.spawn(refreshCatalog)
 
--- Detecta salto local. La detección de disparo usa Tool.Activated; matar requiere evento del juego.
+-- Eventos locales: salto, sustitución de sonidos nativos y macro compatible con toque.
 local boundTools={}
 local function bindTool(tool)
   if not tool:IsA("Tool") or boundTools[tool] then return end
   boundTools[tool]=true
+  -- Solo respaldo: la sustitución principal se hace al detectar el Sound nativo.
   tool.Activated:Connect(function()
-    if state.enabled.Arma and not state.muted.Arma then playSound(state.selected.Arma.URL) end
+    if state.enabled.Arma and not state.muted.Arma and state.selected.Arma.URL~="" then
+      -- No reproducir duplicado si el juego expone el sonido original.
+    end
   end)
 end
 local function setupCharacter(char)
@@ -301,21 +304,79 @@ end
 if player.Character then setupCharacter(player.Character) end
 player.CharacterAdded:Connect(setupCharacter)
 
--- La macro solo activa la herramienta equipada; no fuerza disparos continuos ni simula input global.
+-- Sustituye los sonidos originales conocidos de XeroHub cuando el juego los crea.
+local ORIGINAL_SHOT="10209603"
+local ORIGINAL_KILL="296102734"
+local replacedSounds=setmetatable({}, {__mode="k"})
+local function soundDigits(sound)
+  return tostring(sound.SoundId or ""):match("(%d+)")
+end
+local function watchNativeSound(obj)
+  if not obj:IsA("Sound") or replacedSounds[obj] then return end
+  local function check()
+    local id=soundDigits(obj)
+    local category=(id==ORIGINAL_SHOT) and "Arma" or ((id==ORIGINAL_KILL or obj.Name:lower()=="gunkill") and "Matar" or nil)
+    if not category or not obj.IsPlaying then return end
+    if not state.enabled[category] or state.muted[category] then return end
+    local custom=state.selected[category]
+    if not custom or custom.URL=="" then return end
+    replacedSounds[obj]=true
+    pcall(function() obj:Stop() end)
+    playSound(custom.URL)
+  end
+  obj.Played:Connect(function() task.defer(check) end)
+  obj:GetPropertyChangedSignal("SoundId"):Connect(function() task.defer(check) end)
+end
+for _,root in ipairs({workspace,SoundService,playerGui}) do
+  for _,obj in ipairs(root:GetDescendants()) do watchNativeSound(obj) end
+  root.DescendantAdded:Connect(watchNativeSound)
+end
+
+-- Macro por toque (Android), clic izquierdo o R2. Equipa un Tool disponible y activa una vez.
 local macroBusy=false
-RunService.Heartbeat:Connect(function()
-  if not state.macro or macroBusy then return end
-  if not UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then return end
+local lastMacro=0
+local function runMacro()
+  if not state.macro or macroBusy or os.clock()-lastMacro<0.12 then return end
   local char=player.Character; if not char then return end
-  local tool
-  for _,obj in ipairs(char:GetChildren()) do if obj:IsA("Tool") then tool=obj; break end end
+  local hum=char:FindFirstChildOfClass("Humanoid"); if not hum or hum.Health<=0 then return end
+  local backpack=player:FindFirstChildOfClass("Backpack")
+  local tool=char:FindFirstChildOfClass("Tool")
+  if not tool and backpack then
+    for _,item in ipairs(backpack:GetChildren()) do
+      if item:IsA("Tool") and (item.Name:lower():find("pistol") or item.Name:lower():find("gun") or item.Name:lower():find("sheriff") or item.Name:lower():find("revolver")) then tool=item; break end
+    end
+  end
   if not tool then return end
-  macroBusy=true
+  macroBusy=true; lastMacro=os.clock()
   task.spawn(function()
-    task.wait(state.equipDelay)
-    if state.macro and tool.Parent==char then pcall(function() tool:Activate() end); task.wait(state.shootDelay) end
+    pcall(function()
+      if tool.Parent==backpack then hum:EquipTool(tool) end
+      task.wait(state.equipDelay)
+      if state.macro and player.Character==char and tool.Parent==char then
+        tool:Activate()
+        task.wait(state.shootDelay)
+        pcall(function() tool:Deactivate() end)
+      end
+    end)
     macroBusy=false
   end)
+end
+UserInputService.InputBegan:Connect(function(input,processed)
+  if processed then return end
+  if input.UserInputType==Enum.UserInputType.MouseButton1 or input.KeyCode==Enum.KeyCode.ButtonR2 then runMacro() end
+end)
+local touchStart,touchTime=nil,nil
+UserInputService.TouchStarted:Connect(function(input,processed)
+  if processed then return end
+  touchStart=input.Position; touchTime=os.clock()
+end)
+UserInputService.TouchEnded:Connect(function(input,processed)
+  if processed or not touchStart or not touchTime then touchStart=nil; touchTime=nil; return end
+  local delta=(input.Position-touchStart).Magnitude
+  local elapsed=os.clock()-touchTime
+  touchStart=nil; touchTime=nil
+  -- Evita considerar deslizamientos/gestos como disparo.
+  if delta<18 and elapsed>=0.025 and elapsed<0.6 then runMacro() end
 end)
 
 -- Autoload local de configuración, si el ejecutor permite archivos.
