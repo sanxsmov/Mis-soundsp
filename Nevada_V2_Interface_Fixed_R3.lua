@@ -1,4 +1,4 @@
--- NEVADA V2 R5 | Macro con guardado de arma y delays configurables
+-- NEVADA V2 R7 | Macro conservada y corrección de sonido de disparo
 -- La sustitución de disparo/kill depende de los IDs de sonido usados por el juego.
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
@@ -319,12 +319,14 @@ player.CharacterAdded:Connect(setupCharacter)
 -- Sustituye los sonidos originales conocidos de XeroHub cuando el juego los crea.
 local ORIGINAL_SHOT="10209603"
 local ORIGINAL_KILL="296102734"
-local replacedSounds=setmetatable({}, {__mode="k"})
+local watchedSounds=setmetatable({}, {__mode="k"})
+local recentlyReplaced=setmetatable({}, {__mode="k"})
 local function soundDigits(sound)
   return tostring(sound.SoundId or ""):match("(%d+)")
 end
 local function watchNativeSound(obj)
-  if not obj:IsA("Sound") or replacedSounds[obj] then return end
+  if not obj:IsA("Sound") or watchedSounds[obj] then return end
+  watchedSounds[obj]=true
   local function check()
     local id=soundDigits(obj)
     local category=(id==ORIGINAL_SHOT) and "Arma" or ((id==ORIGINAL_KILL or obj.Name:lower()=="gunkill") and "Matar" or nil)
@@ -332,7 +334,8 @@ local function watchNativeSound(obj)
     if not state.enabled[category] or state.muted[category] then return end
     local custom=state.selected[category]
     if not custom or custom.URL=="" then return end
-    replacedSounds[obj]=true
+    if recentlyReplaced[obj] and os.clock()-recentlyReplaced[obj]<0.12 then return end
+    recentlyReplaced[obj]=os.clock()
     if category=="Arma" then lastCustomShot=os.clock() end
     pcall(function() obj:Stop() end)
     playSound(custom.URL)
