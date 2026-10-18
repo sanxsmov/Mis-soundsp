@@ -1,4 +1,4 @@
--- NEVADA V2 R13 | Interfaz Completa + Sonidos + Macro + Auto-Shoot (Modo Duelos) + Anti-Cheat
+-- NEVADA V2 R14 | Interfaz Completa + Sonidos + Macro + Auto-Shoot (Cualquier Arma) + Anti-Cheat
 if getgenv().NevadaLoaded then return end
 getgenv().NevadaLoaded = true
 
@@ -214,7 +214,7 @@ local aimPage=newPage("AutoAim")
 switch(aimPage,"Activar Auto-Shoot",false,function(v) state.autoAim=v end)
 slider(aimPage,"Delay de disparo",0.01,0.50,state.aimDelay,function(v) state.aimDelay=v end)
 switch(aimPage,"Guardar arma al disparar",true,function(v) state.aimSaveTool=v end)
-local aimInfo=card(aimPage,72); label(aimInfo,"El Auto-Shoot solo funciona en partida (con el arma en la mano). Detecta al enemigo, espera un tiempo de reacción humano, dispara y la guarda.",UDim2.new(1,-24,1,-12),UDim2.new(0,12,0,6),12,C.sub,false)
+local aimInfo=card(aimPage,72); label(aimInfo,"El Auto-Shoot saca cualquier arma, dispara y la guarda. Solo funciona en partida.",UDim2.new(1,-24,1,-12),UDim2.new(0,12,0,6),12,C.sub,false)
 
 local soundsPage=newPage("Sonidos")
 local categoryBar=card(soundsPage,44)
@@ -433,7 +433,7 @@ local function runMacro()
   local tool=char:FindFirstChildOfClass("Tool")
   if not tool then
     for _,item in ipairs(backpack:GetChildren()) do
-      if item:IsA("Tool") and (item.Name:lower():find("pistol") or item.Name:lower():find("gun") or item.Name:lower():find("sheriff") or item.Name:lower():find("revolver")) then
+      if item:IsA("Tool") then
         tool=item; break
       end
     end
@@ -486,7 +486,7 @@ connections[#connections+1] = UserInputService.TouchEnded:Connect(function(input
   if delta<18 and elapsed>=0.025 and elapsed<0.6 then runMacro() end
 end)
 
--- AUTO-SHOOT MODO DUELOS (Anti-Kick Humano)
+-- AUTO-SHOOT MODO DUELOS (Usa cualquier arma)
 local function hasLineOfSight(targetPart)
   if isUnloaded then return false end
   local origin = camera.CFrame.Position
@@ -500,13 +500,12 @@ local function hasLineOfSight(targetPart)
   return false
 end
 
-local function isEnemyInSight()
-  if isUnloaded then return false end
-  if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return false end
+local function getClosestEnemy()
+  if isUnloaded then return nil end
+  if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return nil end
 
-  local char = player.Character
-  local tool = char:FindFirstChildOfClass("Tool")
-  if not tool then return false end -- Solo en partida (con el arma en la mano)
+  local closestEnemy = nil
+  local shortestDistance = math.huge
 
   for _, otherPlayer in ipairs(Players:GetPlayers()) do
     if otherPlayer ~= player and otherPlayer.Character and otherPlayer.Character:FindFirstChild("HumanoidRootPart") and otherPlayer.Character:FindFirstChild("Humanoid") then
@@ -515,49 +514,70 @@ local function isEnemyInSight()
         local rootPart = otherPlayer.Character.HumanoidRootPart
         local screenPos, onScreen = camera:WorldToViewportPoint(rootPart.Position)
         
-        -- Verificamos que esté en pantalla, cerca y sin paredes
         if onScreen and (rootPart.Position - player.Character.HumanoidRootPart.Position).Magnitude < 300 then
           if hasLineOfSight(rootPart) then
-            return true
+            local dist = (rootPart.Position - player.Character.HumanoidRootPart.Position).Magnitude
+            if dist < shortestDistance then
+              shortestDistance = dist
+              closestEnemy = rootPart
+            end
           end
         end
       end
     end
   end
-  return false
+  return closestEnemy
 end
 
 task.spawn(function()
   while not isUnloaded do
-    -- Revisa cada 0.1 segundos
     task.wait(0.1) 
     
     if state.autoAim and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-      if isEnemyInSight() then
-        
-        -- 🛑 TIEMPO DE REACCIÓN HUMANO
-        -- Esperamos un tiempo aleatorio entre 0.15s y 0.35s antes de disparar
+      
+      local enemy = getClosestEnemy()
+      
+      if enemy then
+        -- Tiempo de reacción humano
         task.wait(math.random(15, 35) / 100)
         
         local char = player.Character
-        local tool = char:FindFirstChildOfClass("Tool")
         local humanoid = char:FindFirstChildOfClass("Humanoid")
+        local backpack = player:FindFirstChildOfClass("Backpack")
         
+        -- Buscar CUALQUIER herramienta (Tool) en la mochila o en el personaje
+        local tool = char:FindFirstChildOfClass("Tool")
+        
+        if not tool and backpack then
+            for _, item in ipairs(backpack:GetChildren()) do
+                if item:IsA("Tool") then
+                    tool = item
+                    break
+                end
+            end
+        end
+
         if tool and humanoid then
-            -- Disparamos usando la función nativa (MÁS SEGURO QUE VirtualUser)
+            -- Si el arma no está equipada, la equipamos
+            if tool.Parent ~= char then
+                pcall(function() humanoid:EquipTool(tool) end)
+                task.wait(0.15) -- Esperar a que se equipe
+            end
+            
+            -- Disparar
             pcall(function()
                 tool:Activate()
             end)
             
-            task.wait(0.05)
+            task.wait(0.1)
             
             pcall(function()
                 tool:Deactivate()
             end)
             
-            -- Guardado de arma con delay largo
+            -- Guardar el arma (si está activado)
             if state.aimSaveTool then
-                task.wait(0.2) -- Espera para que el disparo se registre antes de guardar
+                task.wait(0.2) 
                 pcall(function() humanoid:UnequipTools() end)
             end
         end
