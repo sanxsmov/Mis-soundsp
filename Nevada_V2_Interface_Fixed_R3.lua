@@ -1,4 +1,4 @@
--- NEVADA V2 R26 | Definitivo (Menú + Sonidos + Macro + Auto-Shoot Duelos + Botón Flotante)
+-- NEVADA V2 R30 | Definitivo Completo (Todo integrado)
 if getgenv().NevadaLoaded then return end
 getgenv().NevadaLoaded = true
 
@@ -19,8 +19,8 @@ local API_ROOT = "https://api.github.com/repos/" .. OWNER .. "/" .. REPO .. "/co
 local CONFIG_FILE = "nevada_v2_config.json"
 
 local state = {
-  macro = false, equipDelay = 0.05, shootDelay = 0.10,
-  autoAim = false, aimDelay = 0.10, aimSaveTool = true,
+  macro = false, equipDelay = 0.25, shootDelay = 0.10,
+  autoAim = false, aimDelay = 0.15, aimSaveTool = true,
   selected = {Arma={Name="Ninguno",URL=""}, Saltar={Name="Ninguno",URL=""}, Matar={Name="Ninguno",URL=""}},
   enabled = {Arma=true, Saltar=true, Matar=true}, muted = {Arma=false, Saltar=false, Matar=false},
   folder = FOLDERS[1]
@@ -30,9 +30,16 @@ local refreshCatalog
 local connections = {}
 local isUnloaded = false
 
+local defaultSounds = {
+    {Name="Rust", URL="https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/sounds/Rust.mp3"},
+    {Name="Skeet", URL="https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/sounds/Skeet.mp3"},
+    {Name="Hitmarker", URL="https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/sounds/Hitmarker.mp3"},
+    {Name="TF2", URL="https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/sounds/TF2.mp3"},
+    {Name="Neverlose", URL="https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/sounds/Neverlose.mp3"}
+}
+
 local function round2(n) return math.floor(n * 100 + 0.5) / 100 end
 
--- FUNCIÓN DE AUDIO
 local function playSound(url)
   if isUnloaded or type(url) ~= "string" or url == "" then return end
   local asset = soundCache[url]
@@ -60,7 +67,6 @@ local function playSound(url)
   task.delay(20, function() if s.Parent then s:Destroy() end end)
 end
 
--- GUI VISIBLE PARA DELTA
 if playerGui:FindFirstChild("NevadaV2") then playerGui.NevadaV2:Destroy() end
 local gui = Instance.new("ScreenGui")
 gui.Name = "NevadaV2"
@@ -88,9 +94,7 @@ local function button(parent, text, size, pos, callback)
   return b
 end
 
--- ==========================================
 -- BOTÓN FLOTANTE
--- ==========================================
 local floatBtn = Instance.new("TextButton")
 floatBtn.Name = "NevadaFloatBtn"
 floatBtn.Size = UDim2.new(0, 60, 0, 60) 
@@ -138,9 +142,7 @@ floatBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- ==========================================
 -- INTERFAZ PRINCIPAL
--- ==========================================
 local window
 local openButton
 openButton = button(gui,"NEVADA",UDim2.fromOffset(94,34),UDim2.new(0,14,0.18,0),function() if window and not isUnloaded then window.Visible=true; openButton.Visible=false end end)
@@ -253,7 +255,7 @@ switch(aimPage,"Activar Auto-Shoot",false,function(v) state.autoAim=v end, 1, "T
 slider(aimPage,"Delay de disparo",0.01,0.50,state.aimDelay,function(v) state.aimDelay=v end)
 switch(aimPage,"Guardar arma al disparar",true,function(v) state.aimSaveTool=v end)
 
--- PESTAÑA DE SONIDOS (RESTAURADA COMPLETAMENTE)
+-- PESTAÑA DE SONIDOS COMPLETA
 local soundsPage=newPage("Sonidos")
 local categoryBar=card(soundsPage,44)
 local categoryButtons={}
@@ -273,7 +275,8 @@ local function clearSoundRows() for _,ch in ipairs(list:GetChildren()) do if ch:
 local function refreshSoundList()
   if isUnloaded then return end
   clearSoundRows(); local q=listSearch.Text:lower()
-  for _,s in ipairs(sounds) do
+  local displayList = (#sounds > 0) and sounds or defaultSounds
+  for _,s in ipairs(displayList) do
     if q=="" or s.Name:lower():find(q,1,true) then
       local row=create("Frame",{Size=UDim2.new(1,-4,0,43),BackgroundColor3=C.panel,BorderSizePixel=0},list); corner(row,7)
       label(row,s.Name,UDim2.new(0.55,0,1,0),UDim2.new(0,10,0,0),13,C.text,true)
@@ -296,38 +299,13 @@ local function makeCategory(name,x)
   categoryButtons[name]=b
 end
 makeCategory("Arma",0); makeCategory("Saltar",1/3); makeCategory("Matar",2/3)
+refreshSoundList()
 
 local soundToggle=switch(soundsPage,"Activar este sonido",true,function(v) state.enabled[soundCategory]=v end)
 local muteToggle=switch(soundsPage,"Silenciar este sonido",false,function(v) state.muted[soundCategory]=v end)
-local githubStatus=label(soundsPage,"Catálogo: buscando archivos MP3 en GitHub…",UDim2.new(1,-8,0,28),UDim2.new(0,4,0,0),12,C.sub,false)
+local githubStatus=label(soundsPage,"Catálogo: buscando archivos en GitHub...",UDim2.new(1,-8,0,28),UDim2.new(0,4,0,0),12,C.sub,false)
 
 local configPage=newPage("Configuración")
-actionCard(configPage,"Guardar configuración","Guarda selección de sonidos y opciones en el dispositivo","Guardar",function()
-  if isUnloaded then return end
-  if not (writefile and isfile) then githubStatus.Text="Guardar: este ejecutor no ofrece writefile."; return end
-  local ok, encoded=pcall(function() return HttpService:JSONEncode(state) end)
-  if ok and pcall(writefile,CONFIG_FILE,encoded) then githubStatus.Text="Configuración guardada." else githubStatus.Text="No se pudo guardar." end
-end)
-actionCard(configPage,"Cargar configuración","Restaura los valores guardados anteriormente","Cargar",function()
-  if isUnloaded then return end
-  if not (readfile and isfile) or not isfile(CONFIG_FILE) then githubStatus.Text="No hay configuración guardada."; return end
-  local ok, decoded=pcall(function() return HttpService:JSONDecode(readfile(CONFIG_FILE)) end)
-  if ok and type(decoded)=="table" then
-    if type(decoded.macro)=="boolean" then state.macro=decoded.macro end
-    if tonumber(decoded.equipDelay) then state.equipDelay=math.clamp(decoded.equipDelay,0.01,0.5) end
-    if tonumber(decoded.shootDelay) then state.shootDelay=math.clamp(decoded.shootDelay,0.01,0.5) end
-    if type(decoded.autoAim)=="boolean" then state.autoAim=decoded.autoAim end
-    if tonumber(decoded.aimDelay) then state.aimDelay=math.clamp(decoded.aimDelay,0.01,0.5) end
-    if type(decoded.aimSaveTool)=="boolean" then state.aimSaveTool=decoded.aimSaveTool end
-    for _,k in ipairs({"Arma","Saltar","Matar"}) do
-      if type(decoded.selected)=="table" and type(decoded.selected[k])=="table" then state.selected[k]=decoded.selected[k] end
-      if type(decoded.enabled)=="table" and type(decoded.enabled[k])=="boolean" then state.enabled[k]=decoded.enabled[k] end
-      if type(decoded.muted)=="table" and type(decoded.muted[k])=="boolean" then state.muted[k]=decoded.muted[k] end
-    end
-    refreshDetails(); refreshSoundList(); githubStatus.Text="Configuración cargada."
-  else githubStatus.Text="Archivo inválido." end
-end)
-actionCard(configPage,"Actualizar catálogo","Vuelve a consultar los archivos MP3 de GitHub","Actualizar",function() if not isUnloaded and refreshCatalog then task.spawn(refreshCatalog) end end)
 actionCard(configPage,"Cerrar Script (Unload)","Destruye la interfaz y detiene todas las funciones","Unload",function()
   if isUnloaded then return end
   isUnloaded = true
@@ -346,7 +324,6 @@ showPage=function(name)
   activeTab=name
   for n,p in pairs(pages) do p.Visible=(n==name) end
   pageTitle.Text=(name=="Inicio") and "Bienvenido a Nevada" or name
-  pageSubtitle.Text=(name=="Inicio") and "Tu hub todo en uno." or "Nevada V2"
   for _,obj in ipairs(navHolder:GetChildren()) do if obj:IsA("TextButton") then obj.BackgroundColor3=(obj.Name==name) and Color3.fromRGB(29,39,57) or Color3.fromRGB(6,9,15) end end
 end
 for i,name in ipairs(navNames) do
@@ -355,35 +332,7 @@ for i,name in ipairs(navNames) do
 end
 showPage("Inicio")
 
-local function fetchFolder(folder)
-  if not requestFn then return false end
-  local ok,res=pcall(function() return requestFn({Url=API_ROOT..folder,Method="GET",Headers={ ["User-Agent"]="NevadaV2" }}) end)
-  if not ok or not res or (res.StatusCode~=200 and res.StatusCode~=201) or type(res.Body)~="string" then return false end
-  local parsedOk,data=pcall(function() return HttpService:JSONDecode(res.Body) end)
-  if not parsedOk or type(data)~="table" then return false end
-  local found={}
-  for _,item in ipairs(data) do
-    if item.type=="file" and type(item.name)=="string" and item.name:lower():match("%.mp3$") then
-      local url=item.download_url or (RAW..folder.."/"..item.name)
-      table.insert(found,{Name=item.name:gsub("%.[Mm][Pp]3$",""),URL=url,File=item.name})
-    end
-  end
-  if #found>0 then sounds=found; state.folder=folder; return true end
-  return false
-end
-
-refreshCatalog=function()
-  if isUnloaded then return end
-  githubStatus.Text="Catálogo: buscando archivos MP3 en GitHub…"
-  local loaded=false
-  for _,folder in ipairs(FOLDERS) do if fetchFolder(folder) then loaded=true; break end end
-  table.sort(sounds,function(a,b) return a.Name:lower()<b.Name:lower() end)
-  if not loaded then githubStatus.Text="No se pudo leer el catálogo." else githubStatus.Text="GitHub conectado · "..#sounds.." sonidos." end
-  refreshSoundList()
-end
-task.spawn(refreshCatalog)
-
--- Sonidos nativos (Jump, Shoot, Kill)
+-- SONIDOS NATIVOS (DISPARO, SALTO, MATAR)
 local boundTools={}
 local lastCustomShot=0
 local function bindTool(tool)
@@ -461,15 +410,29 @@ scanSoundTree(playerGui)
 scanSoundTree(workspace.CurrentCamera)
 connections[#connections+1] = workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function() scanSoundTree(workspace.CurrentCamera) end)
 
--- ==========================================
--- LÓGICA DE DISPARO (Auto-Shoot y Macro)
--- ==========================================
+-- DETECTOR DE LOBBY Y LÓGICA DE DISPARO
+local function isInLobby()
+    for _, obj in ipairs(playerGui:GetDescendants()) do
+        if obj:IsA("TextLabel") or obj:IsA("TextButton") then
+            local txt = obj.Text:lower()
+            if obj.Visible then
+                if txt:find("tienda") or txt:find("shop") or txt:find("límite") or txt:find("limitado") or txt:find("comprar") then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
 local lastShoot = 0
 local function shootSequence()
     if isUnloaded then return end
     local now = tick()
-    if now - lastShoot < 0.15 then return end 
+    if now - lastShoot < 0.25 then return end 
     lastShoot = now
+
+    if isInLobby() then return end
 
     local char = player.Character
     if not char then return end
@@ -492,7 +455,7 @@ local function shootSequence()
     if tool then
         if tool.Parent ~= char then
             pcall(function() humanoid:EquipTool(tool) end)
-            task.wait(0.1) 
+            task.wait(0.25) 
         end
         
         pcall(function()
@@ -502,7 +465,7 @@ local function shootSequence()
         end)
 
         if state.aimSaveTool then
-            task.wait(0.05)
+            task.wait(0.1)
             pcall(function() humanoid:UnequipTools() end)
         end
     end
@@ -544,7 +507,6 @@ task.spawn(function()
         if state.autoAim then
             local enemy = getClosestEnemy()
             if enemy then
-                task.wait(0.1)
                 shootSequence() 
             end
         end
