@@ -1,4 +1,7 @@
--- NEVADA V2 R7 | Macro, Sonidos, Auto-Shoot (R2) y Unload
+-- NEVADA V2 R11 | Interfaz Completa + Sonidos + Auto-Shoot + Anti-Cheat
+if getgenv().NevadaLoaded then return end
+getgenv().NevadaLoaded = true
+
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
@@ -16,6 +19,7 @@ local RAW = "https://raw.githubusercontent.com/" .. OWNER .. "/" .. REPO .. "/" 
 local API_ROOT = "https://api.github.com/repos/" .. OWNER .. "/" .. REPO .. "/contents/"
 local CONFIG_FILE = "nevada_v2_config.json"
 
+-- Variables de estado
 local state = {
   macro = false, equipDelay = 0.05, shootDelay = 0.10,
   autoAim = false, aimDelay = 0.10, aimFOV = 120, aimRange = 500, aimSaveTool = true,
@@ -31,7 +35,7 @@ local isUnloaded = false
 local function safeCall(fn, ...) local ok, result = pcall(fn, ...); if ok then return result end end
 local function round2(n) return math.floor(n * 100 + 0.5) / 100 end
 
--- Reproduce archivos de audio
+-- FUNCIÓN DE AUDIO
 local function playSound(url)
   if isUnloaded or type(url) ~= "string" or url == "" then return end
   local asset = soundCache[url]
@@ -59,10 +63,25 @@ local function playSound(url)
   task.delay(20, function() if s.Parent then s:Destroy() end end)
 end
 
+-- SEGURIDAD 1: Proteger la GUI
 if playerGui:FindFirstChild("NevadaV2") then playerGui.NevadaV2:Destroy() end
 local gui = Instance.new("ScreenGui")
 gui.Name, gui.ResetOnSpawn, gui.IgnoreGuiInset = "NevadaV2", false, true
-gui.Parent = playerGui
+
+local parentGui = playerGui
+if syn and syn.protect_gui then
+    pcall(function() syn.protect_gui(gui) end)
+    parentGui = game:GetService("CoreGui")
+elseif gethui then
+    pcall(function() parentGui = gethui() end)
+end
+gui.Parent = parentGui
+
+-- SEGURIDAD 2: Entorno y hilo
+pcall(function()
+    getgenv().NevadaV2 = true
+    if setthreadidentity then setthreadidentity(8) end
+end)
 
 local C = {bg=Color3.fromRGB(7,10,17), panel=Color3.fromRGB(10,14,23), card=Color3.fromRGB(14,19,30), edge=Color3.fromRGB(48,59,78), text=Color3.fromRGB(241,245,255), sub=Color3.fromRGB(164,177,201), blue=Color3.fromRGB(120,157,224), green=Color3.fromRGB(50,220,153), red=Color3.fromRGB(220,50,50)}
 local function create(class, props, parent)
@@ -188,14 +207,14 @@ local function slider(parent,title,minV,maxV,initial,callback)
 end
 slider(macroPage,"Tiempo de equipar",0.01,0.50,state.equipDelay,function(v) state.equipDelay=v end)
 slider(macroPage,"Tiempo de disparo",0.01,0.50,state.shootDelay,function(v) state.shootDelay=v end)
-local macroInfo=card(macroPage,72); label(macroInfo,"La macro depende de la mecánica del juego y de los permisos del ejecutor. No todos los juegos aceptan entradas simuladas.",UDim2.new(1,-24,1,-12),UDim2.new(0,12,0,6),12,C.sub,false)
+local macroInfo=card(macroPage,72); label(macroInfo,"La macro depende de la mecánica del juego y de los permisos del ejecutor.",UDim2.new(1,-24,1,-12),UDim2.new(0,12,0,6),12,C.sub,false)
 
 -- PESTAÑA AUTO AIM
 local aimPage=newPage("AutoAim")
 switch(aimPage,"Activar Auto-Shoot",false,function(v) state.autoAim=v end)
 slider(aimPage,"Delay de disparo",0.01,0.50,state.aimDelay,function(v) state.aimDelay=v end)
 switch(aimPage,"Guardar arma al disparar",true,function(v) state.aimSaveTool=v end)
-local aimInfo=card(aimPage,72); label(aimInfo,"El Auto-Shoot detecta al enemigo más cercano en pantalla y dispara automáticamente con R2. Si no detecta enemigos, no disparará.",UDim2.new(1,-24,1,-12),UDim2.new(0,12,0,6),12,C.sub,false)
+local aimInfo=card(aimPage,72); label(aimInfo,"El Auto-Shoot detecta al enemigo, saca el arma, dispara y la guarda.",UDim2.new(1,-24,1,-12),UDim2.new(0,12,0,6),12,C.sub,false)
 
 local soundsPage=newPage("Sonidos")
 local categoryBar=card(soundsPage,44)
@@ -246,11 +265,11 @@ actionCard(configPage,"Guardar configuración","Guarda selección de sonidos y o
   if isUnloaded then return end
   if not (writefile and isfile) then githubStatus.Text="Guardar: este ejecutor no ofrece writefile."; return end
   local ok, encoded=pcall(function() return HttpService:JSONEncode(state) end)
-  if ok and pcall(writefile,CONFIG_FILE,encoded) then githubStatus.Text="Configuración guardada en este dispositivo." else githubStatus.Text="No se pudo guardar la configuración." end
+  if ok and pcall(writefile,CONFIG_FILE,encoded) then githubStatus.Text="Configuración guardada." else githubStatus.Text="No se pudo guardar." end
 end)
 actionCard(configPage,"Cargar configuración","Restaura los valores guardados anteriormente","Cargar",function()
   if isUnloaded then return end
-  if not (readfile and isfile) or not isfile(CONFIG_FILE) then githubStatus.Text="No hay una configuración local guardada."; return end
+  if not (readfile and isfile) or not isfile(CONFIG_FILE) then githubStatus.Text="No hay configuración guardada."; return end
   local ok, decoded=pcall(function() return HttpService:JSONDecode(readfile(CONFIG_FILE)) end)
   if ok and type(decoded)=="table" then
     if type(decoded.macro)=="boolean" then state.macro=decoded.macro end
@@ -264,8 +283,8 @@ actionCard(configPage,"Cargar configuración","Restaura los valores guardados an
       if type(decoded.enabled)=="table" and type(decoded.enabled[k])=="boolean" then state.enabled[k]=decoded.enabled[k] end
       if type(decoded.muted)=="table" and type(decoded.muted[k])=="boolean" then state.muted[k]=decoded.muted[k] end
     end
-    refreshDetails(); refreshSoundList(); githubStatus.Text="Configuración cargada. Los ajustes se restauraron."
-  else githubStatus.Text="El archivo de configuración no es válido." end
+    refreshDetails(); refreshSoundList(); githubStatus.Text="Configuración cargada."
+  else githubStatus.Text="Archivo inválido." end
 end)
 actionCard(configPage,"Actualizar catálogo","Vuelve a consultar los archivos MP3 de GitHub","Actualizar",function() if not isUnloaded and refreshCatalog then task.spawn(refreshCatalog) end end)
 actionCard(configPage,"Cerrar Script (Unload)","Destruye la interfaz y detiene todas las funciones","Unload",function()
@@ -286,7 +305,7 @@ showPage=function(name)
   activeTab=name
   for n,p in pairs(pages) do p.Visible=(n==name) end
   pageTitle.Text=(name=="Inicio") and "Bienvenido a Nevada" or name
-  pageSubtitle.Text=(name=="Inicio") and "Tu hub todo en uno. Macros, sonidos y más." or "Nevada V2 — controles y ajustes"
+  pageSubtitle.Text=(name=="Inicio") and "Tu hub todo en uno." or "Nevada V2"
   for _,obj in ipairs(navHolder:GetChildren()) do if obj:IsA("TextButton") then obj.BackgroundColor3=(obj.Name==name) and Color3.fromRGB(29,39,57) or Color3.fromRGB(6,9,15) end end
 end
 for i,name in ipairs(navNames) do
@@ -318,7 +337,7 @@ refreshCatalog=function()
   local loaded=false
   for _,folder in ipairs(FOLDERS) do if fetchFolder(folder) then loaded=true; break end end
   table.sort(sounds,function(a,b) return a.Name:lower()<b.Name:lower() end)
-  if not loaded then githubStatus.Text="No se pudo leer el catálogo. Revisa el nombre de la carpeta y las solicitudes HTTP." else githubStatus.Text="GitHub conectado · "..#sounds.." sonidos · carpeta "..state.folder end
+  if not loaded then githubStatus.Text="No se pudo leer el catálogo." else githubStatus.Text="GitHub conectado · "..#sounds.." sonidos." end
   refreshSoundList()
 end
 task.spawn(refreshCatalog)
@@ -401,7 +420,7 @@ scanSoundTree(playerGui)
 scanSoundTree(workspace.CurrentCamera)
 connections[#connections+1] = workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function() scanSoundTree(workspace.CurrentCamera) end)
 
--- Macro por toque
+-- MACRO CON ANTICHEAT (Tiempos aleatorios)
 local macroBusy=false
 local lastMacro=0
 local function runMacro()
@@ -412,7 +431,6 @@ local function runMacro()
   if not backpack then return end
 
   local tool=char:FindFirstChildOfClass("Tool")
-  local wasEquipped=(tool~=nil)
   if not tool then
     for _,item in ipairs(backpack:GetChildren()) do
       if item:IsA("Tool") and (item.Name:lower():find("pistol") or item.Name:lower():find("gun") or item.Name:lower():find("sheriff") or item.Name:lower():find("revolver")) then
@@ -424,6 +442,8 @@ local function runMacro()
 
   local now=os.clock()
   local requiredGap=math.max(0.01, tonumber(state.shootDelay) or 0.10)
+  requiredGap = requiredGap + math.random(1, 5) / 100 
+  
   if now-lastMacro<requiredGap then return end
   macroBusy=true
   lastMacro=now
@@ -435,11 +455,11 @@ local function runMacro()
         hum:EquipTool(tool)
         shouldHolster=true
       end
-      task.wait(math.max(0.01, tonumber(state.equipDelay) or 0.05))
+      task.wait(math.max(0.01, tonumber(state.equipDelay) or 0.05) + math.random(1,3)/100)
       if not isUnloaded and state.macro and player.Character==char and hum.Health>0 and tool.Parent==char then
         shouldHolster=true
         tool:Activate()
-        task.wait(math.max(0.01, tonumber(state.shootDelay) or 0.10))
+        task.wait(math.max(0.01, tonumber(state.shootDelay) or 0.10) + math.random(1,3)/100)
         pcall(function() tool:Deactivate() end)
       end
     end)
@@ -466,14 +486,10 @@ connections[#connections+1] = UserInputService.TouchEnded:Connect(function(input
   if delta<18 and elapsed>=0.025 and elapsed<0.6 then runMacro() end
 end)
 
--- LÓGICA DE AUTO AIM (Disparo con R2 / VirtualUser)
-local function getClosestEnemy()
-  if isUnloaded then return nil end
-  local closest = nil
-  local shortestDist = math.huge
-  local mousePos = UserInputService:GetMouseLocation()
-  
-  if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return nil end
+-- AUTO-SHOOT CON ANTICHEAT (Tiempos aleatorios)
+local function isEnemyVisible()
+  if isUnloaded then return false end
+  if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return false end
 
   for _, otherPlayer in ipairs(Players:GetPlayers()) do
     if otherPlayer ~= player and otherPlayer.Character and otherPlayer.Character:FindFirstChild("HumanoidRootPart") and otherPlayer.Character:FindFirstChild("Humanoid") then
@@ -481,59 +497,66 @@ local function getClosestEnemy()
       if hum.Health > 0 then
         local rootPart = otherPlayer.Character.HumanoidRootPart
         local screenPos, onScreen = camera:WorldToViewportPoint(rootPart.Position)
-        
         if onScreen then
-          local distanceToMouse = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
           local distanceToPlayer = (rootPart.Position - player.Character.HumanoidRootPart.Position).Magnitude
-          
-          if distanceToMouse < state.aimFOV and distanceToPlayer < state.aimRange then
-            if distanceToMouse < shortestDist then
-              shortestDist = distanceToMouse
-              closest = rootPart
-            end
+          if distanceToPlayer < state.aimRange then
+            return true
           end
         end
       end
     end
   end
-  return closest
+  return false
 end
 
 task.spawn(function()
   while not isUnloaded do
-    task.wait(state.aimDelay)
+    task.wait(state.aimDelay + math.random(1,5)/100) 
+    
     if state.autoAim and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-      local targetPart = getClosestEnemy()
-      if targetPart then
-        -- 1. Mover la cámara al enemigo
-        camera.CFrame = CFrame.new(camera.CFrame.Position, targetPart.Position)
-        
-        -- 2. Lógica de guardar el arma
+      if isEnemyVisible() then
         if state.aimSaveTool then
           local char = player.Character
-          local tool = char:FindFirstChildOfClass("Tool")
-          if tool then
-            local humanoid = char:FindFirstChildOfClass("Humanoid")
-            if humanoid then
-              humanoid:UnequipTools()
-              task.wait(0.05)
-              humanoid:EquipTool(tool)
+          local humanoid = char:FindFirstChildOfClass("Humanoid")
+          local backpack = player:FindFirstChildOfClass("Backpack")
+          local toolToUse = nil
+          
+          if backpack then
+            for _, item in ipairs(backpack:GetChildren()) do
+              if item:IsA("Tool") and (item.Name:lower():find("pistol") or item.Name:lower():find("gun") or item.Name:lower():find("sheriff") or item.Name:lower():find("revolver")) then
+                toolToUse = item; break
+              end
+            end
+          end
+          if not toolToUse then toolToUse = char:FindFirstChildOfClass("Tool") end
+
+          if toolToUse and humanoid then
+            if toolToUse.Parent ~= char then
+              humanoid:EquipTool(toolToUse)
+              task.wait(0.03 + math.random(1,3)/100)
             end
           end
         end
         
-        -- 3. Disparar simulando presionar R2 (Gatillo del control)
         pcall(function()
-            VirtualUser:Button1Down(Vector2.new(0,0)) -- Simula R2
-            task.wait(0.05) -- Mantiene presionado un instante
-            VirtualUser:Button1Up(Vector2.new(0,0))   -- Suelta R2
+            VirtualUser:Button1Down(Vector2.new(0,0))
+            task.wait(0.03 + math.random(1,3)/100)
+            VirtualUser:Button1Up(Vector2.new(0,0))
         end)
+        
+        if state.aimSaveTool then
+          local char = player.Character
+          local humanoid = char:FindFirstChildOfClass("Humanoid")
+          if humanoid then
+            pcall(function() humanoid:UnequipTools() end)
+          end
+        end
       end
     end
   end
 end)
 
--- Autoload de configuración
+-- Autoload
 task.spawn(function()
   task.wait(1)
   if isUnloaded then return end
