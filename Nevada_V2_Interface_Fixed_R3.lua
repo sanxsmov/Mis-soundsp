@@ -1,4 +1,4 @@
--- NEVADA V2 R18 | Botón Flotante Corregido + Silent Aim + Anti-Lobby
+-- NEVADA V2 R26 | Definitivo (Menú + Sonidos + Macro + Auto-Shoot Duelos + Botón Flotante)
 if getgenv().NevadaLoaded then return end
 getgenv().NevadaLoaded = true
 
@@ -7,7 +7,6 @@ local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
-local VirtualUser = game:GetService("VirtualUser")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 local camera = workspace.CurrentCamera
@@ -21,7 +20,7 @@ local CONFIG_FILE = "nevada_v2_config.json"
 
 local state = {
   macro = false, equipDelay = 0.05, shootDelay = 0.10,
-  autoAim = false, aimDelay = 0.10, aimFOV = 120, aimRange = 300, aimSaveTool = true,
+  autoAim = false, aimDelay = 0.10, aimSaveTool = true,
   selected = {Arma={Name="Ninguno",URL=""}, Saltar={Name="Ninguno",URL=""}, Matar={Name="Ninguno",URL=""}},
   enabled = {Arma=true, Saltar=true, Matar=true}, muted = {Arma=false, Saltar=false, Matar=false},
   folder = FOLDERS[1]
@@ -33,6 +32,7 @@ local isUnloaded = false
 
 local function round2(n) return math.floor(n * 100 + 0.5) / 100 end
 
+-- FUNCIÓN DE AUDIO
 local function playSound(url)
   if isUnloaded or type(url) ~= "string" or url == "" then return end
   local asset = soundCache[url]
@@ -60,24 +60,16 @@ local function playSound(url)
   task.delay(20, function() if s.Parent then s:Destroy() end end)
 end
 
+-- GUI VISIBLE PARA DELTA
 if playerGui:FindFirstChild("NevadaV2") then playerGui.NevadaV2:Destroy() end
 local gui = Instance.new("ScreenGui")
-gui.Name, gui.ResetOnSpawn, gui.IgnoreGuiInset = "NevadaV2", false, true
-local parentGui = playerGui
-if syn and syn.protect_gui then
-    pcall(function() syn.protect_gui(gui) end)
-    parentGui = game:GetService("CoreGui")
-elseif gethui then
-    pcall(function() parentGui = gethui() end)
-end
-gui.Parent = parentGui
+gui.Name = "NevadaV2"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.DisplayOrder = 999999 
+gui.Parent = playerGui
 
-pcall(function()
-    getgenv().NevadaV2 = true
-    if setthreadidentity then setthreadidentity(8) end
-end)
-
-local C = {bg=Color3.fromRGB(7,10,17), panel=Color3.fromRGB(10,14,23), card=Color3.fromRGB(14,19,30), edge=Color3.fromRGB(48,59,78), text=Color3.fromRGB(241,245,255), sub=Color3.fromRGB(164,177,201), blue=Color3.fromRGB(120,157,224), green=Color3.fromRGB(50,220,153), red=Color3.fromRGB(220,50,50)}
+local C = {bg=Color3.fromRGB(7,10,17), panel=Color3.fromRGB(10,14,23), card=Color3.fromRGB(14,19,30), edge=Color3.fromRGB(48,59,78), text=Color3.fromRGB(241,245,255), sub=Color3.fromRGB(164,177,201), blue=Color3.fromRGB(120,157,224)}
 local function create(class, props, parent)
   local obj = Instance.new(class)
   for k,v in pairs(props or {}) do obj[k] = v end
@@ -97,20 +89,21 @@ local function button(parent, text, size, pos, callback)
 end
 
 -- ==========================================
--- BOTÓN FLOTANTE NEGRO (CORREGIDO)
+-- BOTÓN FLOTANTE
 -- ==========================================
 local floatBtn = Instance.new("TextButton")
-floatBtn.Size = UDim2.new(0, 60, 0, 60)
-floatBtn.Position = UDim2.new(0, 20, 0.4, 0)
+floatBtn.Name = "NevadaFloatBtn"
+floatBtn.Size = UDim2.new(0, 60, 0, 60) 
+floatBtn.Position = UDim2.new(0, 20, 0.2, 0) 
 floatBtn.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 floatBtn.Text = "OFF"
 floatBtn.TextColor3 = Color3.fromRGB(255, 50, 50)
 floatBtn.Font = Enum.Font.GothamBold
 floatBtn.TextSize = 14
-floatBtn.ZIndex = 999 -- Asegura que esté por encima de todo
+floatBtn.ZIndex = 10000 
 floatBtn.Parent = gui
 corner(floatBtn, 30)
-stroke(floatBtn, Color3.fromRGB(255, 255, 255), 1.5)
+stroke(floatBtn, Color3.fromRGB(255, 255, 255), 2)
 
 local draggingFloat, dragStartFloat, startPosFloat = false, nil, nil
 floatBtn.InputBegan:Connect(function(input)
@@ -123,13 +116,12 @@ floatBtn.InputBegan:Connect(function(input)
     end)
   end
 end)
-connections[#connections+1] = UserInputService.InputChanged:Connect(function(input)
+UserInputService.InputChanged:Connect(function(input)
   if draggingFloat and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
     local d = input.Position - dragStartFloat
     floatBtn.Position = UDim2.new(startPosFloat.X.Scale, startPosFloat.X.Offset + d.X, startPosFloat.Y.Scale, startPosFloat.Y.Offset + d.Y)
   end
 end)
-
 floatBtn.MouseButton1Click:Connect(function()
     state.autoAim = not state.autoAim
     if state.autoAim then
@@ -147,7 +139,7 @@ floatBtn.MouseButton1Click:Connect(function()
 end)
 
 -- ==========================================
--- INTERFAZ GRÁFICA PRINCIPAL
+-- INTERFAZ PRINCIPAL
 -- ==========================================
 local window
 local openButton
@@ -166,15 +158,11 @@ local sidebar=create("Frame",{Size=UDim2.new(0,190,1,0),BackgroundColor3=Color3.
 local divider=create("Frame",{Size=UDim2.new(0,1,1,0),Position=UDim2.new(0,190,0,0),BackgroundColor3=C.edge,BorderSizePixel=0},window)
 label(sidebar,"▲",UDim2.new(1,0,0,48),UDim2.new(0,0,0,20),29,C.text,true).TextXAlignment=Enum.TextXAlignment.Center
 label(sidebar,"N E V A D A",UDim2.new(1,0,0,34),UDim2.new(0,0,0,63),21,C.text,true).TextXAlignment=Enum.TextXAlignment.Center
-label(sidebar,"V2",UDim2.new(1,0,0,20),UDim2.new(0,0,0,96),12,C.sub,false).TextXAlignment=Enum.TextXAlignment.Center
 local navHolder=create("Frame",{Size=UDim2.new(1,-18,0,220),Position=UDim2.new(0,9,0,140),BackgroundTransparency=1},sidebar)
 create("UIListLayout",{Padding=UDim.new(0,7),SortOrder=Enum.SortOrder.LayoutOrder},navHolder)
-label(sidebar,"NEVADA V2\nTu experiencia, sin límites.",UDim2.new(1,-24,0,48),UDim2.new(0,12,1,-62),11,C.sub,false)
 
 local top=create("Frame",{Size=UDim2.new(1,-210,0,68),Position=UDim2.new(0,205,0,0),BackgroundTransparency=1},window)
-label(top,"▲",UDim2.fromOffset(48,55),UDim2.new(0,0,0,4),28,C.text,true)
 local pageTitle=label(top,"Bienvenido a Nevada",UDim2.new(1,-110,0,30),UDim2.new(0,54,0,10),21,C.text,true)
-local pageSubtitle=label(top,"Tu hub todo en uno. Macros, sonidos y más.",UDim2.new(1,-80,0,25),UDim2.new(0,54,0,38),12,C.sub,false)
 local minimize=button(window,"—",UDim2.fromOffset(34,30),UDim2.new(1,-80,0,10),function() if not isUnloaded then window.Visible=false; openButton.Visible=true end end)
 local close=button(window,"×",UDim2.fromOffset(34,30),UDim2.new(1,-42,0,10),function() 
     if not isUnloaded then
@@ -238,10 +226,10 @@ end
 
 local showPage
 local home=newPage("Inicio")
-local welcome=card(home,108); label(welcome,"Bienvenido a Nevada",UDim2.new(1,-26,0,32),UDim2.new(0,14,0,13),20,C.text,true); label(welcome,"Tu hub todo en uno. Macros, sonidos y más.\nInterfaz Nevada V2",UDim2.new(1,-26,0,45),UDim2.new(0,14,0,51),12,C.sub,false)
-actionCard(home,"Sonidos","Catálogo de tu repositorio de GitHub","Abrir sonidos",function() showPage("Sonidos") end)
-actionCard(home,"Macro","Control de activación y tiempos","Ver macro",function() showPage("Macro") end)
-actionCard(home,"Auto-Shoot","Apunta y dispara automáticamente al enemigo","Ver Auto-Shoot",function() showPage("AutoAim") end)
+local welcome=card(home,108); label(welcome,"Bienvenido a Nevada",UDim2.new(1,-26,0,32),UDim2.new(0,14,0,13),20,C.text,true); label(welcome,"Tu hub todo en uno.",UDim2.new(1,-26,0,45),UDim2.new(0,14,0,51),12,C.sub,false)
+actionCard(home,"Sonidos","Catálogo de GitHub","Abrir sonidos",function() showPage("Sonidos") end)
+actionCard(home,"Macro","Control de tiempos","Ver macro",function() showPage("Macro") end)
+actionCard(home,"Auto-Shoot","Dispara automáticamente","Ver Auto-Shoot",function() showPage("AutoAim") end)
 
 local macroPage=newPage("Macro")
 switch(macroPage,"Activar macro",false,function(v) state.macro=v end)
@@ -259,14 +247,13 @@ local function slider(parent,title,minV,maxV,initial,callback)
 end
 slider(macroPage,"Tiempo de equipar",0.01,0.50,state.equipDelay,function(v) state.equipDelay=v end)
 slider(macroPage,"Tiempo de disparo",0.01,0.50,state.shootDelay,function(v) state.shootDelay=v end)
-local macroInfo=card(macroPage,72); label(macroInfo,"La macro depende de la mecánica del juego y de los permisos del ejecutor.",UDim2.new(1,-24,1,-12),UDim2.new(0,12,0,6),12,C.sub,false)
 
 local aimPage=newPage("AutoAim")
 switch(aimPage,"Activar Auto-Shoot",false,function(v) state.autoAim=v end, 1, "ToggleBtn")
 slider(aimPage,"Delay de disparo",0.01,0.50,state.aimDelay,function(v) state.aimDelay=v end)
 switch(aimPage,"Guardar arma al disparar",true,function(v) state.aimSaveTool=v end)
-local aimInfo=card(aimPage,72); label(aimInfo,"El Auto-Shoot tiene Silent Aim integrado. Solo funciona en partida y con armas de fuego.",UDim2.new(1,-24,1,-12),UDim2.new(0,12,0,6),12,C.sub,false)
 
+-- PESTAÑA DE SONIDOS (RESTAURADA COMPLETAMENTE)
 local soundsPage=newPage("Sonidos")
 local categoryBar=card(soundsPage,44)
 local categoryButtons={}
@@ -278,6 +265,7 @@ connections[#connections+1] = listLayout:GetPropertyChangedSignal("AbsoluteConte
 local soundDetails=card(soundsPage,168)
 local selectedTitle=label(soundDetails,"Seleccionado: Ninguno",UDim2.new(1,-24,0,28),UDim2.new(0,12,0,8),15,C.text,true)
 local selectedFile=label(soundDetails,"Archivo: —",UDim2.new(1,-24,0,24),UDim2.new(0,12,0,38),12,C.sub,false)
+
 local function refreshDetails()
   local s=state.selected[soundCategory]; selectedTitle.Text="Seleccionado: "..s.Name; selectedFile.Text="Archivo: "..(s.URL:match("([^/]+)$") or "—")
 end
@@ -298,6 +286,7 @@ local function refreshSoundList()
   end
 end
 connections[#connections+1] = listSearch:GetPropertyChangedSignal("Text"):Connect(refreshSoundList)
+
 local function makeCategory(name,x)
   local b=button(categoryBar,name,UDim2.new(1/3,-8,0,32),UDim2.new(x,4,0.5,-16),function()
     if isUnloaded then return end
@@ -307,6 +296,7 @@ local function makeCategory(name,x)
   categoryButtons[name]=b
 end
 makeCategory("Arma",0); makeCategory("Saltar",1/3); makeCategory("Matar",2/3)
+
 local soundToggle=switch(soundsPage,"Activar este sonido",true,function(v) state.enabled[soundCategory]=v end)
 local muteToggle=switch(soundsPage,"Silenciar este sonido",false,function(v) state.muted[soundCategory]=v end)
 local githubStatus=label(soundsPage,"Catálogo: buscando archivos MP3 en GitHub…",UDim2.new(1,-8,0,28),UDim2.new(0,4,0,0),12,C.sub,false)
@@ -393,7 +383,7 @@ refreshCatalog=function()
 end
 task.spawn(refreshCatalog)
 
--- Sonidos nativos
+-- Sonidos nativos (Jump, Shoot, Kill)
 local boundTools={}
 local lastCustomShot=0
 local function bindTool(tool)
@@ -471,237 +461,92 @@ scanSoundTree(playerGui)
 scanSoundTree(workspace.CurrentCamera)
 connections[#connections+1] = workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function() scanSoundTree(workspace.CurrentCamera) end)
 
--- MACRO CON ANTICHEAT (Tiempos aleatorios)
-local macroBusy=false
-local lastMacro=0
-local function runMacro()
-  if isUnloaded or not state.macro or macroBusy then return end
-  local char=player.Character; if not char then return end
-  local hum=char:FindFirstChildOfClass("Humanoid"); if not hum or hum.Health<=0 then return end
-  local backpack=player:FindFirstChildOfClass("Backpack")
-  if not backpack then return end
-
-  local tool=char:FindFirstChildOfClass("Tool")
-  if not tool then
-    for _,item in ipairs(backpack:GetChildren()) do
-      if item:IsA("Tool") then
-        tool=item; break
-      end
-    end
-  end
-  if not tool then return end
-
-  local now=os.clock()
-  local requiredGap=math.max(0.01, tonumber(state.shootDelay) or 0.10)
-  requiredGap = requiredGap + math.random(1, 5) / 100 
-  
-  if now-lastMacro<requiredGap then return end
-  macroBusy=true
-  lastMacro=now
-  task.spawn(function()
-    local shouldHolster=false
-    local ok,err=pcall(function()
-      if isUnloaded or not state.macro or player.Character~=char then return end
-      if tool.Parent==backpack then
-        hum:EquipTool(tool)
-        shouldHolster=true
-      end
-      task.wait(math.max(0.01, tonumber(state.equipDelay) or 0.05) + math.random(1,3)/100)
-      if not isUnloaded and state.macro and player.Character==char and hum.Health>0 and tool.Parent==char then
-        shouldHolster=true
-        tool:Activate()
-        task.wait(math.max(0.01, tonumber(state.shootDelay) or 0.10) + math.random(1,3)/100)
-        pcall(function() tool:Deactivate() end)
-      end
-    end)
-    if not isUnloaded and shouldHolster and player.Character==char and hum.Parent==char then
-      pcall(function() hum:UnequipTools() end)
-    end
-    macroBusy=false
-  end)
-end
-connections[#connections+1] = UserInputService.InputBegan:Connect(function(input,processed)
-  if isUnloaded or processed then return end
-  if input.UserInputType==Enum.UserInputType.MouseButton1 or input.KeyCode==Enum.KeyCode.ButtonR2 then runMacro() end
-end)
-local touchStart,touchTime=nil,nil
-connections[#connections+1] = UserInputService.TouchStarted:Connect(function(input,processed)
-  if isUnloaded or processed then return end
-  touchStart=input.Position; touchTime=os.clock()
-end)
-connections[#connections+1] = UserInputService.TouchEnded:Connect(function(input,processed)
-  if isUnloaded or processed or not touchStart or not touchTime then touchStart=nil; touchTime=nil; return end
-  local delta=(input.Position-touchStart).Magnitude
-  local elapsed=os.clock()-touchTime
-  touchStart=nil; touchTime=nil
-  if delta<18 and elapsed>=0.025 and elapsed<0.6 then runMacro() end
-end)
-
 -- ==========================================
--- AUTO-SHOOT MODO DUELOS (Solo armas de fuego + Silent Aim Verdadero)
+-- LÓGICA DE DISPARO (Auto-Shoot y Macro)
 -- ==========================================
-local function hasLineOfSight(targetPart)
-  if isUnloaded then return false end
-  local origin = camera.CFrame.Position
-  local direction = (targetPart.Position - origin)
-  local raycastParams = RaycastParams.new()
-  raycastParams.FilterDescendantsInstances = {player.Character, camera}
-  raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-  local result = workspace:Raycast(origin, direction, raycastParams)
-  if not result then return true end
-  if result.Instance:IsDescendantOf(targetPart.Parent) then return true end
-  return false
-end
+local lastShoot = 0
+local function shootSequence()
+    if isUnloaded then return end
+    local now = tick()
+    if now - lastShoot < 0.15 then return end 
+    lastShoot = now
 
-local function isInLobby()
-    local lobbyKeywords = {"tienda", "shop", "inventario", "inventory", "código", "code", "límite", "limitado", "tiempo", "chat", "lobby"}
-    for _, obj in ipairs(playerGui:GetDescendants()) do
-        if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
-            local txt = obj.Text:lower()
-            for _, keyword in ipairs(lobbyKeywords) do
-                if txt:find(keyword) and obj.Visible then
-                    return true
+    local char = player.Character
+    if not char then return end
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return end
+
+    local tool = char:FindFirstChildOfClass("Tool")
+    if not tool then
+        local backpack = player:FindFirstChildOfClass("Backpack")
+        if backpack then
+            for _, item in ipairs(backpack:GetChildren()) do
+                if item:IsA("Tool") then
+                    tool = item
+                    break
                 end
             end
         end
     end
-    return false
-end
 
-local function isFirearm(tool)
-    if not tool or not tool:IsA("Tool") then return false end
-    local name = tool.Name:lower()
-    if name:find("knife") or name:find("cuchillo") or name:find("sword") or name:find("espada") or name:find("melee") or name:find("fist") or name:find("puño") then
-        return false
-    end
-    if name:find("gun") or name:find("pistol") or name:find("revolver") or name:find("sheriff") or name:find("rifle") or name:find("shotgun") or name:find("smg") or name:find("sniper") or name:find("arma") or name:find("colt") then
-        return true
-    end
-    for _, child in ipairs(tool:GetChildren()) do
-        if child:IsA("Script") or child:IsA("LocalScript") then
-            if child.Name:lower():find("gun") or child.Name:lower():find("shoot") then
-                return true
-            end
+    if tool then
+        if tool.Parent ~= char then
+            pcall(function() humanoid:EquipTool(tool) end)
+            task.wait(0.1) 
+        end
+        
+        pcall(function()
+            tool:Activate()
+            task.wait(0.05)
+            tool:Deactivate()
+        end)
+
+        if state.aimSaveTool then
+            task.wait(0.05)
+            pcall(function() humanoid:UnequipTools() end)
         end
     end
-    return true 
 end
+
+UserInputService.InputBegan:Connect(function(input, processed)
+    if isUnloaded or processed then return end
+    if input.KeyCode == Enum.KeyCode.ButtonR2 or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if state.macro then
+            shootSequence()
+        end
+    end
+end)
 
 local function getClosestEnemy()
-  if isUnloaded then return nil end
-  if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return nil end
-
-  local closestEnemy = nil
-  local shortestDistance = math.huge
-
-  for _, otherPlayer in ipairs(Players:GetPlayers()) do
-    if otherPlayer ~= player and otherPlayer.Character and otherPlayer.Character:FindFirstChild("HumanoidRootPart") and otherPlayer.Character:FindFirstChild("Humanoid") then
-      local hum = otherPlayer.Character.Humanoid
-      if hum.Health > 0 then
-        local rootPart = otherPlayer.Character.HumanoidRootPart
-        local head = otherPlayer.Character:FindFirstChild("Head") or rootPart
-        local screenPos, onScreen = camera:WorldToViewportPoint(rootPart.Position)
-        
-        if onScreen and (rootPart.Position - player.Character.HumanoidRootPart.Position).Magnitude < 300 then
-          if hasLineOfSight(rootPart) then
-            local dist = (rootPart.Position - player.Character.HumanoidRootPart.Position).Magnitude
-            if dist < shortestDistance then
-              shortestDistance = dist
-              closestEnemy = head
-            end
-          end
-        end
-      end
-    end
-  end
-  return closestEnemy
-end
-
-task.spawn(function()
-  while not isUnloaded do
-    task.wait(0.1) 
-    
-    if state.autoAim and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-      
-      if isInLobby() then
-          task.wait(0.5) 
-      else
-          local enemyPart = getClosestEnemy()
-          
-          if enemyPart then
-            task.wait(math.random(15, 35) / 100)
-            
-            local char = player.Character
-            local humanoid = char:FindFirstChildOfClass("Humanoid")
-            local backpack = player:FindFirstChildOfClass("Backpack")
-            
-            local tool = char:FindFirstChildOfClass("Tool")
-            if tool and not isFirearm(tool) then
-                tool = nil 
-            end
-
-            if not tool and backpack then
-                for _, item in ipairs(backpack:GetChildren()) do
-                    if isFirearm(item) then
-                        tool = item
-                        break
+    if isUnloaded or not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return nil end
+    local closest, shortestDist = nil, math.huge
+    for _, otherPlayer in ipairs(Players:GetPlayers()) do
+        if otherPlayer ~= player and otherPlayer.Character and otherPlayer.Character:FindFirstChild("HumanoidRootPart") and otherPlayer.Character:FindFirstChild("Humanoid") then
+            if otherPlayer.Character.Humanoid.Health > 0 then
+                local root = otherPlayer.Character.HumanoidRootPart
+                local screenPos, onScreen = camera:WorldToViewportPoint(root.Position)
+                if onScreen and (root.Position - player.Character.HumanoidRootPart.Position).Magnitude < 300 then
+                    local dist = (root.Position - player.Character.HumanoidRootPart.Position).Magnitude
+                    if dist < shortestDist then
+                        shortestDist = dist
+                        closest = root
                     end
                 end
             end
-
-            if tool and humanoid then
-                if tool.Parent ~= char then
-                    pcall(function() humanoid:EquipTool(tool) end)
-                    task.wait(0.15) 
-                end
-                
-                local originalCFrame = camera.CFrame
-                if enemyPart then
-                    camera.CFrame = CFrame.new(camera.CFrame.Position, enemyPart.Position)
-                end
-
-                pcall(function()
-                    tool:Activate()
-                end)
-                
-                task.wait(0.05)
-                
-                pcall(function()
-                    tool:Deactivate()
-                end)
-
-                camera.CFrame = originalCFrame
-                
-                if state.aimSaveTool then
-                    task.wait(0.2) 
-                    pcall(function() humanoid:UnequipTools() end)
-                end
-            end
-          end
-      end
+        end
     end
-  end
-end)
+    return closest
+end
 
--- Autoload
 task.spawn(function()
-  task.wait(1)
-  if isUnloaded then return end
-  if readfile and isfile and isfile(CONFIG_FILE) then
-    local ok,decoded=pcall(function() return HttpService:JSONDecode(readfile(CONFIG_FILE)) end)
-    if ok and type(decoded)=="table" then
-      if type(decoded.macro)=="boolean" then state.macro=decoded.macro end
-      if tonumber(decoded.equipDelay) then state.equipDelay=math.clamp(decoded.equipDelay,0.01,0.5) end
-      if tonumber(decoded.shootDelay) then state.shootDelay=math.clamp(decoded.shootDelay,0.01,0.5) end
-      if type(decoded.autoAim)=="boolean" then state.autoAim=decoded.autoAim end
-      if tonumber(decoded.aimDelay) then state.aimDelay=math.clamp(decoded.aimDelay,0.01,0.5) end
-      if type(decoded.aimSaveTool)=="boolean" then state.aimSaveTool=decoded.aimSaveTool end
-      for _,k in ipairs({"Arma","Saltar","Matar"}) do
-        if type(decoded.selected)=="table" and type(decoded.selected[k])=="table" then state.selected[k]=decoded.selected[k] end
-        if type(decoded.enabled)=="table" and type(decoded.enabled[k])=="boolean" then state.enabled[k]=decoded.enabled[k] end
-        if type(decoded.muted)=="table" and type(decoded.muted[k])=="boolean" then state.muted[k]=decoded.muted[k] end
-      end
-      refreshDetails()
+    while not isUnloaded do
+        task.wait(0.1)
+        if state.autoAim then
+            local enemy = getClosestEnemy()
+            if enemy then
+                task.wait(0.1)
+                shootSequence() 
+            end
+        end
     end
-  end
 end)
