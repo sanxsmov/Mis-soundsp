@@ -1,4 +1,4 @@
--- NEVADA V2 R14 | Interfaz Completa + Sonidos + Macro + Auto-Shoot (Cualquier Arma) + Anti-Cheat
+-- NEVADA V2 R17 | Interfaz Completa + Botón Flotante + Silent Aim (Solo Armas de Fuego) + Anti-Lobby
 if getgenv().NevadaLoaded then return end
 getgenv().NevadaLoaded = true
 
@@ -22,7 +22,7 @@ local CONFIG_FILE = "nevada_v2_config.json"
 -- Variables de estado
 local state = {
   macro = false, equipDelay = 0.05, shootDelay = 0.10,
-  autoAim = false, aimDelay = 0.10, aimFOV = 120, aimRange = 500, aimSaveTool = true,
+  autoAim = false, aimDelay = 0.10, aimFOV = 120, aimRange = 300, aimSaveTool = true,
   selected = {Arma={Name="Ninguno",URL=""}, Saltar={Name="Ninguno",URL=""}, Matar={Name="Ninguno",URL=""}},
   enabled = {Arma=true, Saltar=true, Matar=true}, muted = {Arma=false, Saltar=false, Matar=false},
   folder = FOLDERS[1]
@@ -67,7 +67,6 @@ end
 if playerGui:FindFirstChild("NevadaV2") then playerGui.NevadaV2:Destroy() end
 local gui = Instance.new("ScreenGui")
 gui.Name, gui.ResetOnSpawn, gui.IgnoreGuiInset = "NevadaV2", false, true
-
 local parentGui = playerGui
 if syn and syn.protect_gui then
     pcall(function() syn.protect_gui(gui) end)
@@ -77,7 +76,6 @@ elseif gethui then
 end
 gui.Parent = parentGui
 
--- SEGURIDAD 2: Entorno y hilo
 pcall(function()
     getgenv().NevadaV2 = true
     if setthreadidentity then setthreadidentity(8) end
@@ -102,6 +100,59 @@ local function button(parent, text, size, pos, callback)
   return b
 end
 
+-- ==========================================
+-- BOTÓN FLOTANTE NEGRO
+-- ==========================================
+local floatBtn = create("TextButton", {
+    Size = UDim2.new(0, 60, 0, 60),
+    Position = UDim2.new(0, 20, 0.4, 0),
+    BackgroundColor3 = Color3.fromRGB(15, 15, 15),
+    Text = "OFF",
+    TextColor3 = Color3.fromRGB(255, 50, 50),
+    Font = Enum.Font.GothamBold,
+    TextSize = 14,
+    Parent = gui
+})
+corner(floatBtn, 30)
+stroke(floatBtn, Color3.fromRGB(255, 255, 255), 1.5)
+
+local draggingFloat, dragStartFloat, startPosFloat = false, nil, nil
+floatBtn.InputBegan:Connect(function(input)
+  if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+    draggingFloat = true
+    dragStartFloat = input.Position
+    startPosFloat = floatBtn.Position
+    input.Changed:Connect(function()
+      if input.UserInputState == Enum.UserInputState.End then draggingFloat = false end
+    end)
+  end
+end)
+connections[#connections+1] = UserInputService.InputChanged:Connect(function(input)
+  if draggingFloat and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+    local d = input.Position - dragStartFloat
+    floatBtn.Position = UDim2.new(startPosFloat.X.Scale, startPosFloat.X.Offset + d.X, startPosFloat.Y.Scale, startPosFloat.Y.Offset + d.Y)
+  end
+end)
+
+floatBtn.MouseButton1Click:Connect(function()
+    state.autoAim = not state.autoAim
+    if state.autoAim then
+        floatBtn.Text = "ON"
+        floatBtn.TextColor3 = Color3.fromRGB(0, 255, 100)
+    else
+        floatBtn.Text = "OFF"
+        floatBtn.TextColor3 = Color3.fromRGB(255, 50, 50)
+    end
+    local aimPageBtn = pages["AutoAim"] and pages["AutoAim"]:FindFirstChild("ToggleBtn")
+    if aimPageBtn then
+        aimPageBtn.Text = state.autoAim and "ACTIVADO" or "DESACTIVADO"
+        aimPageBtn.BackgroundColor3 = state.autoAim and C.blue or C.card
+    end
+end)
+
+-- ==========================================
+-- INTERFAZ GRÁFICA PRINCIPAL
+-- ==========================================
 local window
 local openButton
 openButton = button(gui,"NEVADA",UDim2.fromOffset(94,34),UDim2.new(0,14,0.18,0),function() if window and not isUnloaded then window.Visible=true; openButton.Visible=false end end)
@@ -139,7 +190,6 @@ local close=button(window,"×",UDim2.fromOffset(34,30),UDim2.new(1,-42,0,10),fun
 end)
 openButton.Visible=false
 
--- Arrastrar ventana
 local dragging, dragStart, startPos = false, nil, nil
 local dragArea=top
 dragArea.InputBegan:Connect(function(input)
@@ -168,14 +218,20 @@ end
 local function card(parent,height)
   local f=create("Frame",{Size=UDim2.new(1,-8,0,height),BackgroundColor3=C.card,BorderSizePixel=0},parent); corner(f,11); stroke(f); return f
 end
-local function switch(parent,text,initial,callback,y)
+local function switch(parent,text,initial,callback,y,name)
   local row=card(parent,48); row.LayoutOrder=y or 1
+  if name then row.Name = name end
   label(row,text,UDim2.new(1,-100,1,0),UDim2.new(0,14,0,0),14,C.text,true)
   local b
   b=button(row,initial and "ACTIVADO" or "DESACTIVADO",UDim2.fromOffset(92,30),UDim2.new(1,-104,0.5,-15),function()
     if isUnloaded then return end
     initial=not initial; b.Text=initial and "ACTIVADO" or "DESACTIVADO"; b.BackgroundColor3=initial and C.blue or C.card; callback(initial)
+    if name == "ToggleBtn" then
+        floatBtn.Text = initial and "ON" or "OFF"
+        floatBtn.TextColor3 = initial and Color3.fromRGB(0, 255, 100) or Color3.fromRGB(255, 50, 50)
+    end
   end)
+  b.Name = name or "Btn"
   b.BackgroundColor3=initial and C.blue or C.card
   return b
 end
@@ -211,10 +267,10 @@ local macroInfo=card(macroPage,72); label(macroInfo,"La macro depende de la mec�
 
 -- PESTAÑA AUTO AIM
 local aimPage=newPage("AutoAim")
-switch(aimPage,"Activar Auto-Shoot",false,function(v) state.autoAim=v end)
+switch(aimPage,"Activar Auto-Shoot",false,function(v) state.autoAim=v end, 1, "ToggleBtn")
 slider(aimPage,"Delay de disparo",0.01,0.50,state.aimDelay,function(v) state.aimDelay=v end)
 switch(aimPage,"Guardar arma al disparar",true,function(v) state.aimSaveTool=v end)
-local aimInfo=card(aimPage,72); label(aimInfo,"El Auto-Shoot saca cualquier arma, dispara y la guarda. Solo funciona en partida.",UDim2.new(1,-24,1,-12),UDim2.new(0,12,0,6),12,C.sub,false)
+local aimInfo=card(aimPage,72); label(aimInfo,"El Auto-Shoot tiene Silent Aim integrado. Solo funciona en partida y con armas de fuego.",UDim2.new(1,-24,1,-12),UDim2.new(0,12,0,6),12,C.sub,false)
 
 local soundsPage=newPage("Sonidos")
 local categoryBar=card(soundsPage,44)
@@ -464,7 +520,7 @@ local function runMacro()
       end
     end)
     if not isUnloaded and shouldHolster and player.Character==char and hum.Parent==char then
-      pcall(function() hum:UnequipTools() end)
+      pcall(function() humanoid:UnequipTools() end)
     end
     macroBusy=false
   end)
@@ -486,7 +542,9 @@ connections[#connections+1] = UserInputService.TouchEnded:Connect(function(input
   if delta<18 and elapsed>=0.025 and elapsed<0.6 then runMacro() end
 end)
 
--- AUTO-SHOOT MODO DUELOS (Usa cualquier arma)
+-- ==========================================
+-- AUTO-SHOOT MODO DUELOS (Solo armas de fuego + Silent Aim Verdadero)
+-- ==========================================
 local function hasLineOfSight(targetPart)
   if isUnloaded then return false end
   local origin = camera.CFrame.Position
@@ -498,6 +556,40 @@ local function hasLineOfSight(targetPart)
   if not result then return true end
   if result.Instance:IsDescendantOf(targetPart.Parent) then return true end
   return false
+end
+
+local function isInLobby()
+    local lobbyKeywords = {"tienda", "shop", "inventario", "inventory", "código", "code", "límite", "limitado", "tiempo", "chat", "lobby"}
+    for _, obj in ipairs(playerGui:GetDescendants()) do
+        if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
+            local txt = obj.Text:lower()
+            for _, keyword in ipairs(lobbyKeywords) do
+                if txt:find(keyword) and obj.Visible then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+local function isFirearm(tool)
+    if not tool or not tool:IsA("Tool") then return false end
+    local name = tool.Name:lower()
+    if name:find("knife") or name:find("cuchillo") or name:find("sword") or name:find("espada") or name:find("melee") or name:find("fist") or name:find("puño") then
+        return false
+    end
+    if name:find("gun") or name:find("pistol") or name:find("revolver") or name:find("sheriff") or name:find("rifle") or name:find("shotgun") or name:find("smg") or name:find("sniper") or name:find("arma") or name:find("colt") then
+        return true
+    end
+    for _, child in ipairs(tool:GetChildren()) do
+        if child:IsA("Script") or child:IsA("LocalScript") then
+            if child.Name:lower():find("gun") or child.Name:lower():find("shoot") then
+                return true
+            end
+        end
+    end
+    return true 
 end
 
 local function getClosestEnemy()
@@ -512,6 +604,7 @@ local function getClosestEnemy()
       local hum = otherPlayer.Character.Humanoid
       if hum.Health > 0 then
         local rootPart = otherPlayer.Character.HumanoidRootPart
+        local head = otherPlayer.Character:FindFirstChild("Head") or rootPart
         local screenPos, onScreen = camera:WorldToViewportPoint(rootPart.Position)
         
         if onScreen and (rootPart.Position - player.Character.HumanoidRootPart.Position).Magnitude < 300 then
@@ -519,7 +612,7 @@ local function getClosestEnemy()
             local dist = (rootPart.Position - player.Character.HumanoidRootPart.Position).Magnitude
             if dist < shortestDistance then
               shortestDistance = dist
-              closestEnemy = rootPart
+              closestEnemy = head
             end
           end
         end
@@ -535,52 +628,61 @@ task.spawn(function()
     
     if state.autoAim and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
       
-      local enemy = getClosestEnemy()
-      
-      if enemy then
-        -- Tiempo de reacción humano
-        task.wait(math.random(15, 35) / 100)
-        
-        local char = player.Character
-        local humanoid = char:FindFirstChildOfClass("Humanoid")
-        local backpack = player:FindFirstChildOfClass("Backpack")
-        
-        -- Buscar CUALQUIER herramienta (Tool) en la mochila o en el personaje
-        local tool = char:FindFirstChildOfClass("Tool")
-        
-        if not tool and backpack then
-            for _, item in ipairs(backpack:GetChildren()) do
-                if item:IsA("Tool") then
-                    tool = item
-                    break
+      if isInLobby() then
+          task.wait(0.5) 
+      else
+          local enemyPart = getClosestEnemy()
+          
+          if enemyPart then
+            task.wait(math.random(15, 35) / 100)
+            
+            local char = player.Character
+            local humanoid = char:FindFirstChildOfClass("Humanoid")
+            local backpack = player:FindFirstChildOfClass("Backpack")
+            
+            local tool = char:FindFirstChildOfClass("Tool")
+            if tool and not isFirearm(tool) then
+                tool = nil 
+            end
+
+            if not tool and backpack then
+                for _, item in ipairs(backpack:GetChildren()) do
+                    if isFirearm(item) then
+                        tool = item
+                        break
+                    end
                 end
             end
-        end
 
-        if tool and humanoid then
-            -- Si el arma no está equipada, la equipamos
-            if tool.Parent ~= char then
-                pcall(function() humanoid:EquipTool(tool) end)
-                task.wait(0.15) -- Esperar a que se equipe
+            if tool and humanoid then
+                if tool.Parent ~= char then
+                    pcall(function() humanoid:EquipTool(tool) end)
+                    task.wait(0.15) 
+                end
+                
+                local originalCFrame = camera.CFrame
+                if enemyPart then
+                    camera.CFrame = CFrame.new(camera.CFrame.Position, enemyPart.Position)
+                end
+
+                pcall(function()
+                    tool:Activate()
+                end)
+                
+                task.wait(0.05)
+                
+                pcall(function()
+                    tool:Deactivate()
+                end)
+
+                camera.CFrame = originalCFrame
+                
+                if state.aimSaveTool then
+                    task.wait(0.2) 
+                    pcall(function() humanoid:UnequipTools() end)
+                end
             end
-            
-            -- Disparar
-            pcall(function()
-                tool:Activate()
-            end)
-            
-            task.wait(0.1)
-            
-            pcall(function()
-                tool:Deactivate()
-            end)
-            
-            -- Guardar el arma (si está activado)
-            if state.aimSaveTool then
-                task.wait(0.2) 
-                pcall(function() humanoid:UnequipTools() end)
-            end
-        end
+          end
       end
     end
   end
