@@ -1,4 +1,4 @@
--- NEVADA V2 R12 | Interfaz Completa + Sonidos + Auto-Shoot (Anti-Lobby y Anti-Paredes) + Anti-Cheat
+-- NEVADA V2 R13 | Interfaz Completa + Sonidos + Macro + Auto-Shoot (Modo Duelos) + Anti-Cheat
 if getgenv().NevadaLoaded then return end
 getgenv().NevadaLoaded = true
 
@@ -214,7 +214,7 @@ local aimPage=newPage("AutoAim")
 switch(aimPage,"Activar Auto-Shoot",false,function(v) state.autoAim=v end)
 slider(aimPage,"Delay de disparo",0.01,0.50,state.aimDelay,function(v) state.aimDelay=v end)
 switch(aimPage,"Guardar arma al disparar",true,function(v) state.aimSaveTool=v end)
-local aimInfo=card(aimPage,72); label(aimInfo,"El Auto-Shoot solo funciona en partida (con el arma en la mano). Detecta al enemigo, dispara con R2 y la guarda.",UDim2.new(1,-24,1,-12),UDim2.new(0,12,0,6),12,C.sub,false)
+local aimInfo=card(aimPage,72); label(aimInfo,"El Auto-Shoot solo funciona en partida (con el arma en la mano). Detecta al enemigo, espera un tiempo de reacción humano, dispara y la guarda.",UDim2.new(1,-24,1,-12),UDim2.new(0,12,0,6),12,C.sub,false)
 
 local soundsPage=newPage("Sonidos")
 local categoryBar=card(soundsPage,44)
@@ -486,34 +486,27 @@ connections[#connections+1] = UserInputService.TouchEnded:Connect(function(input
   if delta<18 and elapsed>=0.025 and elapsed<0.6 then runMacro() end
 end)
 
--- AUTO-SHOOT CON ANTICHEAT, RAYCAST Y DETECCIÓN DE PARTIDA
+-- AUTO-SHOOT MODO DUELOS (Anti-Kick Humano)
 local function hasLineOfSight(targetPart)
   if isUnloaded then return false end
-  
   local origin = camera.CFrame.Position
   local direction = (targetPart.Position - origin)
-  
   local raycastParams = RaycastParams.new()
   raycastParams.FilterDescendantsInstances = {player.Character, camera}
   raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-  
   local result = workspace:Raycast(origin, direction, raycastParams)
-  
   if not result then return true end
   if result.Instance:IsDescendantOf(targetPart.Parent) then return true end
   return false
 end
 
-local function isEnemyVisible()
+local function isEnemyInSight()
   if isUnloaded then return false end
   if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return false end
 
-  -- 💡 DETECCIÓN DE PARTIDA: Si no tienes un arma equipada, no estamos en partida (o no puedes disparar).
   local char = player.Character
   local tool = char:FindFirstChildOfClass("Tool")
-  if not tool then
-      return false 
-  end
+  if not tool then return false end -- Solo en partida (con el arma en la mano)
 
   for _, otherPlayer in ipairs(Players:GetPlayers()) do
     if otherPlayer ~= player and otherPlayer.Character and otherPlayer.Character:FindFirstChild("HumanoidRootPart") and otherPlayer.Character:FindFirstChild("Humanoid") then
@@ -522,12 +515,10 @@ local function isEnemyVisible()
         local rootPart = otherPlayer.Character.HumanoidRootPart
         local screenPos, onScreen = camera:WorldToViewportPoint(rootPart.Position)
         
-        if onScreen then
-          local distanceToPlayer = (rootPart.Position - player.Character.HumanoidRootPart.Position).Magnitude
-          if distanceToPlayer < state.aimRange then
-            if hasLineOfSight(rootPart) then
-              return true
-            end
+        -- Verificamos que esté en pantalla, cerca y sin paredes
+        if onScreen and (rootPart.Position - player.Character.HumanoidRootPart.Position).Magnitude < 300 then
+          if hasLineOfSight(rootPart) then
+            return true
           end
         end
       end
@@ -538,24 +529,37 @@ end
 
 task.spawn(function()
   while not isUnloaded do
-    task.wait(state.aimDelay + math.random(1,5)/100) 
+    -- Revisa cada 0.1 segundos
+    task.wait(0.1) 
     
     if state.autoAim and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-      if isEnemyVisible() then
-        -- Si tiene el arma equipada (ya validado en isEnemyVisible), disparamos
-        pcall(function()
-            VirtualUser:Button1Down(Vector2.new(0,0))
-            task.wait(0.03 + math.random(1,3)/100)
-            VirtualUser:Button1Up(Vector2.new(0,0))
-        end)
+      if isEnemyInSight() then
         
-        -- Si tienes activada la opción de guardar arma
-        if state.aimSaveTool then
-          local char = player.Character
-          local humanoid = char:FindFirstChildOfClass("Humanoid")
-          if humanoid then
-            pcall(function() humanoid:UnequipTools() end)
-          end
+        -- 🛑 TIEMPO DE REACCIÓN HUMANO
+        -- Esperamos un tiempo aleatorio entre 0.15s y 0.35s antes de disparar
+        task.wait(math.random(15, 35) / 100)
+        
+        local char = player.Character
+        local tool = char:FindFirstChildOfClass("Tool")
+        local humanoid = char:FindFirstChildOfClass("Humanoid")
+        
+        if tool and humanoid then
+            -- Disparamos usando la función nativa (MÁS SEGURO QUE VirtualUser)
+            pcall(function()
+                tool:Activate()
+            end)
+            
+            task.wait(0.05)
+            
+            pcall(function()
+                tool:Deactivate()
+            end)
+            
+            -- Guardado de arma con delay largo
+            if state.aimSaveTool then
+                task.wait(0.2) -- Espera para que el disparo se registre antes de guardar
+                pcall(function() humanoid:UnequipTools() end)
+            end
         end
       end
     end
