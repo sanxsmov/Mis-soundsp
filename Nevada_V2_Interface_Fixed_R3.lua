@@ -1,4 +1,4 @@
--- NEVADA V2 R17 | Interfaz Completa + Botón Flotante + Silent Aim (Solo Armas de Fuego) + Anti-Lobby
+-- NEVADA V2 R18 | Botón Flotante Corregido + Silent Aim + Anti-Lobby
 if getgenv().NevadaLoaded then return end
 getgenv().NevadaLoaded = true
 
@@ -19,7 +19,6 @@ local RAW = "https://raw.githubusercontent.com/" .. OWNER .. "/" .. REPO .. "/" 
 local API_ROOT = "https://api.github.com/repos/" .. OWNER .. "/" .. REPO .. "/contents/"
 local CONFIG_FILE = "nevada_v2_config.json"
 
--- Variables de estado
 local state = {
   macro = false, equipDelay = 0.05, shootDelay = 0.10,
   autoAim = false, aimDelay = 0.10, aimFOV = 120, aimRange = 300, aimSaveTool = true,
@@ -32,10 +31,8 @@ local refreshCatalog
 local connections = {}
 local isUnloaded = false
 
-local function safeCall(fn, ...) local ok, result = pcall(fn, ...); if ok then return result end end
 local function round2(n) return math.floor(n * 100 + 0.5) / 100 end
 
--- FUNCIÓN DE AUDIO
 local function playSound(url)
   if isUnloaded or type(url) ~= "string" or url == "" then return end
   local asset = soundCache[url]
@@ -63,7 +60,6 @@ local function playSound(url)
   task.delay(20, function() if s.Parent then s:Destroy() end end)
 end
 
--- SEGURIDAD 1: Proteger la GUI
 if playerGui:FindFirstChild("NevadaV2") then playerGui.NevadaV2:Destroy() end
 local gui = Instance.new("ScreenGui")
 gui.Name, gui.ResetOnSpawn, gui.IgnoreGuiInset = "NevadaV2", false, true
@@ -101,18 +97,18 @@ local function button(parent, text, size, pos, callback)
 end
 
 -- ==========================================
--- BOTÓN FLOTANTE NEGRO
+-- BOTÓN FLOTANTE NEGRO (CORREGIDO)
 -- ==========================================
-local floatBtn = create("TextButton", {
-    Size = UDim2.new(0, 60, 0, 60),
-    Position = UDim2.new(0, 20, 0.4, 0),
-    BackgroundColor3 = Color3.fromRGB(15, 15, 15),
-    Text = "OFF",
-    TextColor3 = Color3.fromRGB(255, 50, 50),
-    Font = Enum.Font.GothamBold,
-    TextSize = 14,
-    Parent = gui
-})
+local floatBtn = Instance.new("TextButton")
+floatBtn.Size = UDim2.new(0, 60, 0, 60)
+floatBtn.Position = UDim2.new(0, 20, 0.4, 0)
+floatBtn.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+floatBtn.Text = "OFF"
+floatBtn.TextColor3 = Color3.fromRGB(255, 50, 50)
+floatBtn.Font = Enum.Font.GothamBold
+floatBtn.TextSize = 14
+floatBtn.ZIndex = 999 -- Asegura que esté por encima de todo
+floatBtn.Parent = gui
 corner(floatBtn, 30)
 stroke(floatBtn, Color3.fromRGB(255, 255, 255), 1.5)
 
@@ -265,7 +261,6 @@ slider(macroPage,"Tiempo de equipar",0.01,0.50,state.equipDelay,function(v) stat
 slider(macroPage,"Tiempo de disparo",0.01,0.50,state.shootDelay,function(v) state.shootDelay=v end)
 local macroInfo=card(macroPage,72); label(macroInfo,"La macro depende de la mecánica del juego y de los permisos del ejecutor.",UDim2.new(1,-24,1,-12),UDim2.new(0,12,0,6),12,C.sub,false)
 
--- PESTAÑA AUTO AIM
 local aimPage=newPage("AutoAim")
 switch(aimPage,"Activar Auto-Shoot",false,function(v) state.autoAim=v end, 1, "ToggleBtn")
 slider(aimPage,"Delay de disparo",0.01,0.50,state.aimDelay,function(v) state.aimDelay=v end)
@@ -520,7 +515,7 @@ local function runMacro()
       end
     end)
     if not isUnloaded and shouldHolster and player.Character==char and hum.Parent==char then
-      pcall(function() humanoid:UnequipTools() end)
+      pcall(function() hum:UnequipTools() end)
     end
     macroBusy=false
   end)
