@@ -449,18 +449,19 @@ task.spawn(function()
   end
 end)
 -- ==========================================
--- AUTO-SHOOT 360 Y BOTÓN FLOTANTE (Añadido al final de tu script)
+-- AUTO-SHOOT 360 (SOLO ARMAS DE FUEGO - IGNORA CUCHILLOS)
 -- ==========================================
 local autoAimActive = false
+local autoShootCooldown = 0
 
--- Crear el Botón Flotante (Para activar/desactivar)
+-- Crear el Botón Flotante
 local floatGui = Instance.new("ScreenGui")
 floatGui.Name = "NevadaFloatGui"
 floatGui.ResetOnSpawn = false
 floatGui.Parent = playerGui
 
 local floatBtn = Instance.new("TextButton")
-floatBtn.Size = UDim2.new(0, 120, 0, 50)
+floatBtn.Size = UDim2.new(0, 130, 0, 50)
 floatBtn.Position = UDim2.new(0, 20, 0.3, 0)
 floatBtn.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 floatBtn.Text = "Auto-Shoot: OFF"
@@ -504,40 +505,68 @@ floatBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- Motor del Auto-Shoot 360 (Usa el sistema de tu script)
+-- Función para saber si estamos en el Lobby
+local function estaEnLobby()
+    local char = player.Character
+    if not char then return true end
+    if char:FindFirstChildOfClass("ForceField") then return true end
+    
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        local lobbyZona = Vector3.new(-320.50, 280.82, 16.00)
+        if (hrp.Position - lobbyZona).Magnitude < 500 then return true end
+    end
+    return false
+end
+
+-- 🔥 FUNCIÓN PARA VERIFICAR SI ES UN ARMA DE FUEGO (Ignora cuchillos) 🔥
+local function esArmaDeFuego(tool)
+    if not tool or not tool:IsA("Tool") then return false end
+    local nombre = tool.Name:lower()
+    
+    -- Si tiene nombre de cuchillo, lo ignoramos
+    if nombre:find("knife") or nombre:find("cuchillo") or nombre:find("sword") or nombre:find("espada") or nombre:find("dagger") then
+        return false
+    end
+    
+    -- Si tiene nombre de arma de fuego, lo aceptamos
+    if nombre:find("gun") or nombre:find("pistol") or nombre:find("revolver") or nombre:find("sheriff") or nombre:find("rifle") or nombre:find("shotgun") or nombre:find("arma") or nombre:find("colt") then
+        return true
+    end
+    
+    -- Si no estamos seguros, lo aceptamos (pero evitamos los cuchillos por nombre)
+    return true
+end
+
+-- Motor del Auto-Shoot 360
 RunService.Heartbeat:Connect(function()
     if not autoAimActive or not player.Character then return end
+    if tick() - autoShootCooldown < 0.1 then return end 
+    
+    if estaEnLobby() then return end
     
     local char = player.Character
     local hrp = char:FindFirstChild("HumanoidRootPart")
     local hum = char:FindFirstChildOfClass("Humanoid")
     if not hrp or not hum then return end
 
-    -- 1. Sacar el arma de la pierna
+    -- 1. VERIFICAR SI YA TENEMOS UN ARMA EN LA MANO
     local arma = char:FindFirstChildOfClass("Tool")
-    if not arma then
-        local backpack = player:FindFirstChildOfClass("Backpack")
-        if backpack then
-            for _, item in ipairs(backpack:GetChildren()) do
-                if item:IsA("Tool") then
-                    pcall(function() hum:EquipTool(item) end)
-                    task.wait(0.06)
-                    arma = item
-                    break
-                end
-            end
-        end
+    
+    -- Si lo que tenemos en la mano es un cuchillo, lo ignoramos
+    if arma and not esArmaDeFuego(arma) then
+        arma = nil
     end
 
-    -- 2. Buscar enemigos y girar 360
-    if arma and arma.Parent == char then
-        local closestEnemy = nil
-        local shortestDist = math.huge
-        
-        for _, otherPlayer in ipairs(Players:GetPlayers()) do
-            if otherPlayer ~= player and otherPlayer.Character and otherPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                local enemyHum = otherPlayer.Character:FindFirstChildOfClass("Humanoid")
-                if enemyHum and enemyHum.Health > 0 then
+    -- 2. BUSCAR ENEMIGOS PRIMERO (Solo si hay alguien cerca)
+    local closestEnemy = nil
+    local shortestDist = math.huge
+    
+    for _, otherPlayer in ipairs(Players:GetPlayers()) do
+        if otherPlayer ~= player and otherPlayer.Character and otherPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            local enemyHum = otherPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if enemyHum and enemyHum.Health > 0 then
+                if player.Team == nil or otherPlayer.Team == nil or player.Team ~= otherPlayer.Team then
                     local enemyHrp = otherPlayer.Character.HumanoidRootPart
                     local dist = (enemyHrp.Position - hrp.Position).Magnitude
                     
@@ -555,20 +584,40 @@ RunService.Heartbeat:Connect(function()
                 end
             end
         end
+    end
 
-        -- 3. Giro 360, disparar y guardar
-        if closestEnemy then
+    -- 3. SI VEMOS UN ENEMIGO Y NO TENEMOS ARMA, LA BUSCAMOS
+    if closestEnemy then
+        if not arma then
+            local backpack = player:FindFirstChildOfClass("Backpack")
+            if backpack then
+                for _, item in ipairs(backpack:GetChildren()) do
+                    -- 🔥 AQUÍ APLICAMOS EL FILTRO: SOLO ARMAS DE FUEGO 🔥
+                    if esArmaDeFuego(item) then
+                        pcall(function() hum:EquipTool(item) end)
+                        task.wait(0.08) 
+                        arma = item
+                        break
+                    end
+                end
+            end
+        end
+
+        -- 4. SI YA TENEMOS EL ARMA DE FUEGO, GIRO Y DISPARO
+        if arma and arma.Parent == char then
             local originalCFrame = camera.CFrame
             camera.CFrame = CFrame.new(camera.CFrame.Position, closestEnemy.Position)
             
             pcall(function()
                 arma:Activate()
-                task.wait(0.02)
+                task.wait(0.03)
                 arma:Deactivate()
             end)
             
-            task.wait(0.02)
+            task.wait(0.03)
             camera.CFrame = originalCFrame
+            
+            autoShootCooldown = tick() 
         end
     end
 end)
