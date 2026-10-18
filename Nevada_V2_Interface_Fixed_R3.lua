@@ -1,4 +1,4 @@
--- NEVADA V2 R11 | Interfaz Completa + Sonidos + Auto-Shoot + Anti-Cheat
+-- NEVADA V2 R12 | Interfaz Completa + Sonidos + Auto-Shoot (Anti-Lobby y Anti-Paredes) + Anti-Cheat
 if getgenv().NevadaLoaded then return end
 getgenv().NevadaLoaded = true
 
@@ -214,7 +214,7 @@ local aimPage=newPage("AutoAim")
 switch(aimPage,"Activar Auto-Shoot",false,function(v) state.autoAim=v end)
 slider(aimPage,"Delay de disparo",0.01,0.50,state.aimDelay,function(v) state.aimDelay=v end)
 switch(aimPage,"Guardar arma al disparar",true,function(v) state.aimSaveTool=v end)
-local aimInfo=card(aimPage,72); label(aimInfo,"El Auto-Shoot detecta al enemigo, saca el arma, dispara y la guarda.",UDim2.new(1,-24,1,-12),UDim2.new(0,12,0,6),12,C.sub,false)
+local aimInfo=card(aimPage,72); label(aimInfo,"El Auto-Shoot solo funciona en partida (con el arma en la mano). Detecta al enemigo, dispara con R2 y la guarda.",UDim2.new(1,-24,1,-12),UDim2.new(0,12,0,6),12,C.sub,false)
 
 local soundsPage=newPage("Sonidos")
 local categoryBar=card(soundsPage,44)
@@ -486,10 +486,34 @@ connections[#connections+1] = UserInputService.TouchEnded:Connect(function(input
   if delta<18 and elapsed>=0.025 and elapsed<0.6 then runMacro() end
 end)
 
--- AUTO-SHOOT CON ANTICHEAT (Tiempos aleatorios)
+-- AUTO-SHOOT CON ANTICHEAT, RAYCAST Y DETECCIÓN DE PARTIDA
+local function hasLineOfSight(targetPart)
+  if isUnloaded then return false end
+  
+  local origin = camera.CFrame.Position
+  local direction = (targetPart.Position - origin)
+  
+  local raycastParams = RaycastParams.new()
+  raycastParams.FilterDescendantsInstances = {player.Character, camera}
+  raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+  
+  local result = workspace:Raycast(origin, direction, raycastParams)
+  
+  if not result then return true end
+  if result.Instance:IsDescendantOf(targetPart.Parent) then return true end
+  return false
+end
+
 local function isEnemyVisible()
   if isUnloaded then return false end
   if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return false end
+
+  -- 💡 DETECCIÓN DE PARTIDA: Si no tienes un arma equipada, no estamos en partida (o no puedes disparar).
+  local char = player.Character
+  local tool = char:FindFirstChildOfClass("Tool")
+  if not tool then
+      return false 
+  end
 
   for _, otherPlayer in ipairs(Players:GetPlayers()) do
     if otherPlayer ~= player and otherPlayer.Character and otherPlayer.Character:FindFirstChild("HumanoidRootPart") and otherPlayer.Character:FindFirstChild("Humanoid") then
@@ -497,10 +521,13 @@ local function isEnemyVisible()
       if hum.Health > 0 then
         local rootPart = otherPlayer.Character.HumanoidRootPart
         local screenPos, onScreen = camera:WorldToViewportPoint(rootPart.Position)
+        
         if onScreen then
           local distanceToPlayer = (rootPart.Position - player.Character.HumanoidRootPart.Position).Magnitude
           if distanceToPlayer < state.aimRange then
-            return true
+            if hasLineOfSight(rootPart) then
+              return true
+            end
           end
         end
       end
@@ -515,35 +542,14 @@ task.spawn(function()
     
     if state.autoAim and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
       if isEnemyVisible() then
-        if state.aimSaveTool then
-          local char = player.Character
-          local humanoid = char:FindFirstChildOfClass("Humanoid")
-          local backpack = player:FindFirstChildOfClass("Backpack")
-          local toolToUse = nil
-          
-          if backpack then
-            for _, item in ipairs(backpack:GetChildren()) do
-              if item:IsA("Tool") and (item.Name:lower():find("pistol") or item.Name:lower():find("gun") or item.Name:lower():find("sheriff") or item.Name:lower():find("revolver")) then
-                toolToUse = item; break
-              end
-            end
-          end
-          if not toolToUse then toolToUse = char:FindFirstChildOfClass("Tool") end
-
-          if toolToUse and humanoid then
-            if toolToUse.Parent ~= char then
-              humanoid:EquipTool(toolToUse)
-              task.wait(0.03 + math.random(1,3)/100)
-            end
-          end
-        end
-        
+        -- Si tiene el arma equipada (ya validado en isEnemyVisible), disparamos
         pcall(function()
             VirtualUser:Button1Down(Vector2.new(0,0))
             task.wait(0.03 + math.random(1,3)/100)
             VirtualUser:Button1Up(Vector2.new(0,0))
         end)
         
+        -- Si tienes activada la opción de guardar arma
         if state.aimSaveTool then
           local char = player.Character
           local humanoid = char:FindFirstChildOfClass("Humanoid")
