@@ -1,19 +1,21 @@
 -- ==========================================
--- FLAGS DE RENDIMIENTO Y VISIBILIDAD
+-- 1. MÓDULO DE EVASIÓN Y FLAGS (ANTI-CHEAT)
 -- ==========================================
 pcall(function()
+    local setthread = setthreadidentity or set_thread_identity or setidentity
+    if setthread then pcall(function() setthread(8) end) end
+    
     if setfflag then
         setfflag("DFIntTaskSchedulerTargetFps", "240")
         setfflag("FFlagDisablePostFx", "True")
         setfflag("FFlagRemoveFog", "True")
         setfflag("FIntRenderShadowIntensity", "0")
         setfflag("DFIntS2PhysicsSenderRate", "60")
-        setfflag("DFIntTextureCompositorActiveJobs", "0") 
     end
 end)
 
 -- ==========================================
--- SCRIPT PRINCIPAL (NEVADA V2 + SILENT AIM HOOK)
+-- 2. SCRIPT PRINCIPAL (NEVADA V2 + SILENT AIM)
 -- ==========================================
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
@@ -23,6 +25,7 @@ local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 local camera = workspace.CurrentCamera
+local requestFn = (syn and syn.request) or (http and http.request) or request or http_request
 
 local OWNER, REPO, BRANCH = "sanxsmov", "Mis-soundsp", "main"
 local FOLDERS = {"sounds", "SoundsV2"}
@@ -40,15 +43,12 @@ local sounds, soundCache, activeTab, soundCategory = {}, {}, "Inicio", "Arma"
 local refreshCatalog
 local connections = {}
 local isUnloaded = false
-
 local function round2(n) return math.floor(n * 100 + 0.5) / 100 end
 
--- FUNCIÓN DE AUDIO MEJORADA
+-- FUNCIÓN DE AUDIO
 local function playSound(url)
   if isUnloaded or type(url) ~= "string" or url == "" or url == "Ninguno" then return end
-  
   local finalAssetId = url
-  
   if string.find(url, "http") and not string.find(url, "rbxassetid://") then
     local asset = soundCache[url]
     if not asset then
@@ -63,128 +63,65 @@ local function playSound(url)
         local ok, result = pcall(getcustomasset, name)
         if not ok then return end
         asset = result
-      else
-        asset = url
-      end
+      else asset = url end
       soundCache[url] = asset
     end
     finalAssetId = asset
   elseif string.match(url, "^%d+$") then
     finalAssetId = "rbxassetid://" .. url
   end
-
   local s = Instance.new("Sound")
-  s.SoundId = finalAssetId
-  s.Volume = 1
-  s.Parent = SoundService
-  s:Play()
-  s.Ended:Connect(function() s:Destroy() end)
+  s.SoundId = finalAssetId; s.Volume = 1; s.Parent = SoundService
+  s:Play(); s.Ended:Connect(function() s:Destroy() end)
   task.delay(20, function() if s.Parent then s:Destroy() end end)
 end
 
+-- INTERFAZ GRÁFICA (NEVADA)
 if playerGui:FindFirstChild("NevadaV2") then playerGui.NevadaV2:Destroy() end
 local gui = Instance.new("ScreenGui")
 gui.Name, gui.ResetOnSpawn, gui.IgnoreGuiInset = "NevadaV2", false, true
 gui.Parent = playerGui
+pcall(function() if syn and syn.protect_gui then syn.protect_gui(gui) end end)
 
-local C = {bg=Color3.fromRGB(7,10,17), panel=Color3.fromRGB(10,14,23), card=Color3.fromRGB(14,19,30), edge=Color3.fromRGB(48,59,78), text=Color3.fromRGB(241,245,255), sub=Color3.fromRGB(164,177,201), blue=Color3.fromRGB(120,157,224), green=Color3.fromRGB(50,220,153)}
-local function create(class, props, parent)
-  local obj = Instance.new(class)
-  for k,v in pairs(props or {}) do obj[k] = v end
-  obj.Parent = parent
-  return obj
-end
+local C = {bg=Color3.fromRGB(7,10,17), panel=Color3.fromRGB(10,14,23), card=Color3.fromRGB(14,19,30), edge=Color3.fromRGB(48,59,78), text=Color3.fromRGB(241,245,255), sub=Color3.fromRGB(164,177,201), blue=Color3.fromRGB(120,157,224)}
+local function create(class, props, parent) local obj = Instance.new(class); for k,v in pairs(props or {}) do obj[k] = v end; obj.Parent = parent; return obj end
 local function corner(obj, radius) create("UICorner", {CornerRadius=UDim.new(0,radius or 10)}, obj) end
 local function stroke(obj, color, thickness) create("UIStroke", {Color=color or C.edge, Thickness=thickness or 1, Transparency=0.2}, obj) end
-local function label(parent, text, size, pos, fontSize, color, bold)
-  return create("TextLabel", {BackgroundTransparency=1, Text=text, Size=size, Position=pos, Font=bold and Enum.Font.GothamBold or Enum.Font.Gotham, TextSize=fontSize or 14, TextColor3=color or C.text, TextXAlignment=Enum.TextXAlignment.Left, TextYAlignment=Enum.TextYAlignment.Center, TextWrapped=true}, parent)
-end
-local function button(parent, text, size, pos, callback)
-  local b=create("TextButton", {Size=size, Position=pos, BackgroundColor3=C.card, Text=text, TextColor3=C.text, Font=Enum.Font.GothamMedium, TextSize=13, AutoButtonColor=true}, parent)
-  corner(b,8); stroke(b)
-  b.MouseButton1Click:Connect(callback)
-  return b
-end
+local function label(parent, text, size, pos, fontSize, color, bold) return create("TextLabel", {BackgroundTransparency=1, Text=text, Size=size, Position=pos, Font=bold and Enum.Font.GothamBold or Enum.Font.Gotham, TextSize=fontSize or 14, TextColor3=color or C.text, TextXAlignment=Enum.TextXAlignment.Left, TextYAlignment=Enum.TextYAlignment.Center, TextWrapped=true}, parent) end
+local function button(parent, text, size, pos, callback) local b=create("TextButton", {Size=size, Position=pos, BackgroundColor3=C.card, Text=text, TextColor3=C.text, Font=Enum.Font.GothamMedium, TextSize=13, AutoButtonColor=true}, parent); corner(b,8); stroke(b); b.MouseButton1Click:Connect(callback); return b end
 
-local window
-local openButton
+local window, openButton
 openButton = button(gui,"NEVADA",UDim2.fromOffset(94,34),UDim2.new(0,14,0.18,0),function() if window and not isUnloaded then window.Visible=true; openButton.Visible=false end end)
 window = create("Frame", {Size=UDim2.new(0.94,0,0.84,0), Position=UDim2.new(0.03,0,0.08,0), BackgroundColor3=C.bg, BorderSizePixel=0, ClipsDescendants=true},gui)
 corner(window,16); stroke(window,C.edge,1.3)
 local scale = create("UIScale", {Scale=1}, window)
-local function fitScale()
-  local v=camera.ViewportSize
-  scale.Scale=math.clamp(math.min(v.X/1100,v.Y/680),0.58,1)
-end
-fitScale()
-connections[#connections+1] = camera:GetPropertyChangedSignal("ViewportSize"):Connect(fitScale)
+local function fitScale() local v=camera.ViewportSize; scale.Scale=math.clamp(math.min(v.X/1100,v.Y/680),0.58,1) end
+fitScale(); connections[#connections+1] = camera:GetPropertyChangedSignal("ViewportSize"):Connect(fitScale)
 
 local sidebar=create("Frame",{Size=UDim2.new(0,190,1,0),BackgroundColor3=Color3.fromRGB(6,9,15),BorderSizePixel=0},window)
 local divider=create("Frame",{Size=UDim2.new(0,1,1,0),Position=UDim2.new(0,190,0,0),BackgroundColor3=C.edge,BorderSizePixel=0},window)
 label(sidebar,"▲",UDim2.new(1,0,0,48),UDim2.new(0,0,0,20),29,C.text,true).TextXAlignment=Enum.TextXAlignment.Center
 label(sidebar,"N E V A D A",UDim2.new(1,0,0,34),UDim2.new(0,0,0,63),21,C.text,true).TextXAlignment=Enum.TextXAlignment.Center
-label(sidebar,"V2",UDim2.new(1,0,0,20),UDim2.new(0,0,0,96),12,C.sub,false).TextXAlignment=Enum.TextXAlignment.Center
 local navHolder=create("Frame",{Size=UDim2.new(1,-18,0,220),Position=UDim2.new(0,9,0,140),BackgroundTransparency=1},sidebar)
 create("UIListLayout",{Padding=UDim.new(0,7),SortOrder=Enum.SortOrder.LayoutOrder},navHolder)
-label(sidebar,"NEVADA V2\nTu experiencia, sin límites.",UDim2.new(1,-24,0,48),UDim2.new(0,12,1,-62),11,C.sub,false)
 
 local top=create("Frame",{Size=UDim2.new(1,-210,0,68),Position=UDim2.new(0,205,0,0),BackgroundTransparency=1},window)
-label(top,"▲",UDim2.fromOffset(48,55),UDim2.new(0,0,0,4),28,C.text,true)
 local pageTitle=label(top,"Bienvenido a Nevada",UDim2.new(1,-110,0,30),UDim2.new(0,54,0,10),21,C.text,true)
-local pageSubtitle=label(top,"Tu hub todo en uno. Macros, sonidos y más.",UDim2.new(1,-80,0,25),UDim2.new(0,54,0,38),12,C.sub,false)
 local minimize=button(window,"—",UDim2.fromOffset(34,30),UDim2.new(1,-80,0,10),function() if not isUnloaded then window.Visible=false; openButton.Visible=true end end)
-local close=button(window,"×",UDim2.fromOffset(34,30),UDim2.new(1,-42,0,10),function() 
-    if not isUnloaded then
-        state.macro = false
-        window.Visible = false
-        openButton.Visible = true
-    end
-end)
+local close=button(window,"×",UDim2.fromOffset(34,30),UDim2.new(1,-42,0,10),function() if not isUnloaded then state.macro = false; window.Visible = false; openButton.Visible = true end end)
 openButton.Visible=false
 
 local dragging, dragStart, startPos = false, nil, nil
 local dragArea=top
-dragArea.InputBegan:Connect(function(input)
-  if isUnloaded then return end
-  if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
-    dragging=true; dragStart=input.Position; startPos=window.Position
-    input.Changed:Connect(function() if input.UserInputState==Enum.UserInputState.End then dragging=false end end)
-  end
-end)
-connections[#connections+1] = UserInputService.InputChanged:Connect(function(input)
-  if isUnloaded then return end
-  if dragging and (input.UserInputType==Enum.UserInputType.MouseMovement or input.UserInputType==Enum.UserInputType.Touch) then
-    local d=input.Position-dragStart
-    window.Position=UDim2.new(startPos.X.Scale,startPos.X.Offset+d.X,startPos.Y.Scale,startPos.Y.Offset+d.Y)
-  end
-end)
+dragArea.InputBegan:Connect(function(input) if isUnloaded then return end; if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then dragging=true; dragStart=input.Position; startPos=window.Position; input.Changed:Connect(function() if input.UserInputState==Enum.UserInputState.End then dragging=false end end) end end)
+connections[#connections+1] = UserInputService.InputChanged:Connect(function(input) if isUnloaded then return end; if dragging and (input.UserInputType==Enum.UserInputType.MouseMovement or input.UserInputType==Enum.UserInputType.Touch) then local d=input.Position-dragStart; window.Position=UDim2.new(startPos.X.Scale,startPos.X.Offset+d.X,startPos.Y.Scale,startPos.Y.Offset+d.Y) end end)
 
 local content=create("Frame",{Size=UDim2.new(1,-210,1,-82),Position=UDim2.new(0,205,0,72),BackgroundTransparency=1},window)
 local pages={}
-local function newPage(name)
-  local p=create("ScrollingFrame",{Name=name,Size=UDim2.fromScale(1,1),BackgroundTransparency=1,BorderSizePixel=0,ScrollBarThickness=4,ScrollBarImageColor3=C.blue,Visible=false,CanvasSize=UDim2.new()},content)
-  local l=create("UIListLayout",{Padding=UDim.new(0,10),SortOrder=Enum.SortOrder.LayoutOrder},p)
-  connections[#connections+1] = l:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() p.CanvasSize=UDim2.new(0,0,0,l.AbsoluteContentSize.Y+16) end)
-  pages[name]=p; return p
-end
-local function card(parent,height)
-  local f=create("Frame",{Size=UDim2.new(1,-8,0,height),BackgroundColor3=C.card,BorderSizePixel=0},parent); corner(f,11); stroke(f); return f
-end
-local function switch(parent,text,initial,callback,y)
-  local row=card(parent,48); row.LayoutOrder=y or 1
-  label(row,text,UDim2.new(1,-100,1,0),UDim2.new(0,14,0,0),14,C.text,true)
-  local b
-  b=button(row,initial and "ACTIVADO" or "DESACTIVADO",UDim2.fromOffset(92,30),UDim2.new(1,-104,0.5,-15),function()
-    if isUnloaded then return end
-    initial=not initial; b.Text=initial and "ACTIVADO" or "DESACTIVADO"; b.BackgroundColor3=initial and C.blue or C.card; callback(initial)
-  end)
-  b.BackgroundColor3=initial and C.blue or C.card
-  return b
-end
-local function actionCard(parent,title,desc,btnText,fn)
-  local f=card(parent,70); label(f,title,UDim2.new(0.66,0,0,27),UDim2.new(0,14,0,7),14,C.text,true); label(f,desc,UDim2.new(0.66,0,0,25),UDim2.new(0,14,0,35),11,C.sub,false)
-  button(f,btnText,UDim2.fromOffset(125,34),UDim2.new(1,-139,0.5,-17),fn); return f
-end
+local function newPage(name) local p=create("ScrollingFrame",{Name=name,Size=UDim2.fromScale(1,1),BackgroundTransparency=1,BorderSizePixel=0,ScrollBarThickness=4,ScrollBarImageColor3=C.blue,Visible=false,CanvasSize=UDim2.new()},content); local l=create("UIListLayout",{Padding=UDim.new(0,10),SortOrder=Enum.SortOrder.LayoutOrder},p); connections[#connections+1] = l:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() p.CanvasSize=UDim2.new(0,0,0,l.AbsoluteContentSize.Y+16) end); pages[name]=p; return p end
+local function card(parent,height) local f=create("Frame",{Size=UDim2.new(1,-8,0,height),BackgroundColor3=C.card,BorderSizePixel=0},parent); corner(f,11); stroke(f); return f end
+local function switch(parent,text,initial,callback,y) local row=card(parent,48); row.LayoutOrder=y or 1; label(row,text,UDim2.new(1,-100,1,0),UDim2.new(0,14,0,0),14,C.text,true); local b; b=button(row,initial and "ACTIVADO" or "DESACTIVADO",UDim2.fromOffset(92,30),UDim2.new(1,-104,0.5,-15),function() if isUnloaded then return end; initial=not initial; b.Text=initial and "ACTIVADO" or "DESACTIVADO"; b.BackgroundColor3=initial and C.blue or C.card; callback(initial) end); b.BackgroundColor3=initial and C.blue or C.card; return b end
+local function actionCard(parent,title,desc,btnText,fn) local f=card(parent,70); label(f,title,UDim2.new(0.66,0,0,27),UDim2.new(0,14,0,7),14,C.text,true); label(f,desc,UDim2.new(0.66,0,0,25),UDim2.new(0,14,0,35),11,C.sub,false); button(f,btnText,UDim2.fromOffset(125,34),UDim2.new(1,-139,0.5,-17),fn); return f end
 
 local showPage
 local home=newPage("Inicio")
@@ -199,10 +136,7 @@ local function slider(parent,title,minV,maxV,initial,callback)
   local txt=label(f,title..": "..string.format("%.2f s",value),UDim2.new(1,-24,0,25),UDim2.new(0,13,0,6),13,C.text,true)
   local bar=button(f,"",UDim2.new(1,-28,0,12),UDim2.new(0,14,0,43),function() end); bar.BackgroundColor3=Color3.fromRGB(33,42,59)
   local fill=create("Frame",{Size=UDim2.new((value-minV)/(maxV-minV),0,1,0),BackgroundColor3=C.blue,BorderSizePixel=0},bar); corner(fill,5)
-  local function setFromX(x)
-    if isUnloaded then return end
-    local p=math.clamp((x-bar.AbsolutePosition.X)/math.max(bar.AbsoluteSize.X,1),0,1); value=round2(minV+p*(maxV-minV)); fill.Size=UDim2.new(p,0,1,0); txt.Text=title..": "..string.format("%.2f s",value); callback(value)
-  end
+  local function setFromX(x) if isUnloaded then return end; local p=math.clamp((x-bar.AbsolutePosition.X)/math.max(bar.AbsoluteSize.X,1),0,1); value=round2(minV+p*(maxV-minV)); fill.Size=UDim2.new(p,0,1,0); txt.Text=title..": "..string.format("%.2f s",value); callback(value) end
   bar.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then setFromX(i.Position.X) end end)
   connections[#connections+1] = UserInputService.InputChanged:Connect(function(i) if isUnloaded then return end; if i.UserInputType==Enum.UserInputType.MouseMovement and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then setFromX(i.Position.X) end end)
 end
@@ -220,9 +154,7 @@ connections[#connections+1] = listLayout:GetPropertyChangedSignal("AbsoluteConte
 local soundDetails=card(soundsPage,168)
 local selectedTitle=label(soundDetails,"Seleccionado: Ninguno",UDim2.new(1,-24,0,28),UDim2.new(0,12,0,8),15,C.text,true)
 local selectedFile=label(soundDetails,"Archivo: —",UDim2.new(1,-24,0,24),UDim2.new(0,12,0,38),12,C.sub,false)
-local function refreshDetails()
-  local s=state.selected[soundCategory]; selectedTitle.Text="Seleccionado: "..s.Name; selectedFile.Text="Archivo: "..(s.URL:match("([^/]+)$") or "—")
-end
+local function refreshDetails() local s=state.selected[soundCategory]; selectedTitle.Text="Seleccionado: "..s.Name; selectedFile.Text="Archivo: "..(s.URL:match("([^/]+)$") or "—") end
 local function clearSoundRows() for _,ch in ipairs(list:GetChildren()) do if ch:IsA("Frame") then ch:Destroy() end end end
 local function refreshSoundList()
   if isUnloaded then return end
@@ -232,66 +164,24 @@ local function refreshSoundList()
       local row=create("Frame",{Size=UDim2.new(1,-4,0,43),BackgroundColor3=C.panel,BorderSizePixel=0},list); corner(row,7)
       label(row,s.Name,UDim2.new(0.55,0,1,0),UDim2.new(0,10,0,0),13,C.text,true)
       button(row,"▶ Probar",UDim2.fromOffset(82,29),UDim2.new(1,-176,0.5,-14),function() if not isUnloaded then playSound(s.URL) end end)
-      button(row,"Elegir",UDim2.fromOffset(76,29),UDim2.new(1,-86,0.5,-14),function()
-        if isUnloaded then return end
-        state.selected[soundCategory]={Name=s.Name,URL=s.URL}; refreshDetails()
-      end)
+      button(row,"Elegir",UDim2.fromOffset(76,29),UDim2.new(1,-86,0.5,-14),function() if isUnloaded then return end; state.selected[soundCategory]={Name=s.Name,URL=s.URL}; refreshDetails() end)
     end
   end
 end
 connections[#connections+1] = listSearch:GetPropertyChangedSignal("Text"):Connect(refreshSoundList)
-local function makeCategory(name,x)
-  local b=button(categoryBar,name,UDim2.new(1/3,-8,0,32),UDim2.new(x,4,0.5,-16),function()
-    if isUnloaded then return end
-    soundCategory=name; refreshDetails(); refreshSoundList()
-    for k,v in pairs(categoryButtons) do v.BackgroundColor3=(k==name) and C.blue or C.card end
-  end)
-  categoryButtons[name]=b
-end
+local function makeCategory(name,x) local b=button(categoryBar,name,UDim2.new(1/3,-8,0,32),UDim2.new(x,4,0.5,-16),function() if isUnloaded then return end; soundCategory=name; refreshDetails(); refreshSoundList(); for k,v in pairs(categoryButtons) do v.BackgroundColor3=(k==name) and C.blue or C.card end end); categoryButtons[name]=b end
 makeCategory("Arma",0); makeCategory("Saltar",1/3); makeCategory("Matar",2/3)
 local soundToggle=switch(soundsPage,"Activar este sonido",true,function(v) state.enabled[soundCategory]=v end)
 local muteToggle=switch(soundsPage,"Silenciar este sonido",false,function(v) state.muted[soundCategory]=v end)
 local githubStatus=label(soundsPage,"Catálogo: buscando archivos MP3 en GitHub…",UDim2.new(1,-8,0,28),UDim2.new(0,4,0,0),12,C.sub,false)
 
 local configPage=newPage("Configuración")
-actionCard(configPage,"Guardar configuración","Guarda selección de sonidos y opciones en el dispositivo","Guardar",function()
-  if isUnloaded then return end
-  if not (writefile and isfile) then githubStatus.Text="Guardar: este ejecutor no ofrece writefile."; return end
-  local ok, encoded=pcall(function() return HttpService:JSONEncode(state) end)
-  if ok and pcall(writefile,CONFIG_FILE,encoded) then githubStatus.Text="Configuración guardada en este dispositivo." else githubStatus.Text="No se pudo guardar la configuración." end
-end)
-actionCard(configPage,"Cargar configuración","Restaura los valores guardados anteriormente","Cargar",function()
-  if isUnloaded then return end
-  if not (readfile and isfile) or not isfile(CONFIG_FILE) then githubStatus.Text="No hay una configuración local guardada."; return end
-  local ok, decoded=pcall(function() return HttpService:JSONDecode(readfile(CONFIG_FILE)) end)
-  if ok and type(decoded)=="table" then
-    if type(decoded.macro)=="boolean" then state.macro=decoded.macro end
-    if tonumber(decoded.equipDelay) then state.equipDelay=math.clamp(decoded.equipDelay,0.01,0.5) end
-    if tonumber(decoded.shootDelay) then state.shootDelay=math.clamp(decoded.shootDelay,0.01,0.5) end
-    for _,k in ipairs({"Arma","Saltar","Matar"}) do
-      if type(decoded.selected)=="table" and type(decoded.selected[k])=="table" then state.selected[k]=decoded.selected[k] end
-      if type(decoded.enabled)=="table" and type(decoded.enabled[k])=="boolean" then state.enabled[k]=decoded.enabled[k] end
-      if type(decoded.muted)=="table" and type(decoded.muted[k])=="boolean" then state.muted[k]=decoded.muted[k] end
-    end
-    refreshDetails(); refreshSoundList(); githubStatus.Text="Configuración cargada. Los ajustes se restauraron."
-  else githubStatus.Text="El archivo de configuración no es válido." end
-end)
-actionCard(configPage,"Actualizar catálogo","Vuelve a consultar los archivos MP3 de GitHub","Actualizar",function() if not isUnloaded and refreshCatalog then task.spawn(refreshCatalog) end end)
+actionCard(configPage,"Cerrar Script (Unload)","Destruye la interfaz y detiene todas las funciones","Unload",function() if isUnloaded then return end; isUnloaded = true; state.macro = false; for _, conn in ipairs(connections) do pcall(function() conn:Disconnect() end) end; pcall(function() gui:Destroy() end) end)
 
 local navNames={"Inicio","Macro","Sonidos","Configuración"}
 local navIcons={Inicio="⌂",Macro="◎",Sonidos="♫",["Configuración"]="⚙"}
-showPage=function(name)
-  if isUnloaded then return end
-  activeTab=name
-  for n,p in pairs(pages) do p.Visible=(n==name) end
-  pageTitle.Text=(name=="Inicio") and "Bienvenido a Nevada" or name
-  pageSubtitle.Text=(name=="Inicio") and "Tu hub todo en uno. Macros, sonidos y más." or "Nevada V2 — controles y ajustes"
-  for _,obj in ipairs(navHolder:GetChildren()) do if obj:IsA("TextButton") then obj.BackgroundColor3=(obj.Name==name) and Color3.fromRGB(29,39,57) or Color3.fromRGB(6,9,15) end end
-end
-for i,name in ipairs(navNames) do
-  local b=button(navHolder,navIcons[name].."   "..name,UDim2.new(1,0,0,43),UDim2.new(),function() showPage(name) end)
-  b.Name=name; b.LayoutOrder=i; b.TextXAlignment=Enum.TextXAlignment.Left; b.TextSize=14; b.BackgroundColor3=(name=="Inicio") and Color3.fromRGB(29,39,57) or Color3.fromRGB(6,9,15); b.Position=UDim2.new()
-end
+showPage=function(name) if isUnloaded then return end; activeTab=name; for n,p in pairs(pages) do p.Visible=(n==name) end; pageTitle.Text=(name=="Inicio") and "Bienvenido a Nevada" or name; for _,obj in ipairs(navHolder:GetChildren()) do if obj:IsA("TextButton") then obj.BackgroundColor3=(obj.Name==name) and Color3.fromRGB(29,39,57) or Color3.fromRGB(6,9,15) end end end
+for i,name in ipairs(navNames) do local b=button(navHolder,navIcons[name].."   "..name,UDim2.new(1,0,0,43),UDim2.new(),function() showPage(name) end); b.Name=name; b.LayoutOrder=i; b.TextXAlignment=Enum.TextXAlignment.Left; b.TextSize=14; b.BackgroundColor3=(name=="Inicio") and Color3.fromRGB(29,39,57) or Color3.fromRGB(6,9,15); b.Position=UDim2.new() end
 showPage("Inicio")
 
 local function fetchFolder(folder)
@@ -301,12 +191,7 @@ local function fetchFolder(folder)
   local parsedOk,data=pcall(function() return HttpService:JSONDecode(res.Body) end)
   if not parsedOk or type(data)~="table" then return false end
   local found={}
-  for _,item in ipairs(data) do
-    if item.type=="file" and type(item.name)=="string" and item.name:lower():match("%.mp3$") then
-      local url=item.download_url or (RAW..folder.."/"..item.name)
-      table.insert(found,{Name=item.name:gsub("%.[Mm][Pp]3$",""),URL=url,File=item.name})
-    end
-  end
+  for _,item in ipairs(data) do if item.type=="file" and type(item.name)=="string" and item.name:lower():match("%.mp3$") then local url=item.download_url or (RAW..folder.."/"..item.name); table.insert(found,{Name=item.name:gsub("%.[Mm][Pp]3$",""),URL=url,File=item.name}) end end
   if #found>0 then sounds=found; state.folder=folder; return true end
   return false
 end
@@ -317,46 +202,27 @@ refreshCatalog=function()
   local loaded=false
   for _,folder in ipairs(FOLDERS) do if fetchFolder(folder) then loaded=true; break end end
   table.sort(sounds,function(a,b) return a.Name:lower()<b.Name:lower() end)
-  if not loaded then githubStatus.Text="No se pudo leer el catálogo. Revisa el nombre de la carpeta y las solicitudes HTTP." else githubStatus.Text="GitHub conectado · "..#sounds.." sonidos · carpeta "..state.folder end
+  if not loaded then githubStatus.Text="No se pudo leer el catálogo." else githubStatus.Text="GitHub conectado · "..#sounds.." sonidos." end
   refreshSoundList()
 end
 task.spawn(refreshCatalog)
 
-local boundTools={}
-local lastCustomShot=0
-local function bindTool(tool)
-  if isUnloaded or not tool:IsA("Tool") or boundTools[tool] then return end
-  boundTools[tool]=true
-end
+local boundTools={} local lastCustomShot=0
+local function bindTool(tool) if isUnloaded or not tool:IsA("Tool") or boundTools[tool] then return end; boundTools[tool]=true end
 local function setupCharacter(char)
   if isUnloaded then return end
   local hum=char:WaitForChild("Humanoid",5)
-  if hum then 
-    connections[#connections+1] = hum.Jumping:Connect(function(jumping)
-      if isUnloaded then return end
-      if jumping and state.enabled.Saltar and not state.muted.Saltar and state.selected.Saltar.URL~="" then
-        playSound(state.selected.Saltar.URL)
-      end
-    end) 
-  end
+  if hum then connections[#connections+1] = hum.Jumping:Connect(function(jumping) if isUnloaded then return end; if jumping and state.enabled.Saltar and not state.muted.Saltar and state.selected.Saltar.URL~="" then playSound(state.selected.Saltar.URL) end end) end
   connections[#connections+1] = char.ChildAdded:Connect(bindTool)
   for _,obj in ipairs(char:GetChildren()) do bindTool(obj) end
 end
 if player.Character then setupCharacter(player.Character) end
 connections[#connections+1] = player.CharacterAdded:Connect(setupCharacter)
 
-local ORIGINAL_SHOT="10209603"
-local ORIGINAL_KILL="296102734"
-local watchedSounds=setmetatable({}, {__mode="k"})
-local mutedOriginals=setmetatable({}, {__mode="k"})
-local function soundDigits(sound)
-  return tostring(sound.SoundId or ""):match("(%d+)")
-end
-local function isTargetShot(obj)
-  local id=soundDigits(obj)
-  if id==ORIGINAL_SHOT then return true end
-  return obj.Name:lower()=="gunshot" and obj:FindFirstAncestorWhichIsA("Tool")~=nil
-end
+local ORIGINAL_SHOT="10209603" local ORIGINAL_KILL="296102734"
+local watchedSounds=setmetatable({}, {__mode="k"}) local mutedOriginals=setmetatable({}, {__mode="k"})
+local function soundDigits(sound) return tostring(sound.SoundId or ""):match("(%d+)") end
+local function isTargetShot(obj) local id=soundDigits(obj); if id==ORIGINAL_SHOT then return true end; return obj.Name:lower()=="gunshot" and obj:FindFirstAncestorWhichIsA("Tool")~=nil end
 local function watchNativeSound(obj)
   if isUnloaded or not obj:IsA("Sound") or watchedSounds[obj] then return end
   watchedSounds[obj]=true
@@ -367,173 +233,80 @@ local function watchNativeSound(obj)
     if not category then return end
     local custom=state.selected[category]
     if not state.enabled[category] or state.muted[category] or not custom or custom.URL=="" then return end
-    if not mutedOriginals[obj] then
-      mutedOriginals[obj]=obj.Volume
-      pcall(function() obj.Volume=0 end)
-    elseif obj.Volume~=0 then
-      pcall(function() obj.Volume=0 end)
-    end
+    if not mutedOriginals[obj] then mutedOriginals[obj]=obj.Volume; pcall(function() obj.Volume=0 end) elseif obj.Volume~=0 then pcall(function() obj.Volume=0 end) end
     if category=="Arma" then lastCustomShot=os.clock() end
     playSound(custom.URL)
   end
   connections[#connections+1] = obj.Played:Connect(function() task.defer(check) end)
-  connections[#connections+1] = obj:GetPropertyChangedSignal("Playing"):Connect(function()
-    if obj.Playing or obj.IsPlaying then task.defer(check) end
-  end)
+  connections[#connections+1] = obj:GetPropertyChangedSignal("Playing"):Connect(function() if obj.Playing or obj.IsPlaying then task.defer(check) end end)
   connections[#connections+1] = obj:GetPropertyChangedSignal("SoundId"):Connect(function() task.defer(check) end)
   connections[#connections+1] = obj:GetPropertyChangedSignal("Name"):Connect(function() task.defer(check) end)
-  connections[#connections+1] = obj:GetPropertyChangedSignal("Volume"):Connect(function()
-    if mutedOriginals[obj]~=nil and obj.Parent and obj.Volume~=0 then pcall(function() obj.Volume=0 end) end
-  end)
+  connections[#connections+1] = obj:GetPropertyChangedSignal("Volume"):Connect(function() if mutedOriginals[obj]~=nil and obj.Parent and obj.Volume~=0 then pcall(function() obj.Volume=0 end) end end)
   if obj.IsPlaying or obj.Playing then task.defer(check) end
 end
-local function scanSoundTree(root)
-  if isUnloaded or not root then return end
-  if root:IsA("Sound") then watchNativeSound(root) end
-  for _,obj in ipairs(root:GetDescendants()) do if obj:IsA("Sound") then watchNativeSound(obj) end end
-  connections[#connections+1] = root.DescendantAdded:Connect(watchNativeSound)
-end
-scanSoundTree(workspace)
-scanSoundTree(SoundService)
-scanSoundTree(playerGui)
-scanSoundTree(workspace.CurrentCamera)
+local function scanSoundTree(root) if isUnloaded or not root then return end; if root:IsA("Sound") then watchNativeSound(root) end; for _,obj in ipairs(root:GetDescendants()) do if obj:IsA("Sound") then watchNativeSound(obj) end end; connections[#connections+1] = root.DescendantAdded:Connect(watchNativeSound) end
+scanSoundTree(workspace); scanSoundTree(SoundService); scanSoundTree(playerGui); scanSoundTree(workspace.CurrentCamera)
 connections[#connections+1] = workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function() scanSoundTree(workspace.CurrentCamera) end)
 
 -- MACRO ORIGINAL
-local macroBusy=false
-local lastMacro=0
+local macroBusy=false local lastMacro=0
 local function runMacro()
   if isUnloaded or not state.macro or macroBusy then return end
   local char=player.Character; if not char then return end
   local hum=char:FindFirstChildOfClass("Humanoid"); if not hum or hum.Health<=0 then return end
-  local backpack=player:FindFirstChildOfClass("Backpack")
-  if not backpack then return end
-
+  local backpack=player:FindFirstChildOfClass("Backpack"); if not backpack then return end
   local tool=char:FindFirstChildOfClass("Tool")
-  if not tool then
-    for _,item in ipairs(backpack:GetChildren()) do
-      if item:IsA("Tool") and (item.Name:lower():find("pistol") or item.Name:lower():find("gun") or item.Name:lower():find("sheriff") or item.Name:lower():find("revolver")) then
-        tool=item; break
-      end
-    end
-  end
+  if not tool then for _,item in ipairs(backpack:GetChildren()) do if item:IsA("Tool") and (item.Name:lower():find("pistol") or item.Name:lower():find("gun") or item.Name:lower():find("sheriff") or item.Name:lower():find("revolver")) then tool=item; break end end end
   if not tool then return end
-
-  local now=os.clock()
-  local requiredGap=math.max(0.01, tonumber(state.shootDelay) or 0.10)
+  local now=os.clock() local requiredGap=math.max(0.01, tonumber(state.shootDelay) or 0.10)
   if now-lastMacro<requiredGap then return end
-  macroBusy=true
-  lastMacro=now
+  macroBusy=true; lastMacro=now
   task.spawn(function()
     local shouldHolster=false
     local ok,err=pcall(function()
       if isUnloaded or not state.macro or player.Character~=char then return end
-      if tool.Parent==backpack then
-        hum:EquipTool(tool)
-        shouldHolster=true
-      end
+      if tool.Parent==backpack then hum:EquipTool(tool); shouldHolster=true end
       task.wait(math.max(0.01, tonumber(state.equipDelay) or 0.05))
-      if not isUnloaded and state.macro and player.Character==char and hum.Health>0 and tool.Parent==char then
-        shouldHolster=true
-        tool:Activate()
-        task.wait(math.max(0.01, tonumber(state.shootDelay) or 0.10))
-        pcall(function() tool:Deactivate() end)
-      end
+      if not isUnloaded and state.macro and player.Character==char and hum.Health>0 and tool.Parent==char then shouldHolster=true; tool:Activate(); task.wait(math.max(0.01, tonumber(state.shootDelay) or 0.10)); pcall(function() tool:Deactivate() end) end
     end)
-    if not isUnloaded and shouldHolster and player.Character==char and hum.Parent==char then
-      pcall(function() hum:UnequipTools() end)
-    end
+    if not isUnloaded and shouldHolster and player.Character==char and hum.Parent==char then pcall(function() hum:UnequipTools() end) end
     macroBusy=false
   end)
 end
-connections[#connections+1] = UserInputService.InputBegan:Connect(function(input,processed)
-  if isUnloaded or processed then return end
-  if input.UserInputType==Enum.UserInputType.MouseButton1 or input.KeyCode==Enum.KeyCode.ButtonR2 then runMacro() end
-end)
+connections[#connections+1] = UserInputService.InputBegan:Connect(function(input,processed) if isUnloaded or processed then return end; if input.UserInputType==Enum.UserInputType.MouseButton1 or input.KeyCode==Enum.KeyCode.ButtonR2 then runMacro() end end)
 
--- ==========================================
--- SONIDO DE MUERTE GLOBAL (Funciona con cuchillo)
--- ==========================================
+-- SONIDO DE MUERTE GLOBAL
 local function setupGlobalDeathSound(targetPlayer)
     local function onCharacterAdded(character)
         local humanoid = character:WaitForChild("Humanoid", 5)
-        if humanoid then
-            humanoid.Died:Connect(function()
-                if state.enabled.Matar and not state.muted.Matar and state.selected.Matar.URL ~= "" then
-                    playSound(state.selected.Matar.URL)
-                end
-            end)
-        end
+        if humanoid then humanoid.Died:Connect(function() if state.enabled.Matar and not state.muted.Matar and state.selected.Matar.URL ~= "" then playSound(state.selected.Matar.URL) end end) end
     end
-    
-    if targetPlayer.Character then
-        onCharacterAdded(targetPlayer.Character)
-    end
+    if targetPlayer.Character then onCharacterAdded(targetPlayer.Character) end
     targetPlayer.CharacterAdded:Connect(onCharacterAdded)
 end
-
-for _, otherPlayer in ipairs(Players:GetPlayers()) do
-    if otherPlayer ~= player then
-        setupGlobalDeathSound(otherPlayer)
-    end
-end
-
-Players.PlayerAdded:Connect(function(newPlayer)
-    if newPlayer ~= player then
-        setupGlobalDeathSound(newPlayer)
-    end
-end)
+for _, otherPlayer in ipairs(Players:GetPlayers()) do if otherPlayer ~= player then setupGlobalDeathSound(otherPlayer) end end
+Players.PlayerAdded:Connect(function(newPlayer) if newPlayer ~= player then setupGlobalDeathSound(newPlayer) end end)
 
 -- ==========================================
--- AUTO-SHOOT Y SILENT AIM VERDADERO (HOOK)
+-- SILENT AIM VERDADERO (HOOK CON EVASIÓN Y JITTER)
 -- ==========================================
 local autoAimActive = false
 local autoShootCooldown = 0
 local silentAimTarget = nil
 
--- 1. Función para detectar si estamos en el Lobby
-local function isInLobby()
-    for _, obj in ipairs(playerGui:GetDescendants()) do
-        if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
-            local txt = obj.Text:lower()
-            if obj.Visible and (txt:find("tienda") or txt:find("shop") or txt:find("inventario") or txt:find("código") or txt:find("code")) then
-                return true
-            end
-        end
-    end
-    local char = player.Character
-    if char and char:FindFirstChildOfClass("ForceField") then return true end
-    return false
-end
-
--- 2. Función para verificar si el arma es de fuego
-local function isGun(tool)
-    if not tool or not tool:IsA("Tool") then return false end
-    local name = string.lower(tool.Name)
-    if string.find(name, "knife") or string.find(name, "cuchillo") or string.find(name, "sword") or string.find(name, "espada") or string.find(name, "melee") then return false end
-    if string.find(name, "gun") or string.find(name, "pistol") or string.find(name, "revolver") or string.find(name, "sheriff") or string.find(name, "arma") or string.find(name, "colt") then return true end
-    return false 
-end
-
--- 3. EL HOOK (La magia del Silent Aim de Xero)
+-- Hook de Raycast (El que redirige la bala)
 local oldNamecall
 oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-    local target = silentAimTarget
-    if not checkcaller() and target and target.Parent then
+    if not checkcaller() and silentAimTarget and silentAimTarget.Parent then
         local method = getnamecallmethod()
         if self == workspace then
             if method == "Raycast" then
-                local origin, direction, p3 = ...
-                if typeof(direction) == "Vector3" and direction.Magnitude > 5 and (origin - workspace.CurrentCamera.CFrame.Position).Magnitude > 1 then
-                    -- Redirige el láser a la cabeza del enemigo
-                    local newDir = (target.Position - origin).Unit * 5000
-                    return oldNamecall(self, origin, newDir, p3)
-                end
-            elseif method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" then
-                local ray, p2, p3, p4 = ...
-                if typeof(ray) == "Ray" and ray.Direction.Magnitude > 5 and (ray.Origin - workspace.CurrentCamera.CFrame.Position).Magnitude > 1 then
-                    local newRay = Ray.new(ray.Origin, (target.Position - ray.Origin).Unit * 5000)
-                    return oldNamecall(self, newRay, p2, p3, p4)
+                local origin, direction, params = ...
+                if typeof(direction) == "Vector3" and direction.Magnitude > 5 then
+                    -- JITTER: Apuntamos a la cabeza con un margen de error aleatorio de 0.1 studs
+                    local aimPos = silentAimTarget.Position + Vector3.new(math.random(-10, 10)/100, math.random(-10, 10)/100, math.random(-10, 10)/100)
+                    local newDir = (aimPos - origin).Unit * 5000
+                    return oldNamecall(self, origin, newDir, params)
                 end
             end
         end
@@ -541,126 +314,61 @@ oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
     return oldNamecall(self, ...)
 end)
 
--- Hook para el Mouse (por si el juego usa mouse.Hit)
+-- Hook del Mouse (Por si el juego usa el Mouse.Hit en lugar de Raycast)
 local oldIndex
 oldIndex = hookmetamethod(game, "__index", function(t, k)
-    local target = silentAimTarget
-    if not checkcaller() and t == player:GetMouse() and target and target.Parent then
-        if k == "Hit" then return target.CFrame end
-        if k == "Target" then return target end
+    if not checkcaller() and t == player:GetMouse() and silentAimTarget and silentAimTarget.Parent then
+        if k == "Hit" then return silentAimTarget.CFrame end
+        if k == "Target" then return silentAimTarget end
     end
     return oldIndex(t, k)
 end)
 
--- 4. Botón Flotante
-local floatGui = Instance.new("ScreenGui")
-floatGui.Name = "NevadaFloatGui"
-floatGui.ResetOnSpawn = false
-floatGui.Parent = playerGui
-
-local floatBtn = Instance.new("TextButton")
-floatBtn.Size = UDim2.new(0, 130, 0, 50)
-floatBtn.Position = UDim2.new(0, 20, 0.3, 0)
-floatBtn.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-floatBtn.Text = "Silent Aim: OFF"
-floatBtn.TextColor3 = Color3.fromRGB(255, 50, 50)
-floatBtn.Font = Enum.Font.GothamBold
-floatBtn.TextSize = 14
-floatBtn.Parent = floatGui
-Instance.new("UICorner", floatBtn).CornerRadius = UDim.new(0, 10)
-Instance.new("UIStroke", floatBtn).Color = Color3.fromRGB(255, 255, 255)
-
+-- Botón Flotante
+local floatGui = Instance.new("ScreenGui"); floatGui.Name = "NevadaFloatGui"; floatGui.ResetOnSpawn = false; floatGui.Parent = playerGui
+local floatBtn = Instance.new("TextButton"); floatBtn.Size = UDim2.new(0, 130, 0, 50); floatBtn.Position = UDim2.new(0, 20, 0.3, 0); floatBtn.BackgroundColor3 = Color3.fromRGB(15, 15, 15); floatBtn.Text = "Silent Aim: OFF"; floatBtn.TextColor3 = Color3.fromRGB(255, 50, 50); floatBtn.Font = Enum.Font.GothamBold; floatBtn.TextSize = 14; floatBtn.Parent = floatGui
+Instance.new("UICorner", floatBtn).CornerRadius = UDim.new(0, 10); Instance.new("UIStroke", floatBtn).Color = Color3.fromRGB(255, 255, 255)
 local draggingFloat, dragStartFloat, startPosFloat = false, nil, nil
-floatBtn.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        draggingFloat = true; dragStartFloat = input.Position; startPosFloat = floatBtn.Position
-    end
-end)
-UserInputService.InputChanged:Connect(function(input)
-    if draggingFloat and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-        local delta = input.Position - dragStartFloat
-        floatBtn.Position = UDim2.new(startPosFloat.X.Scale, startPosFloat.X.Offset + delta.X, startPosFloat.Y.Scale, startPosFloat.Y.Offset + delta.Y)
-    end
-end)
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then draggingFloat = false end
-end)
+floatBtn.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then draggingFloat = true; dragStartFloat = input.Position; startPosFloat = floatBtn.Position end end)
+UserInputService.InputChanged:Connect(function(input) if draggingFloat and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then local delta = input.Position - dragStartFloat; floatBtn.Position = UDim2.new(startPosFloat.X.Scale, startPosFloat.X.Offset + delta.X, startPosFloat.Y.Scale, startPosFloat.Y.Offset + delta.Y) end end)
+UserInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then draggingFloat = false end end)
+floatBtn.MouseButton1Click:Connect(function() autoAimActive = not autoAimActive; if autoAimActive then floatBtn.Text = "Silent Aim: ON"; floatBtn.TextColor3 = Color3.fromRGB(0, 255, 100) else floatBtn.Text = "Silent Aim: OFF"; floatBtn.TextColor3 = Color3.fromRGB(255, 50, 50) end end)
 
-floatBtn.MouseButton1Click:Connect(function()
-    autoAimActive = not autoAimActive
-    if autoAimActive then
-        floatBtn.Text = "Silent Aim: ON"; floatBtn.TextColor3 = Color3.fromRGB(0, 255, 100)
-    else
-        floatBtn.Text = "Silent Aim: OFF"; floatBtn.TextColor3 = Color3.fromRGB(255, 50, 50)
-    end
-end)
+local function isInLobby()
+    for _, obj in ipairs(playerGui:GetDescendants()) do if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then local txt = obj.Text:lower(); if obj.Visible and (txt:find("tienda") or txt:find("shop") or txt:find("inventario") or txt:find("código") or txt:find("code")) then return true end end end
+    local char = player.Character; if char and char:FindFirstChildOfClass("ForceField") then return true end
+    return false
+end
+local function isGun(tool) if not tool or not tool:IsA("Tool") then return false end; local name = string.lower(tool.Name); if string.find(name, "knife") or string.find(name, "cuchillo") or string.find(name, "sword") or string.find(name, "espada") or string.find(name, "melee") then return false end; if string.find(name, "gun") or string.find(name, "pistol") or string.find(name, "revolver") or string.find(name, "sheriff") or string.find(name, "arma") or string.find(name, "colt") then return true end; return false end
 
--- 5. Bucle del Auto-Shoot (Dispara invisiblemente)
 RunService.Heartbeat:Connect(function()
     if not autoAimActive or not player.Character then return end
     if tick() - autoShootCooldown < 0.15 then return end 
     if isInLobby() then return end
-    
-    local char = player.Character
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hrp or not hum then return end
-
-    local armaEnMano = char:FindFirstChildOfClass("Tool")
-    if armaEnMano and not isGun(armaEnMano) then armaEnMano = nil end
-
-    local closestEnemy = nil
-    local shortestDist = math.huge
-    
+    local char = player.Character; local hrp = char:FindFirstChild("HumanoidRootPart"); local hum = char:FindFirstChildOfClass("Humanoid"); if not hrp or not hum then return end
+    local armaEnMano = char:FindFirstChildOfClass("Tool"); if armaEnMano and not isGun(armaEnMano) then armaEnMano = nil end
+    local closestEnemy = nil; local shortestDist = math.huge
     for _, otherPlayer in ipairs(Players:GetPlayers()) do
         if otherPlayer ~= player and otherPlayer.Character and otherPlayer.Character:FindFirstChild("HumanoidRootPart") then
             local enemyHum = otherPlayer.Character:FindFirstChildOfClass("Humanoid")
             if enemyHum and enemyHum.Health > 0 and (player.Team == nil or otherPlayer.Team == nil or player.Team ~= otherPlayer.Team) then
-                local enemyHrp = otherPlayer.Character.HumanoidRootPart
-                local dist = (enemyHrp.Position - hrp.Position).Magnitude
-                
+                local enemyHrp = otherPlayer.Character.HumanoidRootPart; local dist = (enemyHrp.Position - hrp.Position).Magnitude
                 if dist < 300 and dist < shortestDist then
-                    local raycastParams = RaycastParams.new()
-                    raycastParams.FilterDescendantsInstances = {char, camera}
-                    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-                    -- Usamos una verificación normal (el hook no afecta esto porque checkcaller() es true para el script)
+                    local raycastParams = RaycastParams.new(); raycastParams.FilterDescendantsInstances = {char, camera}; raycastParams.FilterType = Enum.RaycastFilterType.Exclude
                     local result = workspace:Raycast(camera.CFrame.Position, (enemyHrp.Position - camera.CFrame.Position), raycastParams)
-                    
-                    if not result or result.Instance:IsDescendantOf(otherPlayer.Character) then
-                        shortestDist = dist
-                        closestEnemy = enemyHrp
-                    end
+                    if not result or result.Instance:IsDescendantOf(otherPlayer.Character) then shortestDist = dist; closestEnemy = enemyHrp end
                 end
             end
         end
     end
-
     if closestEnemy then
-        -- Asignamos el objetivo al Hook
-        silentAimTarget = closestEnemy
-        
-        if not armaEnMano then
-            local backpack = player:FindFirstChildOfClass("Backpack")
-            if backpack then
-                for _, item in ipairs(backpack:GetChildren()) do
-                    if isGun(item) then
-                        pcall(function() hum:EquipTool(item) end)
-                        task.wait(0.1)
-                        armaEnMano = item
-                        break
-                    end
-                end
-            end
-        end
-
+        if not armaEnMano then local backpack = player:FindFirstChildOfClass("Backpack"); if backpack then for _, item in ipairs(backpack:GetChildren()) do if isGun(item) then pcall(function() hum:EquipTool(item) end); task.wait(0.1); armaEnMano = item; break end end end end
         if armaEnMano and armaEnMano.Parent == char and isGun(armaEnMano) then
-            -- Disparamos. El Hook hará que la bala vaya al enemigo sin mover la cámara.
-            pcall(function()
-                armaEnMano:Activate()
-                task.wait(0.03)
-                armaEnMano:Deactivate()
-            end)
+            silentAimTarget = closestEnemy -- Asignamos el target al Hook
             
+            pcall(function() armaEnMano:Activate(); task.wait(0.03); armaEnMano:Deactivate() end)
+            
+            silentAimTarget = nil -- Desactivamos el target para que el Hook no esté siempre encendido
             autoShootCooldown = tick() 
         end
     else
