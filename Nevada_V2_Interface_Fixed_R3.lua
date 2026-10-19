@@ -1,5 +1,5 @@
 -- ==========================================
--- 1. MÓDULO DE EVASIÓN Y FLAGS (ANTI-CHEAT)
+-- 1. EVASIÓN Y FLAGS (BYPASS)
 -- ==========================================
 pcall(function()
     local setthread = setthreadidentity or set_thread_identity or setidentity
@@ -10,18 +10,18 @@ pcall(function()
         setfflag("FFlagDisablePostFx", "True")
         setfflag("FFlagRemoveFog", "True")
         setfflag("FIntRenderShadowIntensity", "0")
-        setfflag("DFIntS2PhysicsSenderRate", "60")
     end
 end)
 
 -- ==========================================
--- 2. SCRIPT PRINCIPAL (NEVADA V2 + SILENT AIM)
+-- 2. SCRIPT PRINCIPAL (NEVADA V2)
 -- ==========================================
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
+local VirtualUser = game:GetService("VirtualUser")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 local camera = workspace.CurrentCamera
@@ -45,7 +45,7 @@ local connections = {}
 local isUnloaded = false
 local function round2(n) return math.floor(n * 100 + 0.5) / 100 end
 
--- FUNCIÓN DE AUDIO
+-- FUNCIÓN DE AUDIO (Soporta HTTP, IDs y Assets Locales)
 local function playSound(url)
   if isUnloaded or type(url) ~= "string" or url == "" or url == "Ninguno" then return end
   local finalAssetId = url
@@ -76,7 +76,7 @@ local function playSound(url)
   task.delay(20, function() if s.Parent then s:Destroy() end end)
 end
 
--- INTERFAZ GRÁFICA (NEVADA)
+-- INTERFAZ GRÁFICA
 if playerGui:FindFirstChild("NevadaV2") then playerGui.NevadaV2:Destroy() end
 local gui = Instance.new("ScreenGui")
 gui.Name, gui.ResetOnSpawn, gui.IgnoreGuiInset = "NevadaV2", false, true
@@ -288,51 +288,55 @@ for _, otherPlayer in ipairs(Players:GetPlayers()) do if otherPlayer ~= player t
 Players.PlayerAdded:Connect(function(newPlayer) if newPlayer ~= player then setupGlobalDeathSound(newPlayer) end end)
 
 -- ==========================================
--- SILENT AIM VERDADERO (HOOK CON EVASIÓN Y JITTER)
+-- AUTO-SHOOT INDETECTABLE (SILENT AIM + VIRTUALUSER)
 -- ==========================================
 local autoAimActive = false
 local autoShootCooldown = 0
 local silentAimTarget = nil
 
--- Hook de Raycast (El que redirige la bala)
+-- Hook de Raycast con newcclosure (Oculto al anti-cheat)
 local oldNamecall
-oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-    if not checkcaller() and silentAimTarget and silentAimTarget.Parent then
-        local method = getnamecallmethod()
-        if self == workspace then
-            if method == "Raycast" then
+if newcclosure then
+    oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+        if not checkcaller() and silentAimTarget and silentAimTarget.Parent then
+            local method = getnamecallmethod()
+            if self == workspace and method == "Raycast" then
                 local origin, direction, params = ...
                 if typeof(direction) == "Vector3" and direction.Magnitude > 5 then
-                    -- JITTER: Apuntamos a la cabeza con un margen de error aleatorio de 0.1 studs
+                    -- Jitter (Temblor humano)
                     local aimPos = silentAimTarget.Position + Vector3.new(math.random(-10, 10)/100, math.random(-10, 10)/100, math.random(-10, 10)/100)
-                    local newDir = (aimPos - origin).Unit * 5000
-                    return oldNamecall(self, origin, newDir, params)
+                    return oldNamecall(self, origin, (aimPos - origin).Unit * 5000, params)
                 end
             end
         end
-    end
-    return oldNamecall(self, ...)
-end)
-
--- Hook del Mouse (Por si el juego usa el Mouse.Hit en lugar de Raycast)
-local oldIndex
-oldIndex = hookmetamethod(game, "__index", function(t, k)
-    if not checkcaller() and t == player:GetMouse() and silentAimTarget and silentAimTarget.Parent then
-        if k == "Hit" then return silentAimTarget.CFrame end
-        if k == "Target" then return silentAimTarget end
-    end
-    return oldIndex(t, k)
-end)
+        return oldNamecall(self, ...)
+    end))
+else
+    -- Fallback si el ejecutor no tiene newcclosure
+    oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+        if not checkcaller() and silentAimTarget and silentAimTarget.Parent then
+            local method = getnamecallmethod()
+            if self == workspace and method == "Raycast" then
+                local origin, direction, params = ...
+                if typeof(direction) == "Vector3" and direction.Magnitude > 5 then
+                    local aimPos = silentAimTarget.Position + Vector3.new(math.random(-10, 10)/100, math.random(-10, 10)/100, math.random(-10, 10)/100)
+                    return oldNamecall(self, origin, (aimPos - origin).Unit * 5000, params)
+                end
+            end
+        end
+        return oldNamecall(self, ...)
+    end)
+end
 
 -- Botón Flotante
 local floatGui = Instance.new("ScreenGui"); floatGui.Name = "NevadaFloatGui"; floatGui.ResetOnSpawn = false; floatGui.Parent = playerGui
-local floatBtn = Instance.new("TextButton"); floatBtn.Size = UDim2.new(0, 130, 0, 50); floatBtn.Position = UDim2.new(0, 20, 0.3, 0); floatBtn.BackgroundColor3 = Color3.fromRGB(15, 15, 15); floatBtn.Text = "Silent Aim: OFF"; floatBtn.TextColor3 = Color3.fromRGB(255, 50, 50); floatBtn.Font = Enum.Font.GothamBold; floatBtn.TextSize = 14; floatBtn.Parent = floatGui
+local floatBtn = Instance.new("TextButton"); floatBtn.Size = UDim2.new(0, 130, 0, 50); floatBtn.Position = UDim2.new(0, 20, 0.3, 0); floatBtn.BackgroundColor3 = Color3.fromRGB(15, 15, 15); floatBtn.Text = "Auto-Shoot: OFF"; floatBtn.TextColor3 = Color3.fromRGB(255, 50, 50); floatBtn.Font = Enum.Font.GothamBold; floatBtn.TextSize = 14; floatBtn.Parent = floatGui
 Instance.new("UICorner", floatBtn).CornerRadius = UDim.new(0, 10); Instance.new("UIStroke", floatBtn).Color = Color3.fromRGB(255, 255, 255)
 local draggingFloat, dragStartFloat, startPosFloat = false, nil, nil
 floatBtn.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then draggingFloat = true; dragStartFloat = input.Position; startPosFloat = floatBtn.Position end end)
 UserInputService.InputChanged:Connect(function(input) if draggingFloat and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then local delta = input.Position - dragStartFloat; floatBtn.Position = UDim2.new(startPosFloat.X.Scale, startPosFloat.X.Offset + delta.X, startPosFloat.Y.Scale, startPosFloat.Y.Offset + delta.Y) end end)
 UserInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then draggingFloat = false end end)
-floatBtn.MouseButton1Click:Connect(function() autoAimActive = not autoAimActive; if autoAimActive then floatBtn.Text = "Silent Aim: ON"; floatBtn.TextColor3 = Color3.fromRGB(0, 255, 100) else floatBtn.Text = "Silent Aim: OFF"; floatBtn.TextColor3 = Color3.fromRGB(255, 50, 50) end end)
+floatBtn.MouseButton1Click:Connect(function() autoAimActive = not autoAimActive; if autoAimActive then floatBtn.Text = "Auto-Shoot: ON"; floatBtn.TextColor3 = Color3.fromRGB(0, 255, 100) else floatBtn.Text = "Auto-Shoot: OFF"; floatBtn.TextColor3 = Color3.fromRGB(255, 50, 50) end end)
 
 local function isInLobby()
     for _, obj in ipairs(playerGui:GetDescendants()) do if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then local txt = obj.Text:lower(); if obj.Visible and (txt:find("tienda") or txt:find("shop") or txt:find("inventario") or txt:find("código") or txt:find("code")) then return true end end end
@@ -364,11 +368,18 @@ RunService.Heartbeat:Connect(function()
     if closestEnemy then
         if not armaEnMano then local backpack = player:FindFirstChildOfClass("Backpack"); if backpack then for _, item in ipairs(backpack:GetChildren()) do if isGun(item) then pcall(function() hum:EquipTool(item) end); task.wait(0.1); armaEnMano = item; break end end end end
         if armaEnMano and armaEnMano.Parent == char and isGun(armaEnMano) then
-            silentAimTarget = closestEnemy -- Asignamos el target al Hook
+            silentAimTarget = closestEnemy
             
-            pcall(function() armaEnMano:Activate(); task.wait(0.03); armaEnMano:Deactivate() end)
+            -- 🔥 AQUÍ ESTÁ EL TRUCO: VIRTUALUSER en vez de Activate() 🔥
+            pcall(function()
+                VirtualUser:CaptureController()
+                VirtualUser:ClickButton1(Vector2.new(0,0))
+            end)
             
-            silentAimTarget = nil -- Desactivamos el target para que el Hook no esté siempre encendido
+            -- Un pequeño delay humano para que el Anti-Cheat lo vea natural
+            task.wait(math.random(8, 15) / 100) 
+            
+            silentAimTarget = nil 
             autoShootCooldown = tick() 
         end
     else
