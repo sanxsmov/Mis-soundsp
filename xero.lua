@@ -1,51 +1,58 @@
 -- ==========================================
--- PARTE 1: HOOK ALTERNATIVO PARA DELTA
+-- PARTE 1: HOOK DE XERO EXACTO (Usando hookfunction)
 -- ==========================================
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
-local aimHookTarget = nil
-local oldNamecall
-
--- Intentamos obtener la función original de forma segura
+-- Bypass
 pcall(function()
-    local mt = getrawmetatable(game)
-    -- Desbloqueamos la tabla antes de leerla
-    if setreadonly then setreadonly(mt, false) end
-    oldNamecall = mt.__namecall
-    if setreadonly then setreadonly(mt, true) end
+    local setthread = setthreadidentity or set_thread_identity or setidentity
+    if setthread then pcall(function() setthread(8) end) end
 end)
 
--- Si no pudimos obtener la función, usamos hookmetamethod como plan B
-if not oldNamecall then
-    pcall(function()
-        oldNamecall = hookmetamethod(game, "__namecall", function(...) return ... end)
+local my_hook_function = nil
+local old_getgc = getgc
+local old_getinfo = debug.getinfo
+
+if old_getgc and old_getinfo and newcclosure then
+    getgc = newcclosure(function(includeTables)
+        local gc = old_getgc(includeTables)
+        local filtered = {}
+        for i, v in pairs(gc) do
+            if v ~= my_hook_function then table.insert(filtered, v) end
+        end
+        return filtered
+    end)
+    debug.getinfo = newcclosure(function(func, what)
+        if func == my_hook_function then return nil end
+        return old_getinfo(func, what)
     end)
 end
 
--- Hook principal
-local function hookFunc(self, ...)
-    if not checkcaller() and aimHookTarget and aimHookTarget.Parent then
-        local method = getnamecallmethod()
-        if self == workspace and method == "Raycast" then
-            local origin, direction, params = ...
+local aimHookTarget = nil
+local oldRaycast = workspace.Raycast -- Obtenemos la función original
+
+-- Hook con hookfunction (lo que usa Xero)
+if hookfunction then
+    my_hook_function = function(origin, direction, params)
+        if aimHookTarget and aimHookTarget.Parent then
             if typeof(direction) == "Vector3" and direction.Magnitude > 5 then
                 local newDir = (aimHookTarget.Position - origin).Unit * 5000
-                return oldNamecall(self, origin, newDir, params)
+                return oldRaycast(origin, newDir, params)
             end
         end
+        return oldRaycast(origin, direction, params)
     end
-    return oldNamecall(self, ...)
+    
+    -- Aplicamos el hook
+    pcall(function()
+        workspace.Raycast = hookfunction(oldRaycast, my_hook_function)
+    end)
 end
 
--- Aplicamos el hook con protección
-pcall(function()
-    hookmetamethod(game, "__namecall", hookFunc)
-end)
-
--- Bucle del AutoShoot
+-- Bucle del AutoShoot (Lógica exacta de Xero)
 RunService.Heartbeat:Connect(function()
     local char = LocalPlayer.Character
     if not char then return end
@@ -61,11 +68,13 @@ RunService.Heartbeat:Connect(function()
             if eHum and eHum.Health > 0 then
                 local eHrp = p.Character.HumanoidRootPart
                 local dist = (eHrp.Position - hrp.Position).Magnitude
+                
                 if dist < 300 and dist < closestDist then
                     local params = RaycastParams.new()
                     params.FilterDescendantsInstances = {char, Camera}
                     params.FilterType = Enum.RaycastFilterType.Exclude
                     local result = workspace:Raycast(Camera.CFrame.Position, eHrp.Position - Camera.CFrame.Position, params)
+                    
                     if not result or result.Instance:IsDescendantOf(p.Character) then
                         closestDist = dist
                         closestPart = p.Character:FindFirstChild("Head") or eHrp
@@ -76,14 +85,16 @@ RunService.Heartbeat:Connect(function()
     end
 
     if closestPart then
-        aimHookTarget = closestPart
+        aimHookTarget = closestPart 
         local tool = char:FindFirstChildOfClass("Tool")
         if tool then
-            pcall(function() tool:Activate() end)
+            pcall(function()
+                tool:Activate() 
+            end)
         end
     else
         aimHookTarget = nil
     end
 end)
 
-print("✅ Hook Alternativo Activado.")
+print("✅ Xero Hook Activado (Método hookfunction).")
