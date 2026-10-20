@@ -1,4 +1,3 @@
-
 -- ==========================================
 -- XERO DEFINITIVO (Menú + ESP + Sonidos + SilentAim Protegido)
 -- ==========================================
@@ -203,33 +202,25 @@ shootSound.Volume = 1
 shootSound.Parent = soundFolder
 
 -- ==========================================
--- 5. HOOK DEL SILENT AIM (Protegido)
+-- 5. HOOK DEL SILENT AIM (Usando hookfunction)
 -- ==========================================
 local aimHookTarget = nil
 local hookSuccess = false
+local oldRaycast = workspace.Raycast
 
 pcall(function()
-    local oldNamecall
-    local my_hook_function = function(self, ...)
-        if not checkcaller() and aimHookTarget and aimHookTarget.Parent then
-            local method = getnamecallmethod()
-            if self == workspace and method == "Raycast" then
-                local origin, direction, params = ...
-                if typeof(direction) == "Vector3" and direction.Magnitude > 5 then
-                    local newDir = (aimHookTarget.Position - origin).Unit * 5000
-                    return oldNamecall(self, origin, newDir, params)
-                end
+    -- Intentamos usar hookfunction (más compatible en algunos ejecutores)
+    if hookfunction then
+        workspace.Raycast = hookfunction(oldRaycast, function(origin, direction, params)
+            if aimHookTarget and aimHookTarget.Parent and typeof(direction) == "Vector3" and direction.Magnitude > 5 then
+                -- Redirigimos el rayo hacia el enemigo
+                local newDir = (aimHookTarget.Position - origin).Unit * 5000
+                return oldRaycast(origin, newDir, params)
             end
-        end
-        return oldNamecall(self, ...)
+            return oldRaycast(origin, direction, params)
+        end)
+        hookSuccess = true
     end
-
-    if newcclosure then 
-        oldNamecall = hookmetamethod(game, "__namecall", newcclosure(my_hook_function))
-    else 
-        oldNamecall = hookmetamethod(game, "__namecall", my_hook_function) 
-    end
-    hookSuccess = true
 end)
 
 -- ==========================================
