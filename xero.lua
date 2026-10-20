@@ -1,12 +1,12 @@
 -- ==========================================
--- XERO DEFINITIVO (Menú + ESP + Sonidos + SilentAim Protegido)
+-- XERO EXACTO (Menú + Bypass Original + Hook Raycast)
 -- ==========================================
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
--- Limpiar menús viejos y el botón de prueba
+-- Limpiar menús viejos
 if LocalPlayer.PlayerGui:FindFirstChild("XeroCompleteUI") then
     LocalPlayer.PlayerGui.XeroCompleteUI:Destroy()
 end
@@ -15,7 +15,37 @@ if LocalPlayer.PlayerGui:FindFirstChild("ScreenGui") then
 end
 
 -- ==========================================
--- 1. INTERFAZ
+-- 1. EL BYPASS EXACTO DE XERO (Líneas 13-28)
+-- ==========================================
+pcall(function()
+    local setthread = setthreadidentity or set_thread_identity or setidentity
+    if setthread then pcall(function() setthread(8) end) end
+end)
+
+local my_hook_function = nil
+local old_getgc = getgc
+local old_getinfo = debug.getinfo
+
+if old_getgc and old_getinfo and newcclosure then
+    getgc = newcclosure(function(includeTables)
+        local gc = old_getgc(includeTables)
+        local filtered = {}
+        for i, v in pairs(gc) do
+            if v ~= my_hook_function then
+                table.insert(filtered, v)
+            end
+        end
+        return filtered
+    end)
+
+    debug.getinfo = newcclosure(function(func, what)
+        if func == my_hook_function then return nil end
+        return old_getinfo(func, what)
+    end)
+end
+
+-- ==========================================
+-- 2. INTERFAZ (PESTAÑAS)
 -- ==========================================
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "XeroCompleteUI"
@@ -40,7 +70,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -60, 1, 0)
 Title.Position = UDim2.new(0, 10, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "Xero Definitivo"
+Title.Text = "Xero Original Bypass"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 14
@@ -106,15 +136,15 @@ local function createToggle(text, yPos)
 end
 
 -- ==========================================
--- 2. VARIABLES Y LÓGICA DE PESTAÑAS
+-- 3. VARIABLES Y PESTAÑAS
 -- ==========================================
 local autoShootEnabled, silentAimEnabled, espEnabled, soundEnabled = false, false, false, false
 local targetPartName = "Head"
 
 local function loadCombatTab()
     clearContent()
-    local asBtn = createToggle("AutoShoot", 10)
-    local saBtn = createToggle("SilentAim (Raycast)", 55)
+    local asBtn = createToggle("AutoShoot (Xero)", 10)
+    local saBtn = createToggle("SilentAim (Xero)", 55)
     local partBtn = createToggle("Target: Head", 100)
     
     asBtn.MouseButton1Click:Connect(function()
@@ -159,7 +189,7 @@ SoundTabBtn.MouseButton1Click:Connect(loadSoundTab)
 loadCombatTab()
 
 -- ==========================================
--- 3. ESP
+-- 4. ESP Y SONIDO
 -- ==========================================
 local espFolder = Instance.new("Folder"); espFolder.Parent = ScreenGui
 local activeESPs = {}
@@ -192,9 +222,6 @@ local function updateESP()
     end
 end
 
--- ==========================================
--- 4. SONIDO
--- ==========================================
 local soundFolder = Instance.new("Folder"); soundFolder.Parent = workspace
 local shootSound = Instance.new("Sound")
 shootSound.SoundId = "rbxassetid://131961136" 
@@ -202,30 +229,33 @@ shootSound.Volume = 1
 shootSound.Parent = soundFolder
 
 -- ==========================================
--- 5. HOOK DEL SILENT AIM (Usando hookfunction)
+-- 5. HOOK RAYCAST Y AUTO-SHOOT (Lógica Exacta)
 -- ==========================================
 local aimHookTarget = nil
-local hookSuccess = false
-local oldRaycast = workspace.Raycast
+local oldNamecall
+
+my_hook_function = function(self, ...)
+    if not checkcaller() and aimHookTarget and aimHookTarget.Parent then
+        local method = getnamecallmethod()
+        if self == workspace and method == "Raycast" then
+            local origin, direction, params = ...
+            if typeof(direction) == "Vector3" and direction.Magnitude > 5 then
+                local newDir = (aimHookTarget.Position - origin).Unit * 5000
+                return oldNamecall(self, origin, newDir, params)
+            end
+        end
+    end
+    return oldNamecall(self, ...)
+end
 
 pcall(function()
-    -- Intentamos usar hookfunction (más compatible en algunos ejecutores)
-    if hookfunction then
-        workspace.Raycast = hookfunction(oldRaycast, function(origin, direction, params)
-            if aimHookTarget and aimHookTarget.Parent and typeof(direction) == "Vector3" and direction.Magnitude > 5 then
-                -- Redirigimos el rayo hacia el enemigo
-                local newDir = (aimHookTarget.Position - origin).Unit * 5000
-                return oldRaycast(origin, newDir, params)
-            end
-            return oldRaycast(origin, direction, params)
-        end)
-        hookSuccess = true
+    if newcclosure then 
+        oldNamecall = hookmetamethod(game, "__namecall", newcclosure(my_hook_function))
+    else 
+        oldNamecall = hookmetamethod(game, "__namecall", my_hook_function) 
     end
 end)
 
--- ==========================================
--- 6. AUTO-SHOOT
--- ==========================================
 local function isEnemy(p)
     if p == LocalPlayer then return false end
     if p.Team and LocalPlayer.Team then return p.Team ~= LocalPlayer.Team end
@@ -234,17 +264,20 @@ end
 
 RunService.Heartbeat:Connect(function()
     updateESP()
+
     if not autoShootEnabled and not silentAimEnabled then
         aimHookTarget = nil
-        return 
+        return
     end
+
     local char = LocalPlayer.Character
     if not char then return end
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
+
     local closestDist = math.huge
     local closestPart = nil
-    
+
     for _, p in ipairs(Players:GetPlayers()) do
         if isEnemy(p) and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
             local eHum = p.Character:FindFirstChild("Humanoid")
@@ -257,6 +290,7 @@ RunService.Heartbeat:Connect(function()
                     params.FilterDescendantsInstances = {char, Camera}
                     params.FilterType = Enum.RaycastFilterType.Exclude
                     local result = workspace:Raycast(Camera.CFrame.Position, eHrp.Position - Camera.CFrame.Position, params)
+                    
                     if not result or result.Instance:IsDescendantOf(p.Character) then
                         closestDist = dist
                         closestPart = p.Character:FindFirstChild(targetPartName) or eHrp
@@ -267,22 +301,14 @@ RunService.Heartbeat:Connect(function()
     end
 
     if closestPart then
-        -- Si el hook funcionó, activamos el Silent Aim
-        if silentAimEnabled and hookSuccess then 
-            aimHookTarget = closestPart 
-        end
+        if silentAimEnabled then aimHookTarget = closestPart end
         
-        -- Si el AutoShoot está activo, disparamos
         if autoShootEnabled then
-            if not hookSuccess then
-                -- Si el hook falló, usamos el método simple de mover cámara
-                Camera.CFrame = CFrame.new(Camera.CFrame.Position, closestPart.Position)
-            end
-            
+            aimHookTarget = closestPart -- El hook apunta al enemigo
             local tool = char:FindFirstChildOfClass("Tool")
             if tool then
                 pcall(function()
-                    tool:Activate()
+                    tool:Activate() -- Dispara el arma
                     if soundEnabled then shootSound:Play() end
                 end)
             end
