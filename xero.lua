@@ -1,5 +1,5 @@
 -- ==========================================
--- XERO EXACTO (Menú + Bypass Original + Hook Raycast)
+-- XERO EXACTO CORREGIDO (Orden de ejecución correcto)
 -- ==========================================
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -15,14 +15,21 @@ if LocalPlayer.PlayerGui:FindFirstChild("ScreenGui") then
 end
 
 -- ==========================================
--- 1. EL BYPASS EXACTO DE XERO (Líneas 13-28)
+-- 1. VARIABLES GLOBALES DEL HOOK
+-- ==========================================
+-- Declaramos esto primero para que el bypass sepa qué función ocultar
+local my_hook_function = nil
+local oldNamecall
+local aimHookTarget = nil
+
+-- ==========================================
+-- 2. EL BYPASS (Líneas 13-28 de Xero)
 -- ==========================================
 pcall(function()
     local setthread = setthreadidentity or set_thread_identity or setidentity
     if setthread then pcall(function() setthread(8) end) end
 end)
 
-local my_hook_function = nil
 local old_getgc = getgc
 local old_getinfo = debug.getinfo
 
@@ -45,7 +52,7 @@ if old_getgc and old_getinfo and newcclosure then
 end
 
 -- ==========================================
--- 2. INTERFAZ (PESTAÑAS)
+-- 3. INTERFAZ (PESTAÑAS)
 -- ==========================================
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "XeroCompleteUI"
@@ -70,7 +77,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -60, 1, 0)
 Title.Position = UDim2.new(0, 10, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "Xero Original Bypass"
+Title.Text = "Xero Corregido"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 14
@@ -136,7 +143,7 @@ local function createToggle(text, yPos)
 end
 
 -- ==========================================
--- 3. VARIABLES Y PESTAÑAS
+-- 4. VARIABLES Y PESTAÑAS
 -- ==========================================
 local autoShootEnabled, silentAimEnabled, espEnabled, soundEnabled = false, false, false, false
 local targetPartName = "Head"
@@ -189,7 +196,7 @@ SoundTabBtn.MouseButton1Click:Connect(loadSoundTab)
 loadCombatTab()
 
 -- ==========================================
--- 4. ESP Y SONIDO
+-- 5. ESP Y SONIDO
 -- ==========================================
 local espFolder = Instance.new("Folder"); espFolder.Parent = ScreenGui
 local activeESPs = {}
@@ -229,11 +236,9 @@ shootSound.Volume = 1
 shootSound.Parent = soundFolder
 
 -- ==========================================
--- 5. HOOK RAYCAST Y AUTO-SHOOT (Lógica Exacta)
+-- 6. HOOK RAYCAST Y AUTO-SHOOT (Lógica Exacta)
 -- ==========================================
-local aimHookTarget = nil
-local oldNamecall
-
+-- Ahora sí, definimos la función que el bypass ocultará
 my_hook_function = function(self, ...)
     if not checkcaller() and aimHookTarget and aimHookTarget.Parent then
         local method = getnamecallmethod()
@@ -304,11 +309,11 @@ RunService.Heartbeat:Connect(function()
         if silentAimEnabled then aimHookTarget = closestPart end
         
         if autoShootEnabled then
-            aimHookTarget = closestPart -- El hook apunta al enemigo
+            aimHookTarget = closestPart 
             local tool = char:FindFirstChildOfClass("Tool")
             if tool then
                 pcall(function()
-                    tool:Activate() -- Dispara el arma
+                    tool:Activate() 
                     if soundEnabled then shootSound:Play() end
                 end)
             end
