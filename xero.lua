@@ -1,42 +1,32 @@
 -- ==========================================
--- PARTE 1: HOOK DE XERO (Corregido con setreadonly)
+-- PARTE 1: HOOK ALTERNATIVO PARA DELTA
 -- ==========================================
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
--- 1. Bypass básico
-pcall(function()
-    local setthread = setthreadidentity or set_thread_identity or setidentity
-    if setthread then pcall(function() setthread(8) end) end
-end)
-
--- 2. Ocultar el hook de getgc
-local my_hook_function = nil
-local old_getgc = getgc
-local old_getinfo = debug.getinfo
-
-if old_getgc and old_getinfo and newcclosure then
-    getgc = newcclosure(function(includeTables)
-        local gc = old_getgc(includeTables)
-        local filtered = {}
-        for i, v in pairs(gc) do
-            if v ~= my_hook_function then table.insert(filtered, v) end
-        end
-        return filtered
-    end)
-    debug.getinfo = newcclosure(function(func, what)
-        if func == my_hook_function then return nil end
-        return old_getinfo(func, what)
-    end)
-end
-
--- 3. Hook con setreadonly (la clave para evitar el error)
 local aimHookTarget = nil
 local oldNamecall
 
-my_hook_function = function(self, ...)
+-- Intentamos obtener la función original de forma segura
+pcall(function()
+    local mt = getrawmetatable(game)
+    -- Desbloqueamos la tabla antes de leerla
+    if setreadonly then setreadonly(mt, false) end
+    oldNamecall = mt.__namecall
+    if setreadonly then setreadonly(mt, true) end
+end)
+
+-- Si no pudimos obtener la función, usamos hookmetamethod como plan B
+if not oldNamecall then
+    pcall(function()
+        oldNamecall = hookmetamethod(game, "__namecall", function(...) return ... end)
+    end)
+end
+
+-- Hook principal
+local function hookFunc(self, ...)
     if not checkcaller() and aimHookTarget and aimHookTarget.Parent then
         local method = getnamecallmethod()
         if self == workspace and method == "Raycast" then
@@ -50,15 +40,12 @@ my_hook_function = function(self, ...)
     return oldNamecall(self, ...)
 end
 
+-- Aplicamos el hook con protección
 pcall(function()
-    local mt = getrawmetatable(game)
-    setreadonly(mt, false) -- Desbloqueamos la tabla
-    oldNamecall = mt.__namecall
-    mt.__namecall = newcclosure(my_hook_function)
-    setreadonly(mt, true) -- La volvemos a bloquear
+    hookmetamethod(game, "__namecall", hookFunc)
 end)
 
--- 4. Bucle del AutoShoot
+-- Bucle del AutoShoot
 RunService.Heartbeat:Connect(function()
     local char = LocalPlayer.Character
     if not char then return end
@@ -99,4 +86,4 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
-print("✅ Xero Hook Activado con setreadonly.")
+print("✅ Hook Alternativo Activado.")
