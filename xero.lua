@@ -1,18 +1,18 @@
 -- ==========================================
--- PARTE 1: HOOK DE XERO CORREGIDO (Usando hookmetamethod)
+-- PARTE 1: HOOK DE XERO (Corregido con setreadonly)
 -- ==========================================
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
--- 1. Bypass para ocultar el hook (opcional, pero ayuda)
+-- 1. Bypass básico
 pcall(function()
     local setthread = setthreadidentity or set_thread_identity or setidentity
     if setthread then pcall(function() setthread(8) end) end
 end)
 
--- 2. Variables para el Hook
+-- 2. Ocultar el hook de getgc
 local my_hook_function = nil
 local old_getgc = getgc
 local old_getinfo = debug.getinfo
@@ -32,7 +32,7 @@ if old_getgc and old_getinfo and newcclosure then
     end)
 end
 
--- 3. El Hook usando hookmetamethod (la forma correcta)
+-- 3. Hook con setreadonly (la clave para evitar el error)
 local aimHookTarget = nil
 local oldNamecall
 
@@ -51,11 +51,11 @@ my_hook_function = function(self, ...)
 end
 
 pcall(function()
-    if newcclosure then 
-        oldNamecall = hookmetamethod(game, "__namecall", newcclosure(my_hook_function))
-    else 
-        oldNamecall = hookmetamethod(game, "__namecall", my_hook_function) 
-    end
+    local mt = getrawmetatable(game)
+    setreadonly(mt, false) -- Desbloqueamos la tabla
+    oldNamecall = mt.__namecall
+    mt.__namecall = newcclosure(my_hook_function)
+    setreadonly(mt, true) -- La volvemos a bloquear
 end)
 
 -- 4. Bucle del AutoShoot
@@ -74,13 +74,11 @@ RunService.Heartbeat:Connect(function()
             if eHum and eHum.Health > 0 then
                 local eHrp = p.Character.HumanoidRootPart
                 local dist = (eHrp.Position - hrp.Position).Magnitude
-                
                 if dist < 300 and dist < closestDist then
                     local params = RaycastParams.new()
                     params.FilterDescendantsInstances = {char, Camera}
                     params.FilterType = Enum.RaycastFilterType.Exclude
                     local result = workspace:Raycast(Camera.CFrame.Position, eHrp.Position - Camera.CFrame.Position, params)
-                    
                     if not result or result.Instance:IsDescendantOf(p.Character) then
                         closestDist = dist
                         closestPart = p.Character:FindFirstChild("Head") or eHrp
@@ -94,13 +92,11 @@ RunService.Heartbeat:Connect(function()
         aimHookTarget = closestPart
         local tool = char:FindFirstChildOfClass("Tool")
         if tool then
-            pcall(function()
-                tool:Activate()
-            end)
+            pcall(function() tool:Activate() end)
         end
     else
         aimHookTarget = nil
     end
 end)
 
-print("✅ Xero Hook Activado con hookmetamethod.")
+print("✅ Xero Hook Activado con setreadonly.")
