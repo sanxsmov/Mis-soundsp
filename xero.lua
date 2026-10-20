@@ -1,17 +1,18 @@
 -- ==========================================
--- PARTE 1: HOOK DE XERO (AutoShoot Invisible)
+-- PARTE 1: HOOK DE XERO CORREGIDO (Usando hookmetamethod)
 -- ==========================================
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
--- Bypass
+-- 1. Bypass para ocultar el hook (opcional, pero ayuda)
 pcall(function()
     local setthread = setthreadidentity or set_thread_identity or setidentity
     if setthread then pcall(function() setthread(8) end) end
 end)
 
+-- 2. Variables para el Hook
 local my_hook_function = nil
 local old_getgc = getgc
 local old_getinfo = debug.getinfo
@@ -31,9 +32,10 @@ if old_getgc and old_getinfo and newcclosure then
     end)
 end
 
--- Hook
+-- 3. El Hook usando hookmetamethod (la forma correcta)
 local aimHookTarget = nil
 local oldNamecall
+
 my_hook_function = function(self, ...)
     if not checkcaller() and aimHookTarget and aimHookTarget.Parent then
         local method = getnamecallmethod()
@@ -56,7 +58,7 @@ pcall(function()
     end
 end)
 
--- Bucle del AutoShoot
+-- 4. Bucle del AutoShoot
 RunService.Heartbeat:Connect(function()
     local char = LocalPlayer.Character
     if not char then return end
@@ -89,11 +91,11 @@ RunService.Heartbeat:Connect(function()
     end
 
     if closestPart then
-        aimHookTarget = closestPart -- El hook apunta aquí
+        aimHookTarget = closestPart
         local tool = char:FindFirstChildOfClass("Tool")
         if tool then
             pcall(function()
-                tool:Activate() -- Dispara
+                tool:Activate()
             end)
         end
     else
@@ -101,4 +103,4 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
-print("Xero Hook Activado: AutoShoot Invisible encendido.")
+print("✅ Xero Hook Activado con hookmetamethod.")
