@@ -1,17 +1,18 @@
 -- ==========================================
--- PARTE 1: HOOK DE XERO EXACTO (Usando hookfunction)
+-- PARTE 1: HOOK ESTILO XERO (Bypass Completo)
 -- ==========================================
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
--- Bypass
+-- 1. Bypass de hilo de Xero (Esto es lo que hacía funcionar a Xero)
 pcall(function()
     local setthread = setthreadidentity or set_thread_identity or setidentity
     if setthread then pcall(function() setthread(8) end) end
 end)
 
+-- 2. Ocultar el hook (Líneas exactas de tu captura)
 local my_hook_function = nil
 local old_getgc = getgc
 local old_getinfo = debug.getinfo
@@ -25,34 +26,42 @@ if old_getgc and old_getinfo and newcclosure then
         end
         return filtered
     end)
+
     debug.getinfo = newcclosure(function(func, what)
         if func == my_hook_function then return nil end
         return old_getinfo(func, what)
     end)
 end
 
+-- 3. Hook del Raycast
 local aimHookTarget = nil
-local oldRaycast = workspace.Raycast -- Obtenemos la función original
+local oldNamecall
 
--- Hook con hookfunction (lo que usa Xero)
-if hookfunction then
-    my_hook_function = function(origin, direction, params)
-        if aimHookTarget and aimHookTarget.Parent then
+my_hook_function = function(self, ...)
+    if not checkcaller() and aimHookTarget and aimHookTarget.Parent then
+        local method = getnamecallmethod()
+        if self == workspace and method == "Raycast" then
+            local origin, direction, params = ...
             if typeof(direction) == "Vector3" and direction.Magnitude > 5 then
                 local newDir = (aimHookTarget.Position - origin).Unit * 5000
-                return oldRaycast(origin, newDir, params)
+                return oldNamecall(self, origin, newDir, params)
             end
         end
-        return oldRaycast(origin, direction, params)
     end
-    
-    -- Aplicamos el hook
-    pcall(function()
-        workspace.Raycast = hookfunction(oldRaycast, my_hook_function)
-    end)
+    return oldNamecall(self, ...)
 end
 
--- Bucle del AutoShoot (Lógica exacta de Xero)
+-- 4. Aplicar el Hook de forma segura (Aquí está el truco para que no falle)
+pcall(function()
+    local mt = getrawmetatable(game)
+    local oldSetReadonly = setreadonly
+    oldSetReadonly(mt, false) -- Desbloquea la tabla
+    oldNamecall = mt.__namecall
+    mt.__namecall = newcclosure(my_hook_function)
+    oldSetReadonly(mt, true) -- La vuelve a bloquear
+end)
+
+-- 5. Bucle del AutoShoot
 RunService.Heartbeat:Connect(function()
     local char = LocalPlayer.Character
     if not char then return end
@@ -97,4 +106,4 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
-print("✅ Xero Hook Activado (Método hookfunction).")
+print("✅ Xero Hook Activado (Bypass Completo).")
