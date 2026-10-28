@@ -1,5 +1,4 @@
--- NEVADA V2 R5 | Macro con guardado de arma y delays configurables
--- La sustitución de disparo/kill depende de los IDs de sonido usados por el juego.
+-- NEVADA V2 R9 | Macro de Lanzamiento de Cuchillo (L2) + Macro de Disparo + Sonidos
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
@@ -17,6 +16,7 @@ local CONFIG_FILE = "nevada_v2_config.json"
 
 local state = {
   macro = false, equipDelay = 0.05, shootDelay = 0.10,
+  knifeThrowMacro = false, knifeThrowDelay = 0.15, -- NUEVO: Delay para el lanzamiento
   selected = {Arma={Name="Ninguno",URL=""}, Saltar={Name="Ninguno",URL=""}, Matar={Name="Ninguno",URL=""}},
   enabled = {Arma=true, Saltar=true, Matar=true}, muted = {Arma=false, Saltar=false, Matar=false},
   folder = FOLDERS[1]
@@ -26,7 +26,6 @@ local refreshCatalog
 local function safeCall(fn, ...) local ok, result = pcall(fn, ...); if ok then return result end end
 local function round2(n) return math.floor(n * 100 + 0.5) / 100 end
 
--- Reproduce archivos de audio con las funciones disponibles en el ejecutor.
 local function playSound(url)
   if type(url) ~= "string" or url == "" then return end
   local asset = soundCache[url]
@@ -109,7 +108,6 @@ local minimize=button(window,"—",UDim2.fromOffset(34,30),UDim2.new(1,-80,0,10)
 local close=button(window,"×",UDim2.fromOffset(34,30),UDim2.new(1,-42,0,10),function() gui:Destroy() end)
 openButton.Visible=false
 
--- Arrastrar ventana con mouse o pantalla táctil.
 local dragging, dragStart, startPos = false, nil, nil
 local dragArea=top
 dragArea.InputBegan:Connect(function(input)
@@ -155,10 +153,11 @@ local showPage
 local home=newPage("Inicio")
 local welcome=card(home,108); label(welcome,"Bienvenido a Nevada",UDim2.new(1,-26,0,32),UDim2.new(0,14,0,13),20,C.text,true); label(welcome,"Tu hub todo en uno. Macros, sonidos y más.\nInterfaz Nevada V2",UDim2.new(1,-26,0,45),UDim2.new(0,14,0,51),12,C.sub,false)
 actionCard(home,"Sonidos","Catálogo de tu repositorio de GitHub","Abrir sonidos",function() showPage("Sonidos") end)
-actionCard(home,"Macro","Control de activación y tiempos","Ver macro",function() showPage("Macro") end)
+actionCard(home,"Macro Arma","Disparo rápido automático","Ver macro",function() showPage("Macro") end)
+actionCard(home,"Macro Cuchillo","Lanzamiento rápido (L2)","Ver macro",function() showPage("Cuchillo") end)
 
 local macroPage=newPage("Macro")
-switch(macroPage,"Activar macro",false,function(v) state.macro=v end)
+switch(macroPage,"Activar macro de arma",false,function(v) state.macro=v end)
 local function slider(parent,title,minV,maxV,initial,callback)
   local f=card(parent,72); local value=initial
   local txt=label(f,title..": "..string.format("%.2f s",value),UDim2.new(1,-24,0,25),UDim2.new(0,13,0,6),13,C.text,true)
@@ -168,12 +167,15 @@ local function slider(parent,title,minV,maxV,initial,callback)
     local p=math.clamp((x-bar.AbsolutePosition.X)/math.max(bar.AbsoluteSize.X,1),0,1); value=round2(minV+p*(maxV-minV)); fill.Size=UDim2.new(p,0,1,0); txt.Text=title..": "..string.format("%.2f s",value); callback(value)
   end
   bar.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then setFromX(i.Position.X) end end)
-  UserInputService.InputChanged:Connect(function(i) if i.UserInputType==Enum.UserInputType.Touch then if UserInputService:GetFocusedTextBox()==nil then -- slider touch updates on initial tap; no polling required
-  end elseif i.UserInputType==Enum.UserInputType.MouseMovement and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then end end)
 end
 slider(macroPage,"Tiempo de equipar",0.01,0.50,state.equipDelay,function(v) state.equipDelay=v end)
 slider(macroPage,"Tiempo de disparo",0.01,0.50,state.shootDelay,function(v) state.shootDelay=v end)
-local macroInfo=card(macroPage,72); label(macroInfo,"La macro depende de la mecánica del juego y de los permisos del ejecutor. No todos los juegos aceptan entradas simuladas.",UDim2.new(1,-24,1,-12),UDim2.new(0,12,0,6),12,C.sub,false)
+
+-- PESTAÑA DE CUCHILLO (Lanzamiento L2)
+local knifePage=newPage("Cuchillo")
+switch(knifePage,"Activar lanzamiento (L2)",false,function(v) state.knifeThrowMacro=v end)
+slider(knifePage,"Delay de lanzamiento",0.01,0.50,state.knifeThrowDelay,function(v) state.knifeThrowDelay=v end)
+local knifeInfo=card(knifePage,72); label(knifeInfo,"Al presionar L2, el script sacará el cuchillo, lo lanzará y lo guardará automáticamente.",UDim2.new(1,-24,1,-12),UDim2.new(0,12,0,6),12,C.sub,false)
 
 local soundsPage=newPage("Sonidos")
 local categoryBar=card(soundsPage,44)
@@ -217,16 +219,17 @@ local muteToggle=switch(soundsPage,"Silenciar este sonido",false,function(v) sta
 local githubStatus=label(soundsPage,"Catálogo: buscando archivos MP3 en GitHub…",UDim2.new(1,-8,0,28),UDim2.new(0,4,0,0),12,C.sub,false)
 
 local configPage=newPage("Configuración")
-actionCard(configPage,"Guardar configuración","Guarda selección de sonidos y opciones en el dispositivo","Guardar",function()
+actionCard(configPage,"Guardar configuración","Guarda selección de sonidos y opciones","Guardar",function()
   if not (writefile and isfile) then githubStatus.Text="Guardar: este ejecutor no ofrece writefile."; return end
   local ok, encoded=pcall(function() return HttpService:JSONEncode(state) end)
-  if ok and pcall(writefile,CONFIG_FILE,encoded) then githubStatus.Text="Configuración guardada en este dispositivo." else githubStatus.Text="No se pudo guardar la configuración." end
+  if ok and pcall(writefile,CONFIG_FILE,encoded) then githubStatus.Text="Configuración guardada." else githubStatus.Text="No se pudo guardar." end
 end)
-actionCard(configPage,"Cargar configuración","Restaura los valores guardados anteriormente","Cargar",function()
-  if not (readfile and isfile) or not isfile(CONFIG_FILE) then githubStatus.Text="No hay una configuración local guardada."; return end
+actionCard(configPage,"Cargar configuración","Restaura los valores guardados","Cargar",function()
+  if not (readfile and isfile) or not isfile(CONFIG_FILE) then githubStatus.Text="No hay configuración guardada."; return end
   local ok, decoded=pcall(function() return HttpService:JSONDecode(readfile(CONFIG_FILE)) end)
   if ok and type(decoded)=="table" then
     if type(decoded.macro)=="boolean" then state.macro=decoded.macro end
+    if type(decoded.knifeThrowMacro)=="boolean" then state.knifeThrowMacro=decoded.knifeThrowMacro end
     if tonumber(decoded.equipDelay) then state.equipDelay=math.clamp(decoded.equipDelay,0.01,0.5) end
     if tonumber(decoded.shootDelay) then state.shootDelay=math.clamp(decoded.shootDelay,0.01,0.5) end
     for _,k in ipairs({"Arma","Saltar","Matar"}) do
@@ -234,13 +237,13 @@ actionCard(configPage,"Cargar configuración","Restaura los valores guardados an
       if type(decoded.enabled)=="table" and type(decoded.enabled[k])=="boolean" then state.enabled[k]=decoded.enabled[k] end
       if type(decoded.muted)=="table" and type(decoded.muted[k])=="boolean" then state.muted[k]=decoded.muted[k] end
     end
-    refreshDetails(); refreshSoundList(); githubStatus.Text="Configuración cargada. Los ajustes se restauraron."
-  else githubStatus.Text="El archivo de configuración no es válido." end
+    refreshDetails(); refreshSoundList(); githubStatus.Text="Configuración cargada."
+  else githubStatus.Text="Archivo inválido." end
 end)
-actionCard(configPage,"Actualizar catálogo","Vuelve a consultar los archivos MP3 de GitHub","Actualizar",function() if refreshCatalog then task.spawn(refreshCatalog) else githubStatus.Text="El catálogo todavía se está inicializando." end end)
+actionCard(configPage,"Actualizar catálogo","Vuelve a consultar GitHub","Actualizar",function() if refreshCatalog then task.spawn(refreshCatalog) end end)
 
-local navNames={"Inicio","Macro","Sonidos","Configuración"}
-local navIcons={Inicio="⌂",Macro="◎",Sonidos="♫",["Configuración"]="⚙"}
+local navNames={"Inicio","Macro","Cuchillo","Sonidos","Configuración"}
+local navIcons={Inicio="⌂",Macro="◎",Cuchillo="🔪",Sonidos="♫",["Configuración"]="⚙"}
 showPage=function(name)
   activeTab=name
   for n,p in pairs(pages) do p.Visible=(n==name) end
@@ -276,174 +279,149 @@ refreshCatalog=function()
   local loaded=false
   for _,folder in ipairs(FOLDERS) do if fetchFolder(folder) then loaded=true; break end end
   table.sort(sounds,function(a,b) return a.Name:lower()<b.Name:lower() end)
-  if not loaded then githubStatus.Text="No se pudo leer el catálogo. Revisa el nombre de la carpeta y las solicitudes HTTP." else githubStatus.Text="GitHub conectado · "..#sounds.." sonidos · carpeta "..state.folder end
+  if not loaded then githubStatus.Text="No se pudo leer el catálogo." else githubStatus.Text="GitHub conectado · "..#sounds.." sonidos · carpeta "..state.folder end
   refreshSoundList()
 end
 task.spawn(refreshCatalog)
 
--- Sonidos independientes de la macro: salto y reemplazo global de disparos estilo XeroHub.
-local boundTools={}
-local lastCustomShot=0
-local function bindTool(tool)
-  if not tool:IsA("Tool") or boundTools[tool] then return end
-  boundTools[tool]=true
-  -- NO reproducir el sonido desde Tool.Activated: el sonido se detecta globalmente.
-end
-local function setupCharacter(char)
-  local hum=char:WaitForChild("Humanoid",5)
-  if hum then hum.Jumping:Connect(function(jumping)
-    if jumping and state.enabled.Saltar and not state.muted.Saltar and state.selected.Saltar.URL~="" then
-      playSound(state.selected.Saltar.URL)
-    end
-  end) end
-  char.ChildAdded:Connect(bindTool)
-  for _,obj in ipairs(char:GetChildren()) do bindTool(obj) end
-end
-if player.Character then setupCharacter(player.Character) end
-player.CharacterAdded:Connect(setupCharacter)
-
--- Reutiliza el enfoque de XeroHub: observar globalmente sonidos nativos,
--- silenciar cada Sound original una sola vez y reproducir el MP3 en CADA evento.
-local ORIGINAL_SHOT="10209603"
-local ORIGINAL_KILL="296102734"
-local watchedSounds=setmetatable({}, {__mode="k"})
-local mutedOriginals=setmetatable({}, {__mode="k"})
-local function soundDigits(sound)
-  return tostring(sound.SoundId or ""):match("(%d+)")
-end
-local function isTargetShot(obj)
-  local id=soundDigits(obj)
-  if id==ORIGINAL_SHOT then return true end
-  return obj.Name:lower()=="gunshot" and obj:FindFirstAncestorWhichIsA("Tool")~=nil
-end
-local function watchNativeSound(obj)
-  if not obj:IsA("Sound") or watchedSounds[obj] then return end
-  watchedSounds[obj]=true
-  local function check()
-    if not obj.Parent then return end
-    local id=soundDigits(obj)
-    local category=(isTargetShot(obj) and "Arma") or ((id==ORIGINAL_KILL or obj.Name:lower()=="gunkill") and "Matar" or nil)
-    if not category then return end
-    local custom=state.selected[category]
-    if not state.enabled[category] or state.muted[category] or not custom or custom.URL=="" then return end
-    -- Silencia el sonido nativo persistentemente, pero conserva los listeners
-    -- para que el reemplazo se reproduzca de nuevo en disparos posteriores.
-    if not mutedOriginals[obj] then
-      mutedOriginals[obj]=obj.Volume
-      pcall(function() obj.Volume=0 end)
-    elseif obj.Volume~=0 then
-      pcall(function() obj.Volume=0 end)
-    end
-    if category=="Arma" then lastCustomShot=os.clock() end
-    playSound(custom.URL)
-  end
-  obj.Played:Connect(function() task.defer(check) end)
-  obj:GetPropertyChangedSignal("Playing"):Connect(function()
-    if obj.Playing or obj.IsPlaying then task.defer(check) end
-  end)
-  obj:GetPropertyChangedSignal("SoundId"):Connect(function() task.defer(check) end)
-  obj:GetPropertyChangedSignal("Name"):Connect(function() task.defer(check) end)
-  obj:GetPropertyChangedSignal("Volume"):Connect(function()
-    if mutedOriginals[obj]~=nil and obj.Parent and obj.Volume~=0 then pcall(function() obj.Volume=0 end) end
-  end)
-  -- Si el objeto ya estaba sonando cuando se detectó, procesa ese disparo.
-  if obj.IsPlaying or obj.Playing then task.defer(check) end
-end
-local function scanSoundTree(root)
-  if not root then return end
-  if root:IsA("Sound") then watchNativeSound(root) end
-  for _,obj in ipairs(root:GetDescendants()) do if obj:IsA("Sound") then watchNativeSound(obj) end end
-  root.DescendantAdded:Connect(watchNativeSound)
-end
-scanSoundTree(workspace)
-scanSoundTree(SoundService)
-scanSoundTree(playerGui)
-scanSoundTree(workspace.CurrentCamera)
-workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function() scanSoundTree(workspace.CurrentCamera) end)
-
--- Macro por toque (Android), clic izquierdo o R2.
--- Equipa temporalmente el arma, dispara con los tiempos configurados y la guarda de nuevo.
+-- ==========================================
+-- LÓGICA DE MACROS
+-- ==========================================
 local macroBusy=false
 local lastMacro=0
 local function runMacro()
   if not state.macro or macroBusy then return end
   local char=player.Character; if not char then return end
   local hum=char:FindFirstChildOfClass("Humanoid"); if not hum or hum.Health<=0 then return end
-  local backpack=player:FindFirstChildOfClass("Backpack")
-  if not backpack then return end
+  local backpack=player:FindFirstChildOfClass("Backpack"); if not backpack then return end
 
   local tool=char:FindFirstChildOfClass("Tool")
-  local wasEquipped=(tool~=nil)
   if not tool then
     for _,item in ipairs(backpack:GetChildren()) do
-      if item:IsA("Tool") and (item.Name:lower():find("pistol") or item.Name:lower():find("gun") or item.Name:lower():find("sheriff") or item.Name:lower():find("revolver")) then
-        tool=item; break
-      end
+      if item:IsA("Tool") then tool=item; break end
     end
   end
   if not tool then return end
 
-  -- No usar un cooldown fijo: el tiempo de disparo seleccionado controla el ciclo.
-  local now=os.clock()
-  local requiredGap=math.max(0.01, tonumber(state.shootDelay) or 0.10)
+  local now=os.clock(); local requiredGap=math.max(0.01, tonumber(state.shootDelay) or 0.10)
   if now-lastMacro<requiredGap then return end
-  macroBusy=true
-  lastMacro=now
+  
+  macroBusy=true; lastMacro=now
   task.spawn(function()
     local shouldHolster=false
-    local ok,err=pcall(function()
+    pcall(function()
       if not state.macro or player.Character~=char then return end
-      if tool.Parent==backpack then
-        hum:EquipTool(tool)
-        shouldHolster=true
-      end
+      if tool.Parent==backpack then hum:EquipTool(tool); shouldHolster=true end
       task.wait(math.max(0.01, tonumber(state.equipDelay) or 0.05))
       if state.macro and player.Character==char and hum.Health>0 and tool.Parent==char then
-        shouldHolster=true
-        tool:Activate()
+        shouldHolster=true; tool:Activate()
         task.wait(math.max(0.01, tonumber(state.shootDelay) or 0.10))
         pcall(function() tool:Deactivate() end)
       end
     end)
-    -- Guardar el arma después del ciclo, incluso si ya estaba en la mano.
-    if shouldHolster and player.Character==char and hum.Parent==char then
-      pcall(function() hum:UnequipTools() end)
-    end
+    if shouldHolster and player.Character==char and hum.Parent==char then pcall(function() hum:UnequipTools() end) end
     macroBusy=false
   end)
 end
-UserInputService.InputBegan:Connect(function(input,processed)
+
+-- NUEVA FUNCIÓN: MACRO DE LANZAMIENTO DE CUCHILLO (L2)
+local knifeThrowBusy = false
+local lastKnifeThrow = 0
+local function runKnifeThrowMacro()
+  if not state.knifeThrowMacro or knifeThrowBusy then return end
+  local char = player.Character; if not char then return end
+  local hum = char:FindFirstChildOfClass("Humanoid"); if not hum or hum.Health <= 0 then return end
+  local backpack = player:FindFirstChildOfClass("Backpack"); if not backpack then return end
+
+  -- Buscar el cuchillo en la mochila o en la mano
+  local knife = nil
+  for _, item in ipairs(backpack:GetChildren()) do
+    if item:IsA("Tool") and (item.Name:lower():find("knife") or item.Name:lower():find("cuchillo")) then
+      knife = item; break
+    end
+  end
+  if not knife and char:FindFirstChildOfClass("Tool") and char:FindFirstChildOfClass("Tool").Name:lower():find("knife") then
+    knife = char:FindFirstChildOfClass("Tool")
+  end
+  if not knife then return end
+
+  local now = os.clock()
+  local gap = math.max(0.01, tonumber(state.knifeThrowDelay) or 0.15)
+  if now - lastKnifeThrow < gap then return end
+
+  knifeThrowBusy = true
+  lastKnifeThrow = now
+  task.spawn(function()
+    pcall(function()
+      -- 1. Equipar el cuchillo
+      if knife.Parent == backpack then
+        hum:EquipTool(knife)
+        task.wait(0.05) -- Pequeña espera para que el juego registre que lo sacaste
+      end
+      
+      -- 2. Lanzar el cuchillo (Activar)
+      if knife.Parent == char then
+        knife:Activate()
+        task.wait(gap) -- Esperar el delay configurado
+      end
+      
+      -- 3. Volver a guardarlo
+      if knife.Parent == char then
+        hum:UnequipTools()
+      end
+    end)
+    knifeThrowBusy = false
+  end)
+end
+
+-- ==========================================
+-- INTERCEPTAR ENTRADA NATIVA
+-- ==========================================
+local oldNamecall
+local mt = getrawmetatable and getrawmetatable(game)
+
+if mt and setreadonly then
+    setreadonly(mt, false)
+    oldNamecall = mt.__namecall
+    mt.__namecall = newcclosure(function(self, ...)
+        local method = getnamecallmethod()
+        
+        -- Si el juego procesa un toque de la pantalla
+        if method == "Fire" and self.Name == "TouchButton" then
+            task.spawn(runMacro)
+            -- La macro de cuchillo se activa con L2 o botón específico, no con toque normal
+        end
+        return oldNamecall(self, ...)
+    end)
+    setreadonly(mt, true)
+end
+
+-- Mantenemos R2 (Consola) y Clic Izquierdo (PC) para disparar
+UserInputService.InputBegan:Connect(function(input, processed)
   if processed then return end
-  if input.UserInputType==Enum.UserInputType.MouseButton1 or input.KeyCode==Enum.KeyCode.ButtonR2 then runMacro() end
-end)
-local touchStart,touchTime=nil,nil
-UserInputService.TouchStarted:Connect(function(input,processed)
-  if processed then return end
-  touchStart=input.Position; touchTime=os.clock()
-end)
-UserInputService.TouchEnded:Connect(function(input,processed)
-  if processed or not touchStart or not touchTime then touchStart=nil; touchTime=nil; return end
-  local delta=(input.Position-touchStart).Magnitude
-  local elapsed=os.clock()-touchTime
-  touchStart=nil; touchTime=nil
-  -- Evita considerar deslizamientos/gestos como disparo.
-  if delta<18 and elapsed>=0.025 and elapsed<0.6 then runMacro() end
+  if input.UserInputType==Enum.UserInputType.MouseButton1 or input.KeyCode==Enum.KeyCode.ButtonR2 then 
+      runMacro() 
+  end
 end)
 
--- Autoload local de configuración, si el ejecutor permite archivos.
+-- INTERCEPTAR L2 (Gatillo Izquierdo del control) para lanzar cuchillo
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.ButtonL2 then
+        runKnifeThrowMacro()
+    end
+end)
+
+-- Autoload local de configuración
 task.spawn(function()
   task.wait(1)
   if readfile and isfile and isfile(CONFIG_FILE) then
     local ok,decoded=pcall(function() return HttpService:JSONDecode(readfile(CONFIG_FILE)) end)
     if ok and type(decoded)=="table" then
       if type(decoded.macro)=="boolean" then state.macro=decoded.macro end
+      if type(decoded.knifeThrowMacro)=="boolean" then state.knifeThrowMacro=decoded.knifeThrowMacro end
       if tonumber(decoded.equipDelay) then state.equipDelay=math.clamp(decoded.equipDelay,0.01,0.5) end
       if tonumber(decoded.shootDelay) then state.shootDelay=math.clamp(decoded.shootDelay,0.01,0.5) end
-      for _,k in ipairs({"Arma","Saltar","Matar"}) do
-        if type(decoded.selected)=="table" and type(decoded.selected[k])=="table" then state.selected[k]=decoded.selected[k] end
-        if type(decoded.enabled)=="table" and type(decoded.enabled[k])=="boolean" then state.enabled[k]=decoded.enabled[k] end
-        if type(decoded.muted)=="table" and type(decoded.muted[k])=="boolean" then state.muted[k]=decoded.muted[k] end
-      end
       refreshDetails()
     end
   end
