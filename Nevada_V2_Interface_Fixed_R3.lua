@@ -1,4 +1,4 @@
--- NEVADA V2 R11 | Sonidos interceptados por Hook y macro de cuchillo con L2
+-- NEVADA V4 | Menú + Macro Cuchillo (Xero) + Sonidos Interceptados
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
@@ -16,14 +16,14 @@ local CONFIG_FILE = "nevada_v2_config.json"
 
 local state = {
   macro = false, equipDelay = 0.05, shootDelay = 0.10,
-  knifeThrowMacro = false, knifeThrowDelay = 0.15,
+  knifeMacroEnabled = false, knifeEquipDelay = 0.10, knifeThrowDelay = 0.10,
   selected = {Arma={Name="Ninguno",URL=""}, Saltar={Name="Ninguno",URL=""}, Matar={Name="Ninguno",URL=""}},
   enabled = {Arma=true, Saltar=true, Matar=true}, muted = {Arma=false, Saltar=false, Matar=false},
   folder = FOLDERS[1]
 }
 local sounds, soundCache, activeTab, soundCategory = {}, {}, "Inicio", "Arma"
 local refreshCatalog
-local function safeCall(fn, ...) local ok, result = pcall(fn, ...); if ok then return result end end
+
 local function round2(n) return math.floor(n * 100 + 0.5) / 100 end
 
 local function playSound(url)
@@ -172,9 +172,10 @@ slider(macroPage,"Tiempo de equipar",0.01,0.50,state.equipDelay,function(v) stat
 slider(macroPage,"Tiempo de disparo",0.01,0.50,state.shootDelay,function(v) state.shootDelay=v end)
 
 local knifePage=newPage("Cuchillo")
-switch(knifePage,"Activar lanzamiento (L2)",false,function(v) state.knifeThrowMacro=v end)
-slider(knifePage,"Delay de lanzamiento",0.01,0.50,state.knifeThrowDelay,function(v) state.knifeThrowDelay=v end)
-local knifeInfo=card(knifePage,72); label(knifeInfo,"Al presionar L2, el script sacará el cuchillo, lo lanzará y lo guardará.",UDim2.new(1,-24,1,-12),UDim2.new(0,12,0,6),12,C.sub,false)
+switch(knifePage,"Activar Macro Cuchillo (L2)",false,function(v) state.knifeMacroEnabled = v end)
+slider(knifePage,"Delay al Equipar",0.01,0.50,state.knifeEquipDelay,function(v) state.knifeEquipDelay = v end)
+slider(knifePage,"Delay al Lanzar",0.01,0.50,state.knifeThrowDelay,function(v) state.knifeThrowDelay = v end)
+local knifeInfo=card(knifePage,72); label(knifeInfo,"Presiona L2 para equipar, lanzar y guardar el cuchillo automáticamente.",UDim2.new(1,-24,1,-12),UDim2.new(0,12,0,6),12,C.sub,false)
 
 local soundsPage=newPage("Sonidos")
 local categoryBar=card(soundsPage,44)
@@ -228,9 +229,11 @@ actionCard(configPage,"Cargar configuración","Restaura los valores guardados","
   local ok, decoded=pcall(function() return HttpService:JSONDecode(readfile(CONFIG_FILE)) end)
   if ok and type(decoded)=="table" then
     if type(decoded.macro)=="boolean" then state.macro=decoded.macro end
-    if type(decoded.knifeThrowMacro)=="boolean" then state.knifeThrowMacro=decoded.knifeThrowMacro end
+    if type(decoded.knifeMacroEnabled)=="boolean" then state.knifeMacroEnabled=decoded.knifeMacroEnabled end
     if tonumber(decoded.equipDelay) then state.equipDelay=math.clamp(decoded.equipDelay,0.01,0.5) end
     if tonumber(decoded.shootDelay) then state.shootDelay=math.clamp(decoded.shootDelay,0.01,0.5) end
+    if tonumber(decoded.knifeEquipDelay) then state.knifeEquipDelay=math.clamp(decoded.knifeEquipDelay,0.01,0.5) end
+    if tonumber(decoded.knifeThrowDelay) then state.knifeThrowDelay=math.clamp(decoded.knifeThrowDelay,0.01,0.5) end
     for _,k in ipairs({"Arma","Saltar","Matar"}) do
       if type(decoded.selected)=="table" and type(decoded.selected[k])=="table" then state.selected[k]=decoded.selected[k] end
       if type(decoded.enabled)=="table" and type(decoded.enabled[k])=="boolean" then state.enabled[k]=decoded.enabled[k] end
@@ -286,7 +289,6 @@ task.spawn(refreshCatalog)
 -- ==========================================
 -- LÓGICA DE MACROS (Arma y Cuchillo)
 -- ==========================================
--- (La lógica de las macros se mantiene igual que en el código anterior)
 local macroBusy=false
 local lastMacro=0
 local function runMacro()
@@ -321,86 +323,67 @@ local function runMacro()
   end)
 end
 
-local knifeThrowBusy = false
-local lastKnifeThrow = 0
-local function runKnifeThrowMacro()
-  if not state.knifeThrowMacro or knifeThrowBusy then return end
-  local char = player.Character; if not char then return end
-  local hum = char:FindFirstChildOfClass("Humanoid"); if not hum or hum.Health <= 0 then return end
-  local backpack = player:FindFirstChildOfClass("Backpack"); if not backpack then return end
-  local knife = nil
-  local currentTool = char:FindFirstChildOfClass("Tool")
-  if currentTool then knife = currentTool else
-      for _, item in ipairs(backpack:GetChildren()) do
-        if item:IsA("Tool") then
-          local n = item.Name:lower()
-          if not (n:find("gun") or n:find("pistol") or n:find("revolver") or n:find("sheriff") or n:find("rifle") or n:find("shotgun")) then
-            knife = item; break
-          end
+-- ==========================================
+-- MACRO DE CUCHILLO (Lógica de Xero)
+-- ==========================================
+local knifeBusy = false
+local lastKnife = 0
+
+local function obtenerCuchilloMacro()
+    local character = player.Character
+    local backpack = player:FindFirstChildOfClass("Backpack")
+
+    for _, container in ipairs({character, backpack}) do
+        if container then
+            for _, item in ipairs(container:GetChildren()) do
+                if item:IsA("Tool") and (
+                    item:FindFirstChild("Throw", true)
+                    or item:FindFirstChild("KnifeClient", true)
+                    or item:FindFirstChild("KnifeServer", true)
+                ) then
+                    return item
+                end
+            end
         end
-      end
-  end
-  if not knife then return end
-  local now = os.clock(); local gap = math.max(0.01, tonumber(state.knifeThrowDelay) or 0.15)
-  if now - lastKnifeThrow < gap then return end
-  knifeThrowBusy = true; lastKnifeThrow = now
+    end
+    return nil
+end
+
+local function runKnifeMacro()
+  if not state.knifeMacroEnabled or knifeBusy then return end
+  local character = player.Character
+  local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+  local knife = obtenerCuchilloMacro()
+
+  if not (knife and humanoid) then return end
+  
+  local now = os.clock()
+  if now - lastKnife < 0.1 then return end
+
+  knifeBusy = true
+  lastKnife = now
+  
   task.spawn(function()
     pcall(function()
-      if knife.Parent == backpack then hum:EquipTool(knife); task.wait(0.1) end
-      if knife.Parent == char then
+        humanoid:EquipTool(knife)
+        local equipDeadline = os.clock() + math.max(state.knifeEquipDelay, 0.05)
+        repeat task.wait() until knife.Parent == character or os.clock() >= equipDeadline
+        task.wait(math.max(0, state.knifeEquipDelay))
         pcall(function() knife:Activate() end)
-        if game:GetService("VirtualInputManager") then
-            game:GetService("VirtualInputManager"):SendMouseButtonEvent(0, 0, 0, true, game, 0)
-            task.wait(0.05)
-            game:GetService("VirtualInputManager"):SendMouseButtonEvent(0, 0, 0, false, game, 0)
-        end
-        task.wait(gap) 
-      end
-      if knife.Parent == char then hum:UnequipTools() end
+        task.wait(state.knifeThrowDelay)
+        pcall(function()
+            if humanoid and humanoid.Parent then
+                humanoid:UnequipTools()
+            end
+        end)
     end)
-    knifeThrowBusy = false
+    knifeBusy = false
   end)
 end
 
 -- ==========================================
--- HOOK DE SONIDOS Y ENTRADA NATIVA
+-- ENTRADA DE USUARIO
 -- ==========================================
--- 1. Hook para detectar cuando el juego intenta reproducir un sonido
-local oldSoundPlay
-local mtSound = getrawmetatable and getrawmetatable(game)
-if mtSound and setreadonly then
-    setreadonly(mtSound, false)
-    oldSoundPlay = SoundService.Play
-    -- Interceptamos la función Play del servicio de sonido
-    SoundService.Play = newcclosure(function(self, sound, ...)
-        local id = tostring(sound.SoundId or ""):match("(%d+)")
-        if id == "10209603" and state.enabled.Arma and not state.muted.Arma and state.selected.Arma.URL ~= "" then
-            playSound(state.selected.Arma.URL)
-            -- Opcional: pcall(function() sound.Volume = 0 end) -- Silencia el original
-        elseif id == "296102734" and state.enabled.Matar and not state.muted.Matar and state.selected.Matar.URL ~= "" then
-            playSound(state.selected.Matar.URL)
-        end
-        return oldSoundPlay(self, sound, ...)
-    end)
-    setreadonly(mtSound, true)
-end
-
--- 2. Detección de Entrada (Toques, R2, L2)
-local oldNamecall
-local mt = getrawmetatable and getrawmetatable(game)
-if mt and setreadonly then
-    setreadonly(mt, false)
-    oldNamecall = mt.__namecall
-    mt.__namecall = newcclosure(function(self, ...)
-        local method = getnamecallmethod()
-        if method == "Fire" and self.Name == "TouchButton" then
-            task.spawn(runMacro)
-        end
-        return oldNamecall(self, ...)
-    end)
-    setreadonly(mt, true)
-end
-
 UserInputService.InputBegan:Connect(function(input, processed)
   if processed then return end
   if input.UserInputType==Enum.UserInputType.MouseButton1 or input.KeyCode==Enum.KeyCode.ButtonR2 then 
@@ -408,17 +391,59 @@ UserInputService.InputBegan:Connect(function(input, processed)
   end
 end)
 
-RunService.RenderStepped:Connect(function()
-    local gamepad = UserInputService:GetGamepadState(Enum.UserInputType.Gamepad1)
-    if gamepad then
-        for _, input in ipairs(gamepad) do
-            if input.KeyCode == Enum.KeyCode.ButtonL2 and input.Position.Z > 0.5 then
-                runKnifeThrowMacro()
-                break
-            end
-        end
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if not state.knifeMacroEnabled then return end
+    if input.KeyCode == Enum.KeyCode.ButtonL2 then
+        runKnifeMacro()
     end
 end)
+
+-- ==========================================
+-- SONIDOS INTERCEPTADOS (Aquí está la magia que faltaba)
+-- ==========================================
+local ORIGINAL_SHOT="10209603"
+local ORIGINAL_KILL="296102734"
+local watchedSounds=setmetatable({}, {__mode="k"})
+
+local function watchNativeSound(obj)
+  if not obj:IsA("Sound") or watchedSounds[obj] then return end
+  watchedSounds[obj]=true
+  
+  local function check()
+    if not obj.Parent then return end
+    local id = tostring(obj.SoundId or ""):match("(%d+)")
+    local category = nil
+    
+    -- Detecta si es sonido de arma o de muerte
+    if id == ORIGINAL_SHOT or (obj.Name:lower():find("gun") and obj:FindFirstAncestorWhichIsA("Tool")) then
+        category = "Arma"
+    elseif id == ORIGINAL_KILL or obj.Name:lower():find("kill") then
+        category = "Matar"
+    end
+    
+    if not category then return end
+    
+    local custom=state.selected[category]
+    if not state.enabled[category] or state.muted[category] or not custom or custom.URL=="" then return end
+    
+    -- Silencia el original y pone el tuyo
+    pcall(function() obj.Volume=0 end)
+    playSound(custom.URL)
+  end
+  
+  obj.Played:Connect(check)
+  if obj.IsPlaying or obj.Playing then task.defer(check) end
+end
+
+-- Escanea las armas del juego para que detecte los sonidos
+local function scanSoundTree(root)
+  if not root then return end
+  if root:IsA("Sound") then watchNativeSound(root) end
+  for _,obj in ipairs(root:GetDescendants()) do if obj:IsA("Sound") then watchNativeSound(obj) end end
+  root.DescendantAdded:Connect(watchNativeSound)
+end
+scanSoundTree(workspace)
+scanSoundTree(SoundService)
 
 -- Autoload local de configuración
 task.spawn(function()
@@ -427,9 +452,11 @@ task.spawn(function()
     local ok,decoded=pcall(function() return HttpService:JSONDecode(readfile(CONFIG_FILE)) end)
     if ok and type(decoded)=="table" then
       if type(decoded.macro)=="boolean" then state.macro=decoded.macro end
-      if type(decoded.knifeThrowMacro)=="boolean" then state.knifeThrowMacro=decoded.knifeThrowMacro end
+      if type(decoded.knifeMacroEnabled)=="boolean" then state.knifeMacroEnabled=decoded.knifeMacroEnabled end
       if tonumber(decoded.equipDelay) then state.equipDelay=math.clamp(decoded.equipDelay,0.01,0.5) end
       if tonumber(decoded.shootDelay) then state.shootDelay=math.clamp(decoded.shootDelay,0.01,0.5) end
+      if tonumber(decoded.knifeEquipDelay) then state.knifeEquipDelay=math.clamp(decoded.knifeEquipDelay,0.01,0.5) end
+      if tonumber(decoded.knifeThrowDelay) then state.knifeThrowDelay=math.clamp(decoded.knifeThrowDelay,0.01,0.5) end
       refreshDetails()
     end
   end
