@@ -1,4 +1,4 @@
--- NEVADA V2 R9 | Macro de Lanzamiento de Cuchillo (L2) + Macro de Disparo + Sonidos
+-- NEVADA V2 R11 | Sonidos interceptados por Hook y macro de cuchillo con L2
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
@@ -16,7 +16,7 @@ local CONFIG_FILE = "nevada_v2_config.json"
 
 local state = {
   macro = false, equipDelay = 0.05, shootDelay = 0.10,
-  knifeThrowMacro = false, knifeThrowDelay = 0.15, -- NUEVO: Delay para el lanzamiento
+  knifeThrowMacro = false, knifeThrowDelay = 0.15,
   selected = {Arma={Name="Ninguno",URL=""}, Saltar={Name="Ninguno",URL=""}, Matar={Name="Ninguno",URL=""}},
   enabled = {Arma=true, Saltar=true, Matar=true}, muted = {Arma=false, Saltar=false, Matar=false},
   folder = FOLDERS[1]
@@ -171,11 +171,10 @@ end
 slider(macroPage,"Tiempo de equipar",0.01,0.50,state.equipDelay,function(v) state.equipDelay=v end)
 slider(macroPage,"Tiempo de disparo",0.01,0.50,state.shootDelay,function(v) state.shootDelay=v end)
 
--- PESTAÑA DE CUCHILLO (Lanzamiento L2)
 local knifePage=newPage("Cuchillo")
 switch(knifePage,"Activar lanzamiento (L2)",false,function(v) state.knifeThrowMacro=v end)
 slider(knifePage,"Delay de lanzamiento",0.01,0.50,state.knifeThrowDelay,function(v) state.knifeThrowDelay=v end)
-local knifeInfo=card(knifePage,72); label(knifeInfo,"Al presionar L2, el script sacará el cuchillo, lo lanzará y lo guardará automáticamente.",UDim2.new(1,-24,1,-12),UDim2.new(0,12,0,6),12,C.sub,false)
+local knifeInfo=card(knifePage,72); label(knifeInfo,"Al presionar L2, el script sacará el cuchillo, lo lanzará y lo guardará.",UDim2.new(1,-24,1,-12),UDim2.new(0,12,0,6),12,C.sub,false)
 
 local soundsPage=newPage("Sonidos")
 local categoryBar=card(soundsPage,44)
@@ -285,8 +284,9 @@ end
 task.spawn(refreshCatalog)
 
 -- ==========================================
--- LÓGICA DE MACROS
+-- LÓGICA DE MACROS (Arma y Cuchillo)
 -- ==========================================
+-- (La lógica de las macros se mantiene igual que en el código anterior)
 local macroBusy=false
 local lastMacro=0
 local function runMacro()
@@ -294,7 +294,6 @@ local function runMacro()
   local char=player.Character; if not char then return end
   local hum=char:FindFirstChildOfClass("Humanoid"); if not hum or hum.Health<=0 then return end
   local backpack=player:FindFirstChildOfClass("Backpack"); if not backpack then return end
-
   local tool=char:FindFirstChildOfClass("Tool")
   if not tool then
     for _,item in ipairs(backpack:GetChildren()) do
@@ -302,10 +301,8 @@ local function runMacro()
     end
   end
   if not tool then return end
-
   local now=os.clock(); local requiredGap=math.max(0.01, tonumber(state.shootDelay) or 0.10)
   if now-lastMacro<requiredGap then return end
-  
   macroBusy=true; lastMacro=now
   task.spawn(function()
     local shouldHolster=false
@@ -324,7 +321,6 @@ local function runMacro()
   end)
 end
 
--- NUEVA FUNCIÓN: MACRO DE LANZAMIENTO DE CUCHILLO (L2)
 local knifeThrowBusy = false
 local lastKnifeThrow = 0
 local function runKnifeThrowMacro()
@@ -332,71 +328,79 @@ local function runKnifeThrowMacro()
   local char = player.Character; if not char then return end
   local hum = char:FindFirstChildOfClass("Humanoid"); if not hum or hum.Health <= 0 then return end
   local backpack = player:FindFirstChildOfClass("Backpack"); if not backpack then return end
-
-  -- Buscar el cuchillo en la mochila o en la mano
   local knife = nil
-  for _, item in ipairs(backpack:GetChildren()) do
-    if item:IsA("Tool") and (item.Name:lower():find("knife") or item.Name:lower():find("cuchillo")) then
-      knife = item; break
-    end
-  end
-  if not knife and char:FindFirstChildOfClass("Tool") and char:FindFirstChildOfClass("Tool").Name:lower():find("knife") then
-    knife = char:FindFirstChildOfClass("Tool")
+  local currentTool = char:FindFirstChildOfClass("Tool")
+  if currentTool then knife = currentTool else
+      for _, item in ipairs(backpack:GetChildren()) do
+        if item:IsA("Tool") then
+          local n = item.Name:lower()
+          if not (n:find("gun") or n:find("pistol") or n:find("revolver") or n:find("sheriff") or n:find("rifle") or n:find("shotgun")) then
+            knife = item; break
+          end
+        end
+      end
   end
   if not knife then return end
-
-  local now = os.clock()
-  local gap = math.max(0.01, tonumber(state.knifeThrowDelay) or 0.15)
+  local now = os.clock(); local gap = math.max(0.01, tonumber(state.knifeThrowDelay) or 0.15)
   if now - lastKnifeThrow < gap then return end
-
-  knifeThrowBusy = true
-  lastKnifeThrow = now
+  knifeThrowBusy = true; lastKnifeThrow = now
   task.spawn(function()
     pcall(function()
-      -- 1. Equipar el cuchillo
-      if knife.Parent == backpack then
-        hum:EquipTool(knife)
-        task.wait(0.05) -- Pequeña espera para que el juego registre que lo sacaste
-      end
-      
-      -- 2. Lanzar el cuchillo (Activar)
+      if knife.Parent == backpack then hum:EquipTool(knife); task.wait(0.1) end
       if knife.Parent == char then
-        knife:Activate()
-        task.wait(gap) -- Esperar el delay configurado
+        pcall(function() knife:Activate() end)
+        if game:GetService("VirtualInputManager") then
+            game:GetService("VirtualInputManager"):SendMouseButtonEvent(0, 0, 0, true, game, 0)
+            task.wait(0.05)
+            game:GetService("VirtualInputManager"):SendMouseButtonEvent(0, 0, 0, false, game, 0)
+        end
+        task.wait(gap) 
       end
-      
-      -- 3. Volver a guardarlo
-      if knife.Parent == char then
-        hum:UnequipTools()
-      end
+      if knife.Parent == char then hum:UnequipTools() end
     end)
     knifeThrowBusy = false
   end)
 end
 
 -- ==========================================
--- INTERCEPTAR ENTRADA NATIVA
+-- HOOK DE SONIDOS Y ENTRADA NATIVA
 -- ==========================================
+-- 1. Hook para detectar cuando el juego intenta reproducir un sonido
+local oldSoundPlay
+local mtSound = getrawmetatable and getrawmetatable(game)
+if mtSound and setreadonly then
+    setreadonly(mtSound, false)
+    oldSoundPlay = SoundService.Play
+    -- Interceptamos la función Play del servicio de sonido
+    SoundService.Play = newcclosure(function(self, sound, ...)
+        local id = tostring(sound.SoundId or ""):match("(%d+)")
+        if id == "10209603" and state.enabled.Arma and not state.muted.Arma and state.selected.Arma.URL ~= "" then
+            playSound(state.selected.Arma.URL)
+            -- Opcional: pcall(function() sound.Volume = 0 end) -- Silencia el original
+        elseif id == "296102734" and state.enabled.Matar and not state.muted.Matar and state.selected.Matar.URL ~= "" then
+            playSound(state.selected.Matar.URL)
+        end
+        return oldSoundPlay(self, sound, ...)
+    end)
+    setreadonly(mtSound, true)
+end
+
+-- 2. Detección de Entrada (Toques, R2, L2)
 local oldNamecall
 local mt = getrawmetatable and getrawmetatable(game)
-
 if mt and setreadonly then
     setreadonly(mt, false)
     oldNamecall = mt.__namecall
     mt.__namecall = newcclosure(function(self, ...)
         local method = getnamecallmethod()
-        
-        -- Si el juego procesa un toque de la pantalla
         if method == "Fire" and self.Name == "TouchButton" then
             task.spawn(runMacro)
-            -- La macro de cuchillo se activa con L2 o botón específico, no con toque normal
         end
         return oldNamecall(self, ...)
     end)
     setreadonly(mt, true)
 end
 
--- Mantenemos R2 (Consola) y Clic Izquierdo (PC) para disparar
 UserInputService.InputBegan:Connect(function(input, processed)
   if processed then return end
   if input.UserInputType==Enum.UserInputType.MouseButton1 or input.KeyCode==Enum.KeyCode.ButtonR2 then 
@@ -404,11 +408,15 @@ UserInputService.InputBegan:Connect(function(input, processed)
   end
 end)
 
--- INTERCEPTAR L2 (Gatillo Izquierdo del control) para lanzar cuchillo
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    if input.KeyCode == Enum.KeyCode.ButtonL2 then
-        runKnifeThrowMacro()
+RunService.RenderStepped:Connect(function()
+    local gamepad = UserInputService:GetGamepadState(Enum.UserInputType.Gamepad1)
+    if gamepad then
+        for _, input in ipairs(gamepad) do
+            if input.KeyCode == Enum.KeyCode.ButtonL2 and input.Position.Z > 0.5 then
+                runKnifeThrowMacro()
+                break
+            end
+        end
     end
 end)
 
