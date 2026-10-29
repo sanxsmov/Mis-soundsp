@@ -1,4 +1,4 @@
--- NEVADA V5 | Interfaz completa + Macro de Cuchillo (Xero) + Sonidos + Movimiento Tela
+-- NEVADA V6 | Interfaz completa + Macro Cuchillo + Sonidos + Movimiento Tela (Seguro)
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
@@ -17,7 +17,6 @@ local CONFIG_FILE = "nevada_v2_config.json"
 local state = {
   macro = false, equipDelay = 0.05, shootDelay = 0.10,
   knifeMacroEnabled = false, knifeEquipDelay = 0.10, knifeThrowDelay = 0.10,
-  telaEnabled = false, -- Nueva variable para el movimiento tela
   selected = {Arma={Name="Ninguno",URL=""}, Saltar={Name="Ninguno",URL=""}, Matar={Name="Ninguno",URL=""}},
   enabled = {Arma=true, Saltar=true, Matar=true}, muted = {Arma=false, Saltar=false, Matar=false},
   folder = FOLDERS[1]
@@ -156,7 +155,7 @@ local welcome=card(home,108); label(welcome,"Bienvenido a Nevada",UDim2.new(1,-2
 actionCard(home,"Sonidos","Catálogo de tu repositorio de GitHub","Abrir sonidos",function() showPage("Sonidos") end)
 actionCard(home,"Macro Arma","Disparo rápido automático","Ver macro",function() showPage("Macro") end)
 actionCard(home,"Macro Cuchillo","Lanzamiento rápido (L2)","Ver macro",function() showPage("Cuchillo") end)
-actionCard(home,"Movimiento Tela","Efecto visual de gelatina (TikTok)","Ver efecto",function() showPage("Tela") end)
+actionCard(home,"Movimiento Tela","Efecto de gelatina sin volar","Ver efecto",function() showPage("Tela") end)
 
 local macroPage=newPage("Macro")
 switch(macroPage,"Activar macro de arma",false,function(v) state.macro=v end)
@@ -180,11 +179,11 @@ slider(knifePage,"Delay al Lanzar",0.01,0.50,state.knifeThrowDelay,function(v) s
 local knifeInfo=card(knifePage,72); label(knifeInfo,"Presiona L2 para equipar, lanzar y guardar el cuchillo automáticamente.",UDim2.new(1,-24,1,-12),UDim2.new(0,12,0,6),12,C.sub,false)
 
 -- ==========================================
--- NUEVA PESTAÑA: MOVIMIENTO TELA
+-- PESTAÑA: MOVIMIENTO TELA (SEGURO)
 -- ==========================================
 local telaPage=newPage("Tela")
 local telaInfo=card(telaPage, 60)
-label(telaInfo, "Haz que tu personaje se retuerza y vibre (Efecto TikTok) sin salir volando.", UDim2.new(1,-24,1,-12), UDim2.new(0,12,0,6), 12, C.sub, false)
+label(telaInfo, "Haz que tu personaje tiemble y se retuerza sin volar ni ser expulsado.", UDim2.new(1,-24,1,-12), UDim2.new(0,12,0,6), 12, C.sub, false)
 
 local telaBusy = false
 local function aplicarTela()
@@ -197,6 +196,8 @@ local function aplicarTela()
     if not hrp or not hum then return end
 
     telaBusy = true
+    local cframeOriginal = hrp.CFrame
+    
     hum.PlatformStand = true
     hum:ChangeState(Enum.HumanoidStateType.Physics)
     
@@ -207,39 +208,53 @@ local function aplicarTela()
         end
     end
 
-    task.spawn(function()
-        local tiempoInicio = os.clock()
-        -- El efecto dura 2 segundos
-        while os.clock() - tiempoInicio < 2.0 and char.Parent do
-            local hrpActual = char:FindFirstChild("HumanoidRootPart")
-            if not hrpActual then break end
-            
-            -- Movimiento de vibración (Sin volar)
-            hrpActual.CFrame = hrpActual.CFrame * CFrame.new(math.random(-2, 2), math.random(0, 1), math.random(-2, 2))
-            hrpActual.AssemblyLinearVelocity = Vector3.new(math.random(-10, 10), 5, math.random(-10, 10))
-            
-            RunService.Heartbeat:Wait()
+    local connection = RunService.Heartbeat:Connect(function()
+        local hrpActual = char:FindFirstChild("HumanoidRootPart")
+        if not hrpActual or not char.Parent then return end
+        
+        -- CFrame aleatorio (Efecto Tela de Itachi)
+        hrpActual.CFrame = cframeOriginal * CFrame.new(math.random(-1, 1), math.random(0, 2), math.random(-1, 1))
+        
+        -- Velocidad controlada (Evita que el anti-cheat te saque)
+        hrpActual.AssemblyLinearVelocity = Vector3.new(math.random(-10, 10), 5, math.random(-10, 10))
+        hrpActual.AssemblyAngularVelocity = Vector3.new(math.random(-5, 5), math.random(-5, 5), math.random(-5, 5))
+    end)
+
+    task.wait(1.5)
+
+    if connection then connection:Disconnect() end
+    
+    if char.Parent and hum.Parent then
+        hum.PlatformStand = false
+        hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+        
+        local hrpActual = char:FindFirstChild("HumanoidRootPart")
+        if hrpActual then
+            hrpActual.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+            hrpActual.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+            hrpActual.Velocity = Vector3.new(0, 0, 0)
+            hrpActual.RotVelocity = Vector3.new(0, 0, 0)
+            hrpActual.CFrame = cframeOriginal
         end
         
-        -- Restaurar al terminar
-        if char.Parent and hum.Parent then
-            hum.PlatformStand = false
-            hum:ChangeState(Enum.HumanoidStateType.GettingUp)
-            for _, part in pairs(char:GetDescendants()) do
-                if part:IsA("BasePart") then
-                    part.CanCollide = true
-                    part.CustomPhysicalProperties = nil
-                end
+        for _, part in pairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = true
+                part.CustomPhysicalProperties = nil
             end
         end
-        telaBusy = false
-    end)
+    end
+    
+    telaBusy = false
 end
 
 button(telaPage, "¡Activar Movimiento Tela!", UDim2.new(1,-8,0,50), UDim2.new(0,0,0,10), function()
     aplicarTela()
 end)
 
+-- ==========================================
+-- PESTAÑA: SONIDOS
+-- ==========================================
 local soundsPage=newPage("Sonidos")
 local categoryBar=card(soundsPage,44)
 local categoryButtons={}
@@ -386,9 +401,6 @@ local function runMacro()
   end)
 end
 
--- ==========================================
--- MACRO DE CUCHILLO (Lógica de Xero)
--- ==========================================
 local knifeBusy = false
 local lastKnife = 0
 
