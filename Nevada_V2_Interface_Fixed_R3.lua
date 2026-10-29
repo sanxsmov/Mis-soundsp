@@ -1,4 +1,4 @@
--- NEVADA V7 | Movimiento Tela Corregido (Sin pegarse) + Tu Menú Completo
+-- NEVADA V8 | Interfaz + Macros + Sonidos + Movimiento Tela Automático
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
@@ -53,6 +53,48 @@ local function playSound(url)
   task.delay(20, function() if s.Parent then s:Destroy() end end)
 end
 
+-- ==========================================
+-- MOVIMIENTO TELA AUTOMÁTICO (Sin botones)
+-- ==========================================
+local function activarTelaAutomatica()
+    local char = player.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    local cframeOriginal = hrp.CFrame
+    
+    RunService.Heartbeat:Connect(function()
+        -- Si el personaje cambia o muere, se detiene
+        if not char.Parent or player.Character ~= char then return end
+        local hrpActual = char:FindFirstChild("HumanoidRootPart")
+        if not hrpActual then return end
+        
+        local tiempo = tick() * 10 
+        
+        -- Rotaciones para el efecto tela (Gira y se mece)
+        local rotacionX = math.sin(tiempo) * 0.8 
+        local rotacionZ = math.cos(tiempo) * 0.8 
+        local rotacionY = math.sin(tiempo * 0.5) * 2 
+        
+        hrpActual.CFrame = cframeOriginal * CFrame.Angles(rotacionX, rotacionY, rotacionZ)
+    end)
+end
+
+-- Activar al iniciar
+if player.Character then
+    activarTelaAutomatica()
+end
+
+-- Reactivar al respawnear
+player.CharacterAdded:Connect(function(char)
+    task.wait(1)
+    activarTelaAutomatica()
+end)
+
+-- ==========================================
+-- INTERFAZ GRÁFICA
+-- ==========================================
 if playerGui:FindFirstChild("NevadaV2") then playerGui.NevadaV2:Destroy() end
 local gui = Instance.new("ScreenGui")
 gui.Name, gui.ResetOnSpawn, gui.IgnoreGuiInset = "NevadaV2", false, true
@@ -155,7 +197,6 @@ local welcome=card(home,108); label(welcome,"Bienvenido a Nevada",UDim2.new(1,-2
 actionCard(home,"Sonidos","Catálogo de tu repositorio de GitHub","Abrir sonidos",function() showPage("Sonidos") end)
 actionCard(home,"Macro Arma","Disparo rápido automático","Ver macro",function() showPage("Macro") end)
 actionCard(home,"Macro Cuchillo","Lanzamiento rápido (L2)","Ver macro",function() showPage("Cuchillo") end)
-actionCard(home,"Movimiento Tela","Efecto de gelatina sin volar","Ver efecto",function() showPage("Tela") end)
 
 local macroPage=newPage("Macro")
 switch(macroPage,"Activar macro de arma",false,function(v) state.macro=v end)
@@ -178,85 +219,6 @@ slider(knifePage,"Delay al Equipar",0.01,0.50,state.knifeEquipDelay,function(v) 
 slider(knifePage,"Delay al Lanzar",0.01,0.50,state.knifeThrowDelay,function(v) state.knifeThrowDelay = v end)
 local knifeInfo=card(knifePage,72); label(knifeInfo,"Presiona L2 para equipar, lanzar y guardar el cuchillo automáticamente.",UDim2.new(1,-24,1,-12),UDim2.new(0,12,0,6),12,C.sub,false)
 
--- ==========================================
--- PESTAÑA: MOVIMIENTO TELA (CORREGIDO)
--- ==========================================
-local telaPage=newPage("Tela")
-local telaInfo=card(telaPage, 60)
-label(telaInfo, "Haz que tu personaje tiemble y se retuerza sin volar ni ser expulsado.", UDim2.new(1,-24,1,-12), UDim2.new(0,12,0,6), 12, C.sub, false)
-
-local telaBusy = false
-local function aplicarTela()
-    if telaBusy then return end
-    local char = player.Character
-    if not char then return end
-    
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hrp or not hum then return end
-
-    telaBusy = true
-    local cframeOriginal = hrp.CFrame
-    
-    hum.PlatformStand = true
-    
-    for _, joint in pairs(char:GetDescendants()) do
-        if joint:IsA("Motor6D") then
-            joint.Enabled = false
-        end
-    end
-
-    for _, part in pairs(char:GetDescendants()) do
-        if part:IsA("BasePart") then
-            part.CustomPhysicalProperties = PhysicalProperties.new(0.1, 0.5, 0.5, 1, 1)
-        end
-    end
-
-    local connection = RunService.Heartbeat:Connect(function()
-        local hrpActual = char:FindFirstChild("HumanoidRootPart")
-        if not hrpActual or not char.Parent then return end
-        
-        hrpActual.CFrame = cframeOriginal * CFrame.new(math.random(-1, 1), 0, math.random(-1, 1))
-        hrpActual.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-        hrpActual.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-    end)
-
-    task.wait(2.0)
-
-    if connection then connection:Disconnect() end
-    
-    if char.Parent and hum.Parent then
-        hum.PlatformStand = false
-        hum:ChangeState(Enum.HumanoidStateType.GettingUp)
-        
-        for _, joint in pairs(char:GetDescendants()) do
-            if joint:IsA("Motor6D") then
-                joint.Enabled = true
-            end
-        end
-        
-        for _, part in pairs(char:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.CustomPhysicalProperties = nil
-            end
-        end
-        
-        local hrpActual = char:FindFirstChild("HumanoidRootPart")
-        if hrpActual then
-            hrpActual.CFrame = cframeOriginal
-        end
-    end
-    
-    telaBusy = false
-end
-
-button(telaPage, "¡Activar Movimiento Tela!", UDim2.new(1,-8,0,50), UDim2.new(0,0,0,10), function()
-    aplicarTela()
-end)
-
--- ==========================================
--- PESTAÑA: SONIDOS (Con UIListLayout)
--- ==========================================
 local soundsPage=newPage("Sonidos")
 local categoryBar=card(soundsPage,44)
 local categoryButtons={}
@@ -324,8 +286,8 @@ actionCard(configPage,"Cargar configuración","Restaura los valores guardados","
 end)
 actionCard(configPage,"Actualizar catálogo","Vuelve a consultar GitHub","Actualizar",function() if refreshCatalog then task.spawn(refreshCatalog) end end)
 
-local navNames={"Inicio","Macro","Cuchillo","Tela","Sonidos","Configuración"}
-local navIcons={Inicio="⌂",Macro="◎",Cuchillo="🔪",Tela="💃",Sonidos="♫",["Configuración"]="⚙"}
+local navNames={"Inicio","Macro","Cuchillo","Sonidos","Configuración"}
+local navIcons={Inicio="⌂",Macro="◎",Cuchillo="🔪",Sonidos="♫",["Configuración"]="⚙"}
 showPage=function(name)
   activeTab=name
   for n,p in pairs(pages) do p.Visible=(n==name) end
