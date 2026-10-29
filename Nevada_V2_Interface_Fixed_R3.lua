@@ -1,4 +1,4 @@
--- NEVADA V7 | Interfaz completa + Macro de Cuchillo (Xero) + Sonidos
+-- NEVADA V7 | Interfaz completa + Macro de Cuchillo + Sonidos
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
