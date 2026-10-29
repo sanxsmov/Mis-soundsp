@@ -1,4 +1,4 @@
--- NEVADA V8 | Interfaz + Macros + Sonidos + Movimiento Tela Automático
+-- NEVADA V7 | Interfaz completa + Macro de Cuchillo (Xero) + Sonidos
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
@@ -53,48 +53,6 @@ local function playSound(url)
   task.delay(20, function() if s.Parent then s:Destroy() end end)
 end
 
--- ==========================================
--- MOVIMIENTO TELA AUTOMÁTICO (Sin botones)
--- ==========================================
-local function activarTelaAutomatica()
-    local char = player.Character
-    if not char then return end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-
-    local cframeOriginal = hrp.CFrame
-    
-    RunService.Heartbeat:Connect(function()
-        -- Si el personaje cambia o muere, se detiene
-        if not char.Parent or player.Character ~= char then return end
-        local hrpActual = char:FindFirstChild("HumanoidRootPart")
-        if not hrpActual then return end
-        
-        local tiempo = tick() * 10 
-        
-        -- Rotaciones para el efecto tela (Gira y se mece)
-        local rotacionX = math.sin(tiempo) * 0.8 
-        local rotacionZ = math.cos(tiempo) * 0.8 
-        local rotacionY = math.sin(tiempo * 0.5) * 2 
-        
-        hrpActual.CFrame = cframeOriginal * CFrame.Angles(rotacionX, rotacionY, rotacionZ)
-    end)
-end
-
--- Activar al iniciar
-if player.Character then
-    activarTelaAutomatica()
-end
-
--- Reactivar al respawnear
-player.CharacterAdded:Connect(function(char)
-    task.wait(1)
-    activarTelaAutomatica()
-end)
-
--- ==========================================
--- INTERFAZ GRÁFICA
--- ==========================================
 if playerGui:FindFirstChild("NevadaV2") then playerGui.NevadaV2:Destroy() end
 local gui = Instance.new("ScreenGui")
 gui.Name, gui.ResetOnSpawn, gui.IgnoreGuiInset = "NevadaV2", false, true
