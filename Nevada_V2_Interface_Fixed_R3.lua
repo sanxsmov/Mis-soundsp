@@ -1,4 +1,4 @@
--- NEVADA V6 | Interfaz completa + Macro Cuchillo + Sonidos + Movimiento Tela (Seguro)
+-- NEVADA V7 | Movimiento Tela Corregido (Sin pegarse) + Tu Menú Completo
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
@@ -179,7 +179,7 @@ slider(knifePage,"Delay al Lanzar",0.01,0.50,state.knifeThrowDelay,function(v) s
 local knifeInfo=card(knifePage,72); label(knifeInfo,"Presiona L2 para equipar, lanzar y guardar el cuchillo automáticamente.",UDim2.new(1,-24,1,-12),UDim2.new(0,12,0,6),12,C.sub,false)
 
 -- ==========================================
--- PESTAÑA: MOVIMIENTO TELA (SEGURO)
+-- PESTAÑA: MOVIMIENTO TELA (CORREGIDO)
 -- ==========================================
 local telaPage=newPage("Tela")
 local telaInfo=card(telaPage, 60)
@@ -199,12 +199,16 @@ local function aplicarTela()
     local cframeOriginal = hrp.CFrame
     
     hum.PlatformStand = true
-    hum:ChangeState(Enum.HumanoidStateType.Physics)
     
+    for _, joint in pairs(char:GetDescendants()) do
+        if joint:IsA("Motor6D") then
+            joint.Enabled = false
+        end
+    end
+
     for _, part in pairs(char:GetDescendants()) do
         if part:IsA("BasePart") then
-            part.CanCollide = false
-            part.CustomPhysicalProperties = PhysicalProperties.new(0.0001, 0, 0, 0, 0)
+            part.CustomPhysicalProperties = PhysicalProperties.new(0.1, 0.5, 0.5, 1, 1)
         end
     end
 
@@ -212,15 +216,12 @@ local function aplicarTela()
         local hrpActual = char:FindFirstChild("HumanoidRootPart")
         if not hrpActual or not char.Parent then return end
         
-        -- CFrame aleatorio (Efecto Tela de Itachi)
-        hrpActual.CFrame = cframeOriginal * CFrame.new(math.random(-1, 1), math.random(0, 2), math.random(-1, 1))
-        
-        -- Velocidad controlada (Evita que el anti-cheat te saque)
-        hrpActual.AssemblyLinearVelocity = Vector3.new(math.random(-10, 10), 5, math.random(-10, 10))
-        hrpActual.AssemblyAngularVelocity = Vector3.new(math.random(-5, 5), math.random(-5, 5), math.random(-5, 5))
+        hrpActual.CFrame = cframeOriginal * CFrame.new(math.random(-1, 1), 0, math.random(-1, 1))
+        hrpActual.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+        hrpActual.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
     end)
 
-    task.wait(1.5)
+    task.wait(2.0)
 
     if connection then connection:Disconnect() end
     
@@ -228,20 +229,21 @@ local function aplicarTela()
         hum.PlatformStand = false
         hum:ChangeState(Enum.HumanoidStateType.GettingUp)
         
-        local hrpActual = char:FindFirstChild("HumanoidRootPart")
-        if hrpActual then
-            hrpActual.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-            hrpActual.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-            hrpActual.Velocity = Vector3.new(0, 0, 0)
-            hrpActual.RotVelocity = Vector3.new(0, 0, 0)
-            hrpActual.CFrame = cframeOriginal
+        for _, joint in pairs(char:GetDescendants()) do
+            if joint:IsA("Motor6D") then
+                joint.Enabled = true
+            end
         end
         
         for _, part in pairs(char:GetDescendants()) do
             if part:IsA("BasePart") then
-                part.CanCollide = true
                 part.CustomPhysicalProperties = nil
             end
+        end
+        
+        local hrpActual = char:FindFirstChild("HumanoidRootPart")
+        if hrpActual then
+            hrpActual.CFrame = cframeOriginal
         end
     end
     
@@ -253,7 +255,7 @@ button(telaPage, "¡Activar Movimiento Tela!", UDim2.new(1,-8,0,50), UDim2.new(0
 end)
 
 -- ==========================================
--- PESTAÑA: SONIDOS
+-- PESTAÑA: SONIDOS (Con UIListLayout)
 -- ==========================================
 local soundsPage=newPage("Sonidos")
 local categoryBar=card(soundsPage,44)
