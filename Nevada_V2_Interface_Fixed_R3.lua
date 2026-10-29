@@ -1,4 +1,4 @@
--- NEVADA V4 | Menú + Macro Cuchillo (Xero) + Sonidos Interceptados
+-- NEVADA V5 | Interfaz completa + Macro de Cuchillo (Xero) + Sonidos + Movimiento Tela
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
@@ -17,6 +17,7 @@ local CONFIG_FILE = "nevada_v2_config.json"
 local state = {
   macro = false, equipDelay = 0.05, shootDelay = 0.10,
   knifeMacroEnabled = false, knifeEquipDelay = 0.10, knifeThrowDelay = 0.10,
+  telaEnabled = false, -- Nueva variable para el movimiento tela
   selected = {Arma={Name="Ninguno",URL=""}, Saltar={Name="Ninguno",URL=""}, Matar={Name="Ninguno",URL=""}},
   enabled = {Arma=true, Saltar=true, Matar=true}, muted = {Arma=false, Saltar=false, Matar=false},
   folder = FOLDERS[1]
@@ -155,6 +156,7 @@ local welcome=card(home,108); label(welcome,"Bienvenido a Nevada",UDim2.new(1,-2
 actionCard(home,"Sonidos","Catálogo de tu repositorio de GitHub","Abrir sonidos",function() showPage("Sonidos") end)
 actionCard(home,"Macro Arma","Disparo rápido automático","Ver macro",function() showPage("Macro") end)
 actionCard(home,"Macro Cuchillo","Lanzamiento rápido (L2)","Ver macro",function() showPage("Cuchillo") end)
+actionCard(home,"Movimiento Tela","Efecto visual de gelatina (TikTok)","Ver efecto",function() showPage("Tela") end)
 
 local macroPage=newPage("Macro")
 switch(macroPage,"Activar macro de arma",false,function(v) state.macro=v end)
@@ -176,6 +178,67 @@ switch(knifePage,"Activar Macro Cuchillo (L2)",false,function(v) state.knifeMacr
 slider(knifePage,"Delay al Equipar",0.01,0.50,state.knifeEquipDelay,function(v) state.knifeEquipDelay = v end)
 slider(knifePage,"Delay al Lanzar",0.01,0.50,state.knifeThrowDelay,function(v) state.knifeThrowDelay = v end)
 local knifeInfo=card(knifePage,72); label(knifeInfo,"Presiona L2 para equipar, lanzar y guardar el cuchillo automáticamente.",UDim2.new(1,-24,1,-12),UDim2.new(0,12,0,6),12,C.sub,false)
+
+-- ==========================================
+-- NUEVA PESTAÑA: MOVIMIENTO TELA
+-- ==========================================
+local telaPage=newPage("Tela")
+local telaInfo=card(telaPage, 60)
+label(telaInfo, "Haz que tu personaje se retuerza y vibre (Efecto TikTok) sin salir volando.", UDim2.new(1,-24,1,-12), UDim2.new(0,12,0,6), 12, C.sub, false)
+
+local telaBusy = false
+local function aplicarTela()
+    if telaBusy then return end
+    local char = player.Character
+    if not char then return end
+    
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hrp or not hum then return end
+
+    telaBusy = true
+    hum.PlatformStand = true
+    hum:ChangeState(Enum.HumanoidStateType.Physics)
+    
+    for _, part in pairs(char:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.CanCollide = false
+            part.CustomPhysicalProperties = PhysicalProperties.new(0.0001, 0, 0, 0, 0)
+        end
+    end
+
+    task.spawn(function()
+        local tiempoInicio = os.clock()
+        -- El efecto dura 2 segundos
+        while os.clock() - tiempoInicio < 2.0 and char.Parent do
+            local hrpActual = char:FindFirstChild("HumanoidRootPart")
+            if not hrpActual then break end
+            
+            -- Movimiento de vibración (Sin volar)
+            hrpActual.CFrame = hrpActual.CFrame * CFrame.new(math.random(-2, 2), math.random(0, 1), math.random(-2, 2))
+            hrpActual.AssemblyLinearVelocity = Vector3.new(math.random(-10, 10), 5, math.random(-10, 10))
+            
+            RunService.Heartbeat:Wait()
+        end
+        
+        -- Restaurar al terminar
+        if char.Parent and hum.Parent then
+            hum.PlatformStand = false
+            hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+            for _, part in pairs(char:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.CanCollide = true
+                    part.CustomPhysicalProperties = nil
+                end
+            end
+        end
+        telaBusy = false
+    end)
+end
+
+button(telaPage, "¡Activar Movimiento Tela!", UDim2.new(1,-8,0,50), UDim2.new(0,0,0,10), function()
+    aplicarTela()
+end)
 
 local soundsPage=newPage("Sonidos")
 local categoryBar=card(soundsPage,44)
@@ -244,8 +307,8 @@ actionCard(configPage,"Cargar configuración","Restaura los valores guardados","
 end)
 actionCard(configPage,"Actualizar catálogo","Vuelve a consultar GitHub","Actualizar",function() if refreshCatalog then task.spawn(refreshCatalog) end end)
 
-local navNames={"Inicio","Macro","Cuchillo","Sonidos","Configuración"}
-local navIcons={Inicio="⌂",Macro="◎",Cuchillo="🔪",Sonidos="♫",["Configuración"]="⚙"}
+local navNames={"Inicio","Macro","Cuchillo","Tela","Sonidos","Configuración"}
+local navIcons={Inicio="⌂",Macro="◎",Cuchillo="🔪",Tela="💃",Sonidos="♫",["Configuración"]="⚙"}
 showPage=function(name)
   activeTab=name
   for n,p in pairs(pages) do p.Visible=(n==name) end
@@ -399,7 +462,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 end)
 
 -- ==========================================
--- SONIDOS INTERCEPTADOS (Aquí está la magia que faltaba)
+-- SONIDOS INTERCEPTADOS
 -- ==========================================
 local ORIGINAL_SHOT="10209603"
 local ORIGINAL_KILL="296102734"
@@ -414,7 +477,6 @@ local function watchNativeSound(obj)
     local id = tostring(obj.SoundId or ""):match("(%d+)")
     local category = nil
     
-    -- Detecta si es sonido de arma o de muerte
     if id == ORIGINAL_SHOT or (obj.Name:lower():find("gun") and obj:FindFirstAncestorWhichIsA("Tool")) then
         category = "Arma"
     elseif id == ORIGINAL_KILL or obj.Name:lower():find("kill") then
@@ -426,7 +488,6 @@ local function watchNativeSound(obj)
     local custom=state.selected[category]
     if not state.enabled[category] or state.muted[category] or not custom or custom.URL=="" then return end
     
-    -- Silencia el original y pone el tuyo
     pcall(function() obj.Volume=0 end)
     playSound(custom.URL)
   end
@@ -435,7 +496,6 @@ local function watchNativeSound(obj)
   if obj.IsPlaying or obj.Playing then task.defer(check) end
 end
 
--- Escanea las armas del juego para que detecte los sonidos
 local function scanSoundTree(root)
   if not root then return end
   if root:IsA("Sound") then watchNativeSound(root) end
