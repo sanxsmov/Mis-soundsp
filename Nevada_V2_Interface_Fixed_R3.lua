@@ -1,4 +1,4 @@
--- NEVADA V12 | Macro 360 (Cuerpo Completo + Delay Ajustable) + Sonidos + Macros
+-- NEVADA V14 | Macro 360 (Rápido) + Anti-Lobby + Sonidos + Macros
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
@@ -17,7 +17,8 @@ local CONFIG_FILE = "nevada_v2_config.json"
 local state = {
   macro = false, equipDelay = 0.05, shootDelay = 0.10,
   knifeMacroEnabled = false, knifeEquipDelay = 0.10, knifeThrowDelay = 0.10,
-  macro360Enabled = false, macro360Delay = 0.5, macro360EquipDelay = 0.15, -- Nuevos tiempos
+  -- Tiempos por defecto de la Macro 360 (más rápidos)
+  macro360Enabled = false, macro360Delay = 0.15, macro360EquipDelay = 0.05, 
   selected = {Arma={Name="Ninguno",URL=""}, Saltar={Name="Ninguno",URL=""}, Matar={Name="Ninguno",URL=""}},
   enabled = {Arma=true, Saltar=true, Matar=true}, muted = {Arma=false, Saltar=false, Matar=false},
   folder = FOLDERS[1]
@@ -26,6 +27,31 @@ local sounds, soundCache, activeTab, soundCategory = {}, {}, "Inicio", "Arma"
 local refreshCatalog
 
 local function round2(n) return math.floor(n * 100 + 0.5) / 100 end
+
+-- SISTEMA ANTI-LOBBY
+local SAFE_ZONES = {
+    {Center = Vector3.new(-320.50, 280.82, 16.00), Radius = 500},
+    {Center = Vector3.new(1564.14, -155.45, 40.04), Radius = 300}
+}
+
+local function estaEnLobby()
+    local character = player.Character
+    if not character then return true end
+    if character:FindFirstChildOfClass("ForceField") then return true end
+    if player.Team then
+        local name = player.Team.Name:lower()
+        if name:find("lobby") or name:find("spectat") or name:find("espectador") or name:find("menu") or name:find("dead") then 
+            return true 
+        end
+    end
+    local root = character:FindFirstChild("HumanoidRootPart")
+    if root then
+        for _, zone in ipairs(SAFE_ZONES) do
+            if (root.Position - zone.Center).Magnitude <= zone.Radius then return true end
+        end
+    end
+    return false
+end
 
 local function playSound(url)
   if type(url) ~= "string" or url == "" then return end
@@ -180,15 +206,17 @@ slider(knifePage,"Delay al Lanzar",0.01,0.50,state.knifeThrowDelay,function(v) s
 local knifeInfo=card(knifePage,72); label(knifeInfo,"Presiona L2 para equipar, lanzar y guardar el cuchillo automáticamente.",UDim2.new(1,-24,1,-12),UDim2.new(0,12,0,6),12,C.sub,false)
 
 -- ==========================================
--- NUEVA PESTAÑA: MACRO 360 (Cuerpo Completo)
+-- MACRO 360 (TIEMPOS MÁS RÁPIDOS Y ENTENDIBLES)
 -- ==========================================
 local macro360Page = newPage("Macro360")
 local asInfo = card(macro360Page, 60)
-label(asInfo, "Busca enemigos en 360 grados, dispara a cualquier parte del cuerpo y guarda el arma.", UDim2.new(1,-24,1,-12), UDim2.new(0,12,0,6), 12, C.sub, false)
+label(asInfo, "Busca enemigos, dispara a cualquier parte del cuerpo y guarda el arma.", UDim2.new(1,-24,1,-12), UDim2.new(0,12,0,6), 12, C.sub, false)
 
 switch(macro360Page, "Activar Macro 360", false, function(v) state.macro360Enabled = v end)
-slider(macro360Page, "Delay entre Disparos", 0.1, 2.0, state.macro360Delay, function(v) state.macro360Delay = v end)
-slider(macro360Page, "Delay al Equipar", 0.05, 0.5, state.macro360EquipDelay, function(v) state.macro360EquipDelay = v end)
+
+-- Cambiado el nombre para que se entienda: Menor número = Dispara más rápido.
+slider(macro360Page, "Velocidad de Disparo (Menor = Más Rápido)", 0.01, 1.0, state.macro360Delay, function(v) state.macro360Delay = v end)
+slider(macro360Page, "Tiempo para Sacar el Arma", 0.01, 0.5, state.macro360EquipDelay, function(v) state.macro360EquipDelay = v end)
 
 local isBusy360 = false
 
@@ -196,28 +224,26 @@ task.spawn(function()
     local params = RaycastParams.new()
     params.FilterType = Enum.RaycastFilterType.Exclude
     
-    while task.wait(0.1) do
-        if state.macro360Enabled and not isBusy360 then
+    while task.wait(0.05) do -- Revisa más rápido (antes era 0.1)
+        if state.macro360Enabled and not isBusy360 and not estaEnLobby() then
             local char = player.Character
             if not char or not char:FindFirstChild("HumanoidRootPart") then continue end
             local hum = char:FindFirstChildOfClass("Humanoid")
             if not hum or hum.Health <= 0 then continue end
             
-            -- BUSCAR ENEMIGO EN 360 GRADOS
             local bestPart, bestDist = nil, math.huge
             local myPos = char.HumanoidRootPart.Position
             
             for _, p in ipairs(Players:GetPlayers()) do
                 if p ~= player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
                     local eHum = p.Character:FindFirstChildOfClass("Humanoid")
-                    if eHum and eHum.Health > 0 then
+                    if eHum and eHum.Health > 0 and not p.Character:FindFirstChildOfClass("ForceField") then
                         local dist = (p.Character.HumanoidRootPart.Position - myPos).Magnitude
                         if dist < 150 and dist < bestDist then
                             params.FilterDescendantsInstances = { char, p.Character }
                             local ray = workspace:Raycast(myPos, p.Character.HumanoidRootPart.Position - myPos, params)
                             
                             if not ray then
-                                -- 🔥 ESCANEAR TODO EL CUERPO 🔥
                                 for _, part in ipairs(p.Character:GetChildren()) do
                                     if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" and part.Name ~= "Humanoid" then
                                         local partDist = (part.Position - myPos).Magnitude
@@ -236,7 +262,6 @@ task.spawn(function()
                 end
             end
             
-            -- CICLO DE DISPARO
             if bestPart then
                 isBusy360 = true
                 local backpack = player:FindFirstChildOfClass("Backpack")
@@ -260,11 +285,9 @@ task.spawn(function()
                     
                     if tool.Parent == char then
                         local originalCamCFrame = workspace.CurrentCamera.CFrame
-                        
-                        -- Disparo invisible
                         workspace.CurrentCamera.CFrame = CFrame.new(originalCamCFrame.Position, bestPart.Position)
                         pcall(function() tool:Activate() end)
-                        task.wait(0.1)
+                        task.wait(0.05) -- Micro delay para el disparo
                         pcall(function() tool:Deactivate() end)
                         workspace.CurrentCamera.CFrame = originalCamCFrame
                         
@@ -275,7 +298,7 @@ task.spawn(function()
                     end
                 end
                 
-                task.wait(state.macro360Delay) -- Delay configurable
+                task.wait(state.macro360Delay) -- Aquí se aplica la velocidad
                 isBusy360 = false
             end
         end
@@ -339,7 +362,7 @@ actionCard(configPage,"Cargar configuración","Restaura los valores guardados","
     if type(decoded.macro)=="boolean" then state.macro=decoded.macro end
     if type(decoded.knifeMacroEnabled)=="boolean" then state.knifeMacroEnabled=decoded.knifeMacroEnabled end
     if type(decoded.macro360Enabled)=="boolean" then state.macro360Enabled=decoded.macro360Enabled end
-    if tonumber(decoded.macro360Delay) then state.macro360Delay=math.clamp(decoded.macro360Delay,0.1,2.0) end
+    if tonumber(decoded.macro360Delay) then state.macro360Delay=math.clamp(decoded.macro360Delay,0.01,1.0) end
     if tonumber(decoded.equipDelay) then state.equipDelay=math.clamp(decoded.equipDelay,0.01,0.5) end
     if tonumber(decoded.shootDelay) then state.shootDelay=math.clamp(decoded.shootDelay,0.01,0.5) end
     if tonumber(decoded.knifeEquipDelay) then state.knifeEquipDelay=math.clamp(decoded.knifeEquipDelay,0.01,0.5) end
@@ -527,7 +550,7 @@ task.spawn(function()
       if type(decoded.macro)=="boolean" then state.macro=decoded.macro end
       if type(decoded.knifeMacroEnabled)=="boolean" then state.knifeMacroEnabled=decoded.knifeMacroEnabled end
       if type(decoded.macro360Enabled)=="boolean" then state.macro360Enabled=decoded.macro360Enabled end
-      if tonumber(decoded.macro360Delay) then state.macro360Delay=math.clamp(decoded.macro360Delay,0.1,2.0) end
+      if tonumber(decoded.macro360Delay) then state.macro360Delay=math.clamp(decoded.macro360Delay,0.01,1.0) end
       if tonumber(decoded.equipDelay) then state.equipDelay=math.clamp(decoded.equipDelay,0.01,0.5) end
       if tonumber(decoded.shootDelay) then state.shootDelay=math.clamp(decoded.shootDelay,0.01,0.5) end
       refreshDetails()
