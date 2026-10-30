@@ -1,4 +1,4 @@
--- NEVADA V23 | Hook Raycast + Team Check Avanzado + Botón Flotante Sincronizado
+-- NEVADA V24 | Hook Raycast + Team Check (Scoreboard de RoxHub) + Botón Flotante
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
@@ -33,44 +33,72 @@ local refreshCatalog
 local function round2(n) return math.floor(n * 100 + 0.5) / 100 end
 
 -- ==========================================
--- TEAM CHECK (SÚPER ROBUSTO)
+-- TEAM CHECK EXACTO DE ROXHUB (Leyendo el Scoreboard)
 -- ==========================================
+local function getInGameScoreboard()
+    local gui = player:FindFirstChild("PlayerGui")
+    local main = gui and gui:FindFirstChild("Main")
+    local frame = main and main:FindFirstChild("MainGameFrame")
+    return frame and frame:FindFirstChild("IngameScore") or nil
+end
+
+local function getTeamSnapshot()
+    local snapshot = {}
+    local score = getInGameScoreboard()
+    if score then
+        for _, teamName in ipairs({"TeamRed", "TeamBlue"}) do
+            local teamFolder = score:FindFirstChild(teamName)
+            if teamFolder then
+                local team = teamName == "TeamRed" and "Red" or "Blue"
+                for _, entry in ipairs(teamFolder:GetChildren()) do
+                    if entry:IsA("GuiObject") then
+                        -- Guarda el nombre del jugador en minúsculas con su equipo
+                        snapshot[string.lower(entry.Name)] = team
+                    end
+                end
+            end
+        end
+    end
+    return snapshot
+end
+
+local function getPlayerTeam(targetPlayer)
+    if not targetPlayer then return nil end
+    local snapshot = getTeamSnapshot()
+    
+    -- 1. Buscar por Nombre en la Scoreboard
+    local team = snapshot[string.lower(targetPlayer.Name)]
+    if team then return team end
+    
+    -- 2. Buscar por DisplayName
+    if targetPlayer.DisplayName then
+        team = snapshot[string.lower(targetPlayer.DisplayName)]
+        if team then return team end
+    end
+    
+    -- 3. Fallback a atributos si la scoreboard está vacía
+    local attr = targetPlayer:GetAttribute("Team") or targetPlayer:GetAttribute("team")
+    if attr and tostring(attr) ~= "" then return tostring(attr) end
+    
+    -- 4. Fallback a Roblox Team
+    if targetPlayer.Team then return targetPlayer.Team.Name end
+    
+    return nil
+end
+
 local function isEnemy(targetPlayer)
     if not targetPlayer or targetPlayer == player then return false end
     
-    -- 1. Revisar Player.Team
-    if player.Team ~= nil and targetPlayer.Team ~= nil then
-        if player.Team == targetPlayer.Team then return false end
+    local myTeam = getPlayerTeam(player)
+    local targetTeam = getPlayerTeam(targetPlayer)
+    
+    -- Si ambos tienen equipo, comparar. Si son iguales, NO es enemigo.
+    if myTeam ~= nil and targetTeam ~= nil then
+        return myTeam ~= targetTeam
     end
     
-    -- 2. Revisar Player.TeamColor
-    local myColor = player.TeamColor
-    local targetColor = targetPlayer.TeamColor
-    if myColor and targetColor then
-        if myColor.Name ~= "White" and myColor.Name ~= "Medium stone grey" then
-            if myColor == targetColor then return false end
-        end
-    end
-    
-    -- 3. Revisar Atributos del Jugador (Muy común en Duels)
-    local myTeamAttr = player:GetAttribute("Team") or player:GetAttribute("team")
-    local targetTeamAttr = targetPlayer:GetAttribute("Team") or targetPlayer:GetAttribute("team")
-    if myTeamAttr ~= nil and targetTeamAttr ~= nil then
-        if myTeamAttr == targetTeamAttr then return false end
-    end
-
-    -- 4. Revisar Atributos del Personaje
-    local char = player.Character
-    local targetChar = targetPlayer.Character
-    if char and targetChar then
-        local myCharAttr = char:GetAttribute("Team") or char:GetAttribute("team")
-        local targetCharAttr = targetChar:GetAttribute("Team") or targetChar:GetAttribute("team")
-        if myCharAttr ~= nil and targetCharAttr ~= nil then
-            if myCharAttr == targetCharAttr then return false end
-        end
-    end
-    
-    return true -- Si no coinciden en nada, es enemigo
+    -- Si no se puede determinar el equipo, asumimos que es enemigo (para no romper el script)
+    return true 
 end
 
 -- ==========================================
@@ -292,41 +320,37 @@ slider(knifePage,"Delay al Lanzar",0.01,0.50,state.knifeThrowDelay,function(v) s
 local knifeInfo=card(knifePage,72); label(knifeInfo,"Presiona L2 para equipar, lanzar y guardar el cuchillo automáticamente.",UDim2.new(1,-24,1,-12),UDim2.new(0,12,0,6),12,C.sub,false)
 
 -- ==========================================
--- MACRO 360 (CON BOTÓN FLOTANTE SINCRONIZADO)
+-- MACRO 360
 -- ==========================================
 local macro360Page = newPage("Macro360")
 local asInfo = card(macro360Page, 60)
 label(asInfo, "Busca enemigos, dispara invisiblemente usando el Hook. Solo funciona con armas de fuego.", UDim2.new(1,-24,1,-12), UDim2.new(0,12,0,6), 12, C.sub, false)
 
--- Variables para guardar las referencias de los botones
 local toggle360MenuBtn = nil
 local floatingBtn = nil
+local isBusy360 = false
 
--- Función maestra para actualizar todo
 local function setMacro360State(nuevoEstado)
     state.macro360Enabled = nuevoEstado
     
-    -- Actualizar el botón del Menú
     if toggle360MenuBtn then
         toggle360MenuBtn.Text = nuevoEstado and "ACTIVADO" or "DESACTIVADO"
         toggle360MenuBtn.BackgroundColor3 = nuevoEstado and C.blue or C.card
     end
     
-    -- Actualizar el Botón Flotante (Verde o Rojo)
     if floatingBtn then
         if nuevoEstado then
             floatingBtn.Text = "MACRO 360: ON"
-            floatingBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 0) -- Verde Brillante
-            floatingBtn.UIStroke.Color = Color3.fromRGB(0, 255, 100)
+            floatingBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
+            if floatingBtn:FindFirstChild("UIStroke") then floatingBtn.UIStroke.Color = Color3.fromRGB(0, 255, 100) end
         else
             floatingBtn.Text = "MACRO 360: OFF"
-            floatingBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0) -- Rojo Brillante
-            floatingBtn.UIStroke.Color = Color3.fromRGB(255, 100, 100)
+            floatingBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+            if floatingBtn:FindFirstChild("UIStroke") then floatingBtn.UIStroke.Color = Color3.fromRGB(255, 100, 100) end
         end
     end
 end
 
--- Crear el botón del menú con la nueva función maestra
 toggle360MenuBtn = switch(macro360Page, "Activar Auto Shoot / Macro 360", false, function(v) 
     setMacro360State(v) 
 end)
@@ -336,9 +360,7 @@ slider(macro360Page, "Probabilidad de acierto (%)", 1, 100, state.macro360HitCha
 slider(macro360Page, "Tiempo de reacción (s)", 0, 1, state.macro360Reaction, function(v) state.macro360Reaction = v end)
 slider(macro360Page, "Delay entre Disparos (s)", 0.01, 1.0, state.macro360Cooldown, function(v) state.macro360Cooldown = v end)
 
-local isBusy360 = false
-
--- Crear Botón Flotante
+-- Botón Flotante
 floatingBtn = create("TextButton", {
     Size = UDim2.new(0, 120, 0, 45),
     Position = UDim2.new(0, 20, 0.5, 0),
@@ -351,9 +373,9 @@ floatingBtn = create("TextButton", {
     ZIndex = 100
 }, gui)
 corner(floatingBtn, 8)
-stroke(floatingBtn, Color3.fromRGB(255,100,100), 1, 0.5)
+local fStroke = stroke(floatingBtn, Color3.fromRGB(255,100,100), 1, 0.5)
+fStroke.Name = "UIStroke" -- Nombrar para encontrarlo en la función
 
--- Hacerlo arrastrable
 local draggingBtn = false
 local dragStartBtn, startPosBtn
 floatingBtn.InputBegan:Connect(function(input)
@@ -375,14 +397,12 @@ UserInputService.InputEnded:Connect(function(input)
     end
 end)
 
--- Clic del botón flotante para activar/desactivar
 floatingBtn.MouseButton1Click:Connect(function()
-    -- Invertir el estado actual y llamar a la función maestra
     setMacro360State(not state.macro360Enabled)
 end)
 
 -- ==========================================
--- BUCLE DE LA MACRO 360
+-- BUCLE DE LA MACRO 360 (USANDO EL NUEVO TEAM CHECK)
 -- ==========================================
 task.spawn(function()
     local params = RaycastParams.new()
@@ -399,7 +419,7 @@ task.spawn(function()
             local myPos = char.HumanoidRootPart.Position
             
             for _, p in ipairs(Players:GetPlayers()) do
-                -- 🔥 AQUÍ SE USA EL TEAM CHECK ROBUSTO 🔥
+                -- 🔥 AQUÍ SE USA EL TEAM CHECK DE ROXHUB 🔥
                 if isEnemy(p) and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
                     local eHum = p.Character:FindFirstChildOfClass("Humanoid")
                     if eHum and eHum.Health > 0 and not p.Character:FindFirstChildOfClass("ForceField") then
