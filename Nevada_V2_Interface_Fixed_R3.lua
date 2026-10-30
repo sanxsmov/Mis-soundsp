@@ -1,4 +1,4 @@
--- NEVADA V19 | Hook Raycast Real (Silent Aim de RoxHub) + Macros + Sonidos
+-- NEVADA V21 | Hook Raycast (Solo Pistolas y Ultra Rápido) + Botón Flotante + Macros + Sonidos
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
@@ -21,7 +21,7 @@ local state = {
   macro360Fov = 120, 
   macro360HitChance = 100, 
   macro360Reaction = 0,
-  macro360Cooldown = 0.15, 
+  macro360Cooldown = 0.05, -- MÁS RÁPIDO POR DEFECTO
   
   selected = {Arma={Name="Ninguno",URL=""}, Saltar={Name="Ninguno",URL=""}, Matar={Name="Ninguno",URL=""}},
   enabled = {Arma=true, Saltar=true, Matar=true}, muted = {Arma=false, Saltar=false, Matar=false},
@@ -60,7 +60,16 @@ local function estaEnLobby()
 end
 
 -- ==========================================
--- HOOK DE RAYCAST (La magia de RoxHub)
+-- DETECCIÓN DE PISTOLA EXACTA (Lógica de RoxHub)
+-- ==========================================
+local function esPistola(tool)
+    if not tool or not tool:IsA("Tool") then return false end
+    local beam = tool:FindFirstChild("showBeam")
+    return beam ~= nil and beam:IsA("RemoteEvent")
+end
+
+-- ==========================================
+-- HOOK DE RAYCAST (Silent Aim)
 -- ==========================================
 getgenv().NevadaTargetPart = nil
 
@@ -73,7 +82,6 @@ if hookmetamethod and getnamecallmethod and checkcaller then
                 local target = getgenv().NevadaTargetPart
                 if target and target.Parent then
                     local origin, direction, p3 = ...
-                    -- Filtro de RoxHub para no romper la cámara ni otros rayos
                     if typeof(direction) == "Vector3" and direction.Magnitude > 20 then
                         local camOrigin = workspace.CurrentCamera.CFrame.Position
                         if (origin - camOrigin).Magnitude >= 1 then
@@ -122,7 +130,7 @@ local gui = Instance.new("ScreenGui")
 gui.Name, gui.ResetOnSpawn, gui.IgnoreGuiInset = "NevadaV2", false, true
 gui.Parent = playerGui
 
-local C = {bg=Color3.fromRGB(7,10,17), panel=Color3.fromRGB(10,14,23), card=Color3.fromRGB(14,19,30), edge=Color3.fromRGB(48,59,78), text=Color3.fromRGB(241,245,255), sub=Color3.fromRGB(164,177,201), blue=Color3.fromRGB(120,157,224), green=Color3.fromRGB(50,220,153)}
+local C = {bg=Color3.fromRGB(7,10,17), panel=Color3.fromRGB(10,14,23), card=Color3.fromRGB(14,19,30), edge=Color3.fromRGB(48,59,78), text=Color3.fromRGB(241,245,255), sub=Color3.fromRGB(164,177,201), blue=Color3.fromRGB(120,157,224), green=Color3.fromRGB(50,220,153), red=Color3.fromRGB(200, 50, 50)}
 local function create(class, props, parent)
   local obj = Instance.new(class)
   for k,v in pairs(props or {}) do obj[k] = v end
@@ -243,13 +251,13 @@ slider(knifePage,"Delay al Lanzar",0.01,0.50,state.knifeThrowDelay,function(v) s
 local knifeInfo=card(knifePage,72); label(knifeInfo,"Presiona L2 para equipar, lanzar y guardar el cuchillo automáticamente.",UDim2.new(1,-24,1,-12),UDim2.new(0,12,0,6),12,C.sub,false)
 
 -- ==========================================
--- MACRO 360 (CON EL HOOK REAL DE ROXHUB)
+-- MACRO 360 (SOLO PISTOLAS Y RÁPIDO)
 -- ==========================================
 local macro360Page = newPage("Macro360")
 local asInfo = card(macro360Page, 60)
-label(asInfo, "Busca enemigos, dispara invisiblemente usando el Hook y guarda el arma.", UDim2.new(1,-24,1,-12), UDim2.new(0,12,0,6), 12, C.sub, false)
+label(asInfo, "Busca enemigos, dispara invisiblemente usando el Hook. Solo funciona con armas de fuego.", UDim2.new(1,-24,1,-12), UDim2.new(0,12,0,6), 12, C.sub, false)
 
-switch(macro360Page, "Activar Auto Shoot / Macro 360", false, function(v) state.macro360Enabled = v end)
+local toggle360UI = switch(macro360Page, "Activar Auto Shoot / Macro 360", false, function(v) state.macro360Enabled = v end)
 slider(macro360Page, "Tamaño del FOV", 10, 500, state.macro360Fov, function(v) state.macro360Fov = v end)
 slider(macro360Page, "Probabilidad de acierto (%)", 1, 100, state.macro360HitChance, function(v) state.macro360HitChance = v end)
 slider(macro360Page, "Tiempo de reacción (s)", 0, 1, state.macro360Reaction, function(v) state.macro360Reaction = v end)
@@ -257,11 +265,71 @@ slider(macro360Page, "Delay entre Disparos (s)", 0.01, 1.0, state.macro360Cooldo
 
 local isBusy360 = false
 
+-- ==========================================
+-- BOTÓN FLOTANTE
+-- ==========================================
+local floatingBtn = create("TextButton", {
+    Size = UDim2.new(0, 120, 0, 45),
+    Position = UDim2.new(0, 20, 0.5, 0),
+    BackgroundColor3 = C.red,
+    Text = "MACRO 360: OFF",
+    TextColor3 = Color3.fromRGB(255, 255, 255),
+    Font = Enum.Font.GothamBold,
+    TextSize = 12,
+    AutoButtonColor = false,
+    ZIndex = 100
+}, gui)
+corner(floatingBtn, 8)
+local btnStroke = stroke(floatingBtn, Color3.fromRGB(255,255,255), 1, 0.5)
+
+local draggingBtn = false
+local dragStartBtn, startPosBtn
+floatingBtn.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        draggingBtn = true
+        dragStartBtn = input.Position
+        startPosBtn = floatingBtn.Position
+    end
+end)
+UserInputService.InputChanged:Connect(function(input)
+    if draggingBtn and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStartBtn
+        floatingBtn.Position = UDim2.new(startPosBtn.X.Scale, startPosBtn.X.Offset + delta.X, startPosBtn.Y.Scale, startPosBtn.Y.Offset + delta.Y)
+    end
+end)
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        draggingBtn = false
+    end
+end)
+
+local function updateFloatingBtn()
+    if state.macro360Enabled then
+        floatingBtn.Text = "MACRO 360: ON"
+        floatingBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 50)
+        btnStroke.Color = Color3.fromRGB(0, 255, 100)
+    else
+        floatingBtn.Text = "MACRO 360: OFF"
+        floatingBtn.BackgroundColor3 = C.red
+        btnStroke.Color = Color3.fromRGB(255, 255, 255)
+    end
+end
+
+floatingBtn.MouseButton1Click:Connect(function()
+    if draggingBtn then return end
+    state.macro360Enabled = not state.macro360Enabled
+    toggle360UI:Set(state.macro360Enabled)
+    updateFloatingBtn()
+end)
+
+-- ==========================================
+-- BUCLE DE LA MACRO 360 (RÁPIDO Y SOLO PISTOLA)
+-- ==========================================
 task.spawn(function()
     local params = RaycastParams.new()
     params.FilterType = Enum.RaycastFilterType.Exclude
     
-    while task.wait(0.05) do 
+    while task.wait(0.01) do -- Escaneo ultra rápido
         if state.macro360Enabled and not isBusy360 and not estaEnLobby() then
             local char = player.Character
             if not char or not char:FindFirstChild("HumanoidRootPart") then continue end
@@ -310,11 +378,17 @@ task.spawn(function()
                 if chance <= state.macro360HitChance then
                     local backpack = player:FindFirstChildOfClass("Backpack")
                     local tool = char:FindFirstChildOfClass("Tool")
-                    local wasEquipped = (tool ~= nil)
                     
+                    -- 🔥 LÓGICA SOLO PISTOLA 🔥
+                    -- Si tiene el cuchillo en la mano, lo ignora.
+                    if tool and not esPistola(tool) then
+                        tool = nil 
+                    end
+                    
+                    -- Si no tiene pistola en la mano, la busca en la mochila
                     if not tool and backpack then
                         for _, item in ipairs(backpack:GetChildren()) do
-                            if item:IsA("Tool") and not item.Name:lower():find("knife") then
+                            if esPistola(item) then
                                 tool = item
                                 break
                             end
@@ -322,25 +396,20 @@ task.spawn(function()
                     end
                     
                     if tool then
+                        local wasEquipped = (tool.Parent == char)
                         if not wasEquipped then
                             hum:EquipTool(tool)
-                            task.wait(0.05) 
+                            task.wait(0.01) -- Espera mínima para que el servidor registre el arma
                         end
                         
                         if tool.Parent == char then
-                            -- 🔥 AQUÍ SE USA EL HOOK DE ROXHUB 🔥
                             getgenv().NevadaTargetPart = bestPart
-                            
-                            -- Disparamos normal. El Hook redirigirá la bala.
                             pcall(function() tool:Activate() end)
-                            task.wait(0.1)
+                            task.wait(0.05) -- Tiempo de disparo rápido
                             pcall(function() tool:Deactivate() end)
-                            
-                            -- Limpiamos el objetivo
                             getgenv().NevadaTargetPart = nil
                             
                             if not wasEquipped then
-                                task.wait(0.05)
                                 pcall(function() hum:UnequipTools() end)
                             end
                         end
