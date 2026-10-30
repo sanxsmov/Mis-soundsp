@@ -1,4 +1,4 @@
--- NEVADA V7 | Interfaz completa + Macro de Cuchillo + Sonidos
+-- NEVADA V12 | Macro 360 (Cuerpo Completo + Delay Ajustable) + Sonidos + Macros
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
@@ -17,6 +17,7 @@ local CONFIG_FILE = "nevada_v2_config.json"
 local state = {
   macro = false, equipDelay = 0.05, shootDelay = 0.10,
   knifeMacroEnabled = false, knifeEquipDelay = 0.10, knifeThrowDelay = 0.10,
+  macro360Enabled = false, macro360Delay = 0.5, macro360EquipDelay = 0.15, -- Nuevos tiempos
   selected = {Arma={Name="Ninguno",URL=""}, Saltar={Name="Ninguno",URL=""}, Matar={Name="Ninguno",URL=""}},
   enabled = {Arma=true, Saltar=true, Matar=true}, muted = {Arma=false, Saltar=false, Matar=false},
   folder = FOLDERS[1]
@@ -155,6 +156,7 @@ local welcome=card(home,108); label(welcome,"Bienvenido a Nevada",UDim2.new(1,-2
 actionCard(home,"Sonidos","Catálogo de tu repositorio de GitHub","Abrir sonidos",function() showPage("Sonidos") end)
 actionCard(home,"Macro Arma","Disparo rápido automático","Ver macro",function() showPage("Macro") end)
 actionCard(home,"Macro Cuchillo","Lanzamiento rápido (L2)","Ver macro",function() showPage("Cuchillo") end)
+actionCard(home,"Macro 360","Disparo invisible a todo el cuerpo","Ver Macro 360",function() showPage("Macro360") end)
 
 local macroPage=newPage("Macro")
 switch(macroPage,"Activar macro de arma",false,function(v) state.macro=v end)
@@ -177,6 +179,112 @@ slider(knifePage,"Delay al Equipar",0.01,0.50,state.knifeEquipDelay,function(v) 
 slider(knifePage,"Delay al Lanzar",0.01,0.50,state.knifeThrowDelay,function(v) state.knifeThrowDelay = v end)
 local knifeInfo=card(knifePage,72); label(knifeInfo,"Presiona L2 para equipar, lanzar y guardar el cuchillo automáticamente.",UDim2.new(1,-24,1,-12),UDim2.new(0,12,0,6),12,C.sub,false)
 
+-- ==========================================
+-- NUEVA PESTAÑA: MACRO 360 (Cuerpo Completo)
+-- ==========================================
+local macro360Page = newPage("Macro360")
+local asInfo = card(macro360Page, 60)
+label(asInfo, "Busca enemigos en 360 grados, dispara a cualquier parte del cuerpo y guarda el arma.", UDim2.new(1,-24,1,-12), UDim2.new(0,12,0,6), 12, C.sub, false)
+
+switch(macro360Page, "Activar Macro 360", false, function(v) state.macro360Enabled = v end)
+slider(macro360Page, "Delay entre Disparos", 0.1, 2.0, state.macro360Delay, function(v) state.macro360Delay = v end)
+slider(macro360Page, "Delay al Equipar", 0.05, 0.5, state.macro360EquipDelay, function(v) state.macro360EquipDelay = v end)
+
+local isBusy360 = false
+
+task.spawn(function()
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    
+    while task.wait(0.1) do
+        if state.macro360Enabled and not isBusy360 then
+            local char = player.Character
+            if not char or not char:FindFirstChild("HumanoidRootPart") then continue end
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if not hum or hum.Health <= 0 then continue end
+            
+            -- BUSCAR ENEMIGO EN 360 GRADOS
+            local bestPart, bestDist = nil, math.huge
+            local myPos = char.HumanoidRootPart.Position
+            
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                    local eHum = p.Character:FindFirstChildOfClass("Humanoid")
+                    if eHum and eHum.Health > 0 then
+                        local dist = (p.Character.HumanoidRootPart.Position - myPos).Magnitude
+                        if dist < 150 and dist < bestDist then
+                            params.FilterDescendantsInstances = { char, p.Character }
+                            local ray = workspace:Raycast(myPos, p.Character.HumanoidRootPart.Position - myPos, params)
+                            
+                            if not ray then
+                                -- 🔥 ESCANEAR TODO EL CUERPO 🔥
+                                for _, part in ipairs(p.Character:GetChildren()) do
+                                    if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" and part.Name ~= "Humanoid" then
+                                        local partDist = (part.Position - myPos).Magnitude
+                                        if partDist < bestDist then
+                                            local partRay = workspace:Raycast(myPos, part.Position - myPos, params)
+                                            if not partRay or partRay.Instance:IsDescendantOf(p.Character) then
+                                                bestDist = partDist
+                                                bestPart = part
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+            
+            -- CICLO DE DISPARO
+            if bestPart then
+                isBusy360 = true
+                local backpack = player:FindFirstChildOfClass("Backpack")
+                local tool = char:FindFirstChildOfClass("Tool")
+                local wasEquipped = (tool ~= nil)
+                
+                if not tool and backpack then
+                    for _, item in ipairs(backpack:GetChildren()) do
+                        if item:IsA("Tool") and not item.Name:lower():find("knife") then
+                            tool = item
+                            break
+                        end
+                    end
+                end
+                
+                if tool then
+                    if not wasEquipped then
+                        hum:EquipTool(tool)
+                        task.wait(state.macro360EquipDelay)
+                    end
+                    
+                    if tool.Parent == char then
+                        local originalCamCFrame = workspace.CurrentCamera.CFrame
+                        
+                        -- Disparo invisible
+                        workspace.CurrentCamera.CFrame = CFrame.new(originalCamCFrame.Position, bestPart.Position)
+                        pcall(function() tool:Activate() end)
+                        task.wait(0.1)
+                        pcall(function() tool:Deactivate() end)
+                        workspace.CurrentCamera.CFrame = originalCamCFrame
+                        
+                        if not wasEquipped then
+                            task.wait(0.1)
+                            pcall(function() hum:UnequipTools() end)
+                        end
+                    end
+                end
+                
+                task.wait(state.macro360Delay) -- Delay configurable
+                isBusy360 = false
+            end
+        end
+    end
+end)
+
+-- ==========================================
+-- PESTAÑA: SONIDOS
+-- ==========================================
 local soundsPage=newPage("Sonidos")
 local categoryBar=card(soundsPage,44)
 local categoryButtons={}
@@ -230,6 +338,8 @@ actionCard(configPage,"Cargar configuración","Restaura los valores guardados","
   if ok and type(decoded)=="table" then
     if type(decoded.macro)=="boolean" then state.macro=decoded.macro end
     if type(decoded.knifeMacroEnabled)=="boolean" then state.knifeMacroEnabled=decoded.knifeMacroEnabled end
+    if type(decoded.macro360Enabled)=="boolean" then state.macro360Enabled=decoded.macro360Enabled end
+    if tonumber(decoded.macro360Delay) then state.macro360Delay=math.clamp(decoded.macro360Delay,0.1,2.0) end
     if tonumber(decoded.equipDelay) then state.equipDelay=math.clamp(decoded.equipDelay,0.01,0.5) end
     if tonumber(decoded.shootDelay) then state.shootDelay=math.clamp(decoded.shootDelay,0.01,0.5) end
     if tonumber(decoded.knifeEquipDelay) then state.knifeEquipDelay=math.clamp(decoded.knifeEquipDelay,0.01,0.5) end
@@ -244,8 +354,8 @@ actionCard(configPage,"Cargar configuración","Restaura los valores guardados","
 end)
 actionCard(configPage,"Actualizar catálogo","Vuelve a consultar GitHub","Actualizar",function() if refreshCatalog then task.spawn(refreshCatalog) end end)
 
-local navNames={"Inicio","Macro","Cuchillo","Sonidos","Configuración"}
-local navIcons={Inicio="⌂",Macro="◎",Cuchillo="🔪",Sonidos="♫",["Configuración"]="⚙"}
+local navNames={"Inicio","Macro","Cuchillo","Macro360","Sonidos","Configuración"}
+local navIcons={Inicio="⌂",Macro="◎",Cuchillo="🔪",Macro360="🎯",Sonidos="♫",["Configuración"]="⚙"}
 showPage=function(name)
   activeTab=name
   for n,p in pairs(pages) do p.Visible=(n==name) end
@@ -325,19 +435,13 @@ end
 
 local knifeBusy = false
 local lastKnife = 0
-
 local function obtenerCuchilloMacro()
     local character = player.Character
     local backpack = player:FindFirstChildOfClass("Backpack")
-
     for _, container in ipairs({character, backpack}) do
         if container then
             for _, item in ipairs(container:GetChildren()) do
-                if item:IsA("Tool") and (
-                    item:FindFirstChild("Throw", true)
-                    or item:FindFirstChild("KnifeClient", true)
-                    or item:FindFirstChild("KnifeServer", true)
-                ) then
+                if item:IsA("Tool") and (item:FindFirstChild("Throw", true) or item:FindFirstChild("KnifeClient", true) or item:FindFirstChild("KnifeServer", true)) then
                     return item
                 end
             end
@@ -351,15 +455,11 @@ local function runKnifeMacro()
   local character = player.Character
   local humanoid = character and character:FindFirstChildOfClass("Humanoid")
   local knife = obtenerCuchilloMacro()
-
   if not (knife and humanoid) then return end
-  
   local now = os.clock()
   if now - lastKnife < 0.1 then return end
-
   knifeBusy = true
   lastKnife = now
-  
   task.spawn(function()
     pcall(function()
         humanoid:EquipTool(knife)
@@ -368,31 +468,20 @@ local function runKnifeMacro()
         task.wait(math.max(0, state.knifeEquipDelay))
         pcall(function() knife:Activate() end)
         task.wait(state.knifeThrowDelay)
-        pcall(function()
-            if humanoid and humanoid.Parent then
-                humanoid:UnequipTools()
-            end
-        end)
+        pcall(function() if humanoid and humanoid.Parent then humanoid:UnequipTools() end end)
     end)
     knifeBusy = false
   end)
 end
 
--- ==========================================
--- ENTRADA DE USUARIO
--- ==========================================
 UserInputService.InputBegan:Connect(function(input, processed)
   if processed then return end
-  if input.UserInputType==Enum.UserInputType.MouseButton1 or input.KeyCode==Enum.KeyCode.ButtonR2 then 
-      runMacro() 
-  end
+  if input.UserInputType==Enum.UserInputType.MouseButton1 or input.KeyCode==Enum.KeyCode.ButtonR2 then runMacro() end
 end)
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if not state.knifeMacroEnabled then return end
-    if input.KeyCode == Enum.KeyCode.ButtonL2 then
-        runKnifeMacro()
-    end
+    if input.KeyCode == Enum.KeyCode.ButtonL2 then runKnifeMacro() end
 end)
 
 -- ==========================================
@@ -405,27 +494,18 @@ local watchedSounds=setmetatable({}, {__mode="k"})
 local function watchNativeSound(obj)
   if not obj:IsA("Sound") or watchedSounds[obj] then return end
   watchedSounds[obj]=true
-  
   local function check()
     if not obj.Parent then return end
     local id = tostring(obj.SoundId or ""):match("(%d+)")
     local category = nil
-    
-    if id == ORIGINAL_SHOT or (obj.Name:lower():find("gun") and obj:FindFirstAncestorWhichIsA("Tool")) then
-        category = "Arma"
-    elseif id == ORIGINAL_KILL or obj.Name:lower():find("kill") then
-        category = "Matar"
-    end
-    
+    if id == ORIGINAL_SHOT or (obj.Name:lower():find("gun") and obj:FindFirstAncestorWhichIsA("Tool")) then category = "Arma"
+    elseif id == ORIGINAL_KILL or obj.Name:lower():find("kill") then category = "Matar" end
     if not category then return end
-    
     local custom=state.selected[category]
     if not state.enabled[category] or state.muted[category] or not custom or custom.URL=="" then return end
-    
     pcall(function() obj.Volume=0 end)
     playSound(custom.URL)
   end
-  
   obj.Played:Connect(check)
   if obj.IsPlaying or obj.Playing then task.defer(check) end
 end
@@ -439,7 +519,6 @@ end
 scanSoundTree(workspace)
 scanSoundTree(SoundService)
 
--- Autoload local de configuración
 task.spawn(function()
   task.wait(1)
   if readfile and isfile and isfile(CONFIG_FILE) then
@@ -447,10 +526,10 @@ task.spawn(function()
     if ok and type(decoded)=="table" then
       if type(decoded.macro)=="boolean" then state.macro=decoded.macro end
       if type(decoded.knifeMacroEnabled)=="boolean" then state.knifeMacroEnabled=decoded.knifeMacroEnabled end
+      if type(decoded.macro360Enabled)=="boolean" then state.macro360Enabled=decoded.macro360Enabled end
+      if tonumber(decoded.macro360Delay) then state.macro360Delay=math.clamp(decoded.macro360Delay,0.1,2.0) end
       if tonumber(decoded.equipDelay) then state.equipDelay=math.clamp(decoded.equipDelay,0.01,0.5) end
       if tonumber(decoded.shootDelay) then state.shootDelay=math.clamp(decoded.shootDelay,0.01,0.5) end
-      if tonumber(decoded.knifeEquipDelay) then state.knifeEquipDelay=math.clamp(decoded.knifeEquipDelay,0.01,0.5) end
-      if tonumber(decoded.knifeThrowDelay) then state.knifeThrowDelay=math.clamp(decoded.knifeThrowDelay,0.01,0.5) end
       refreshDetails()
     end
   end
