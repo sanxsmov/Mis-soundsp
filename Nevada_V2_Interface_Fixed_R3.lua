@@ -1,4 +1,4 @@
--- NEVADA V21 | Hook Raycast (Solo Pistolas y Ultra Rápido) + Botón Flotante + Macros + Sonidos
+-- NEVADA V22 | Hook Raycast + Team Check + Botón Flotante Móvil + Macros + Sonidos
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
@@ -21,7 +21,7 @@ local state = {
   macro360Fov = 120, 
   macro360HitChance = 100, 
   macro360Reaction = 0,
-  macro360Cooldown = 0.05, -- MÁS RÁPIDO POR DEFECTO
+  macro360Cooldown = 0.05, 
   
   selected = {Arma={Name="Ninguno",URL=""}, Saltar={Name="Ninguno",URL=""}, Matar={Name="Ninguno",URL=""}},
   enabled = {Arma=true, Saltar=true, Matar=true}, muted = {Arma=false, Saltar=false, Matar=false},
@@ -31,6 +31,34 @@ local sounds, soundCache, activeTab, soundCategory = {}, {}, "Inicio", "Arma"
 local refreshCatalog
 
 local function round2(n) return math.floor(n * 100 + 0.5) / 100 end
+
+-- ==========================================
+-- TEAM CHECK (Verificación de Equipo)
+-- ==========================================
+local function isEnemy(targetPlayer)
+    if not targetPlayer or targetPlayer == player then return false end
+    
+    -- 1. Verificar si están en el mismo equipo de Roblox
+    if player.Team and targetPlayer.Team then
+        if player.Team == targetPlayer.Team then return false end
+    end
+    
+    -- 2. Verificar si tienen el mismo Color de Equipo (por si el juego no usa Teams)
+    if player.TeamColor and targetPlayer.TeamColor then
+        if player.TeamColor.Name ~= "White" and player.TeamColor.Name ~= "Medium stone grey" then
+            if player.TeamColor == targetPlayer.TeamColor then return false end
+        end
+    end
+    
+    -- 3. Verificar atributos personalizados (común en Duels)
+    local myTeamAttr = player:GetAttribute("Team") or player:GetAttribute("team")
+    local targetTeamAttr = targetPlayer:GetAttribute("Team") or targetPlayer:GetAttribute("team")
+    if myTeamAttr and targetTeamAttr and myTeamAttr == targetTeamAttr then 
+        return false 
+    end
+    
+    return true -- Si pasa todo, es enemigo
+end
 
 -- ==========================================
 -- SISTEMA ANTI-LOBBY
@@ -60,7 +88,7 @@ local function estaEnLobby()
 end
 
 -- ==========================================
--- DETECCIÓN DE PISTOLA EXACTA (Lógica de RoxHub)
+-- DETECCIÓN DE PISTOLA
 -- ==========================================
 local function esPistola(tool)
     if not tool or not tool:IsA("Tool") then return false end
@@ -251,7 +279,7 @@ slider(knifePage,"Delay al Lanzar",0.01,0.50,state.knifeThrowDelay,function(v) s
 local knifeInfo=card(knifePage,72); label(knifeInfo,"Presiona L2 para equipar, lanzar y guardar el cuchillo automáticamente.",UDim2.new(1,-24,1,-12),UDim2.new(0,12,0,6),12,C.sub,false)
 
 -- ==========================================
--- MACRO 360 (SOLO PISTOLAS Y RÁPIDO)
+-- MACRO 360 (TEAM CHECK + BOTÓN MÓVIL)
 -- ==========================================
 local macro360Page = newPage("Macro360")
 local asInfo = card(macro360Page, 60)
@@ -266,7 +294,7 @@ slider(macro360Page, "Delay entre Disparos (s)", 0.01, 1.0, state.macro360Cooldo
 local isBusy360 = false
 
 -- ==========================================
--- BOTÓN FLOTANTE
+-- BOTÓN FLOTANTE (Arreglado para Móvil)
 -- ==========================================
 local floatingBtn = create("TextButton", {
     Size = UDim2.new(0, 120, 0, 45),
@@ -284,52 +312,59 @@ local btnStroke = stroke(floatingBtn, Color3.fromRGB(255,255,255), 1, 0.5)
 
 local draggingBtn = false
 local dragStartBtn, startPosBtn
+local touchStartTime = 0
+local touchStartPos = nil
+
 floatingBtn.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         draggingBtn = true
         dragStartBtn = input.Position
         startPosBtn = floatingBtn.Position
+        touchStartTime = tick()
+        touchStartPos = input.Position
     end
 end)
+
 UserInputService.InputChanged:Connect(function(input)
     if draggingBtn and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
         local delta = input.Position - dragStartBtn
         floatingBtn.Position = UDim2.new(startPosBtn.X.Scale, startPosBtn.X.Offset + delta.X, startPosBtn.Y.Scale, startPosBtn.Y.Offset + delta.Y)
     end
 end)
+
 UserInputService.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        draggingBtn = false
+        if draggingBtn then
+            draggingBtn = false
+            local holdTime = tick() - touchStartTime
+            local moveDist = (input.Position - touchStartPos).Magnitude
+            
+            -- Si fue un toque rápido y no se movió mucho, es un clic
+            if holdTime < 0.3 and moveDist < 10 then
+                state.macro360Enabled = not state.macro360Enabled
+                toggle360UI:Set(state.macro360Enabled)
+                if state.macro360Enabled then
+                    floatingBtn.Text = "MACRO 360: ON"
+                    floatingBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 50)
+                    btnStroke.Color = Color3.fromRGB(0, 255, 100)
+                else
+                    floatingBtn.Text = "MACRO 360: OFF"
+                    floatingBtn.BackgroundColor3 = C.red
+                    btnStroke.Color = Color3.fromRGB(255, 255, 255)
+                end
+            end
+        end
     end
-end)
-
-local function updateFloatingBtn()
-    if state.macro360Enabled then
-        floatingBtn.Text = "MACRO 360: ON"
-        floatingBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 50)
-        btnStroke.Color = Color3.fromRGB(0, 255, 100)
-    else
-        floatingBtn.Text = "MACRO 360: OFF"
-        floatingBtn.BackgroundColor3 = C.red
-        btnStroke.Color = Color3.fromRGB(255, 255, 255)
-    end
-end
-
-floatingBtn.MouseButton1Click:Connect(function()
-    if draggingBtn then return end
-    state.macro360Enabled = not state.macro360Enabled
-    toggle360UI:Set(state.macro360Enabled)
-    updateFloatingBtn()
 end)
 
 -- ==========================================
--- BUCLE DE LA MACRO 360 (RÁPIDO Y SOLO PISTOLA)
+-- BUCLE DE LA MACRO 360
 -- ==========================================
 task.spawn(function()
     local params = RaycastParams.new()
     params.FilterType = Enum.RaycastFilterType.Exclude
     
-    while task.wait(0.01) do -- Escaneo ultra rápido
+    while task.wait(0.01) do 
         if state.macro360Enabled and not isBusy360 and not estaEnLobby() then
             local char = player.Character
             if not char or not char:FindFirstChild("HumanoidRootPart") then continue end
@@ -340,7 +375,8 @@ task.spawn(function()
             local myPos = char.HumanoidRootPart.Position
             
             for _, p in ipairs(Players:GetPlayers()) do
-                if p ~= player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                -- 🔥 AQUÍ SE USA EL TEAM CHECK 🔥
+                if isEnemy(p) and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
                     local eHum = p.Character:FindFirstChildOfClass("Humanoid")
                     if eHum and eHum.Health > 0 and not p.Character:FindFirstChildOfClass("ForceField") then
                         local dist = (p.Character.HumanoidRootPart.Position - myPos).Magnitude
@@ -379,13 +415,8 @@ task.spawn(function()
                     local backpack = player:FindFirstChildOfClass("Backpack")
                     local tool = char:FindFirstChildOfClass("Tool")
                     
-                    -- 🔥 LÓGICA SOLO PISTOLA 🔥
-                    -- Si tiene el cuchillo en la mano, lo ignora.
-                    if tool and not esPistola(tool) then
-                        tool = nil 
-                    end
+                    if tool and not esPistola(tool) then tool = nil end
                     
-                    -- Si no tiene pistola en la mano, la busca en la mochila
                     if not tool and backpack then
                         for _, item in ipairs(backpack:GetChildren()) do
                             if esPistola(item) then
@@ -399,13 +430,13 @@ task.spawn(function()
                         local wasEquipped = (tool.Parent == char)
                         if not wasEquipped then
                             hum:EquipTool(tool)
-                            task.wait(0.01) -- Espera mínima para que el servidor registre el arma
+                            task.wait(0.01)
                         end
                         
                         if tool.Parent == char then
                             getgenv().NevadaTargetPart = bestPart
                             pcall(function() tool:Activate() end)
-                            task.wait(0.05) -- Tiempo de disparo rápido
+                            task.wait(0.05)
                             pcall(function() tool:Deactivate() end)
                             getgenv().NevadaTargetPart = nil
                             
@@ -625,7 +656,7 @@ end)
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if not state.knifeMacroEnabled then return end
-    if input.KeyCode == Enum.KeyCode.ButtonL2 then runKnifeMacro() end
+    if input.KeyCode == Enum.KeyCode.L2 then runKnifeMacro() end
 end)
 
 -- ==========================================
