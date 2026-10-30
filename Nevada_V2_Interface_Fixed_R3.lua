@@ -1,4 +1,4 @@
--- NEVADA V16 | Macro 360 (Como la foto) + Anti-Lobby + Sonidos + Macros
+-- NEVADA V19 | Hook Raycast Real (Silent Aim de RoxHub) + Macros + Sonidos
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
@@ -17,7 +17,6 @@ local CONFIG_FILE = "nevada_v2_config.json"
 local state = {
   macro = false, equipDelay = 0.05, shootDelay = 0.10,
   knifeMacroEnabled = false, knifeEquipDelay = 0.10, knifeThrowDelay = 0.10,
-  -- Variables exactas de la foto
   macro360Enabled = false, 
   macro360Fov = 120, 
   macro360HitChance = 100, 
@@ -33,7 +32,9 @@ local refreshCatalog
 
 local function round2(n) return math.floor(n * 100 + 0.5) / 100 end
 
+-- ==========================================
 -- SISTEMA ANTI-LOBBY
+-- ==========================================
 local SAFE_ZONES = {
     {Center = Vector3.new(-320.50, 280.82, 16.00), Radius = 500},
     {Center = Vector3.new(1564.14, -155.45, 40.04), Radius = 300}
@@ -56,6 +57,37 @@ local function estaEnLobby()
         end
     end
     return false
+end
+
+-- ==========================================
+-- HOOK DE RAYCAST (La magia de RoxHub)
+-- ==========================================
+getgenv().NevadaTargetPart = nil
+
+local oldNamecall
+if hookmetamethod and getnamecallmethod and checkcaller then
+    oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+        local method = getnamecallmethod()
+        if not checkcaller() and getgenv().NevadaTargetPart then
+            if method == "Raycast" and self == workspace then
+                local target = getgenv().NevadaTargetPart
+                if target and target.Parent then
+                    local origin, direction, p3 = ...
+                    -- Filtro de RoxHub para no romper la cámara ni otros rayos
+                    if typeof(direction) == "Vector3" and direction.Magnitude > 20 then
+                        local camOrigin = workspace.CurrentCamera.CFrame.Position
+                        if (origin - camOrigin).Magnitude >= 1 then
+                            local newDir = (target.Position - origin).Unit * 5000
+                            return oldNamecall(self, origin, newDir, p3)
+                        end
+                    end
+                else
+                    getgenv().NevadaTargetPart = nil
+                end
+            end
+        end
+        return oldNamecall(self, ...)
+    end)
 end
 
 local function playSound(url)
@@ -211,11 +243,11 @@ slider(knifePage,"Delay al Lanzar",0.01,0.50,state.knifeThrowDelay,function(v) s
 local knifeInfo=card(knifePage,72); label(knifeInfo,"Presiona L2 para equipar, lanzar y guardar el cuchillo automáticamente.",UDim2.new(1,-24,1,-12),UDim2.new(0,12,0,6),12,C.sub,false)
 
 -- ==========================================
--- MACRO 360 (EXACTAMENTE COMO TU FOTO)
+-- MACRO 360 (CON EL HOOK REAL DE ROXHUB)
 -- ==========================================
 local macro360Page = newPage("Macro360")
 local asInfo = card(macro360Page, 60)
-label(asInfo, "Busca enemigos, dispara y guarda el arma. Configura FOV, Probabilidad y Reacción.", UDim2.new(1,-24,1,-12), UDim2.new(0,12,0,6), 12, C.sub, false)
+label(asInfo, "Busca enemigos, dispara invisiblemente usando el Hook y guarda el arma.", UDim2.new(1,-24,1,-12), UDim2.new(0,12,0,6), 12, C.sub, false)
 
 switch(macro360Page, "Activar Auto Shoot / Macro 360", false, function(v) state.macro360Enabled = v end)
 slider(macro360Page, "Tamaño del FOV", 10, 500, state.macro360Fov, function(v) state.macro360Fov = v end)
@@ -270,12 +302,10 @@ task.spawn(function()
             if bestPart then
                 isBusy360 = true
                 
-                -- TIEMPO DE REACCIÓN
                 if state.macro360Reaction > 0 then
                     task.wait(state.macro360Reaction)
                 end
                 
-                -- PROBABILIDAD DE ACIERTO
                 local chance = math.random(1, 100)
                 if chance <= state.macro360HitChance then
                     local backpack = player:FindFirstChildOfClass("Backpack")
@@ -294,16 +324,20 @@ task.spawn(function()
                     if tool then
                         if not wasEquipped then
                             hum:EquipTool(tool)
-                            task.wait(0.05) -- Interno: Tiempo para que el servidor detecte el arma
+                            task.wait(0.05) 
                         end
                         
                         if tool.Parent == char then
-                            local originalCamCFrame = workspace.CurrentCamera.CFrame
-                            workspace.CurrentCamera.CFrame = CFrame.new(originalCamCFrame.Position, bestPart.Position)
+                            -- 🔥 AQUÍ SE USA EL HOOK DE ROXHUB 🔥
+                            getgenv().NevadaTargetPart = bestPart
+                            
+                            -- Disparamos normal. El Hook redirigirá la bala.
                             pcall(function() tool:Activate() end)
-                            task.wait(0.05) -- Interno: Tiempo de disparo
+                            task.wait(0.1)
                             pcall(function() tool:Deactivate() end)
-                            workspace.CurrentCamera.CFrame = originalCamCFrame
+                            
+                            -- Limpiamos el objetivo
+                            getgenv().NevadaTargetPart = nil
                             
                             if not wasEquipped then
                                 task.wait(0.05)
