@@ -1,4 +1,4 @@
--- NEVADA V22 | Hook Raycast + Team Check + Botón Flotante Móvil + Macros + Sonidos
+-- NEVADA V23 | Hook Raycast + Team Check Avanzado + Botón Flotante Sincronizado
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
@@ -33,31 +33,44 @@ local refreshCatalog
 local function round2(n) return math.floor(n * 100 + 0.5) / 100 end
 
 -- ==========================================
--- TEAM CHECK (Verificación de Equipo)
+-- TEAM CHECK (SÚPER ROBUSTO)
 -- ==========================================
 local function isEnemy(targetPlayer)
     if not targetPlayer or targetPlayer == player then return false end
     
-    -- 1. Verificar si están en el mismo equipo de Roblox
-    if player.Team and targetPlayer.Team then
+    -- 1. Revisar Player.Team
+    if player.Team ~= nil and targetPlayer.Team ~= nil then
         if player.Team == targetPlayer.Team then return false end
     end
     
-    -- 2. Verificar si tienen el mismo Color de Equipo (por si el juego no usa Teams)
-    if player.TeamColor and targetPlayer.TeamColor then
-        if player.TeamColor.Name ~= "White" and player.TeamColor.Name ~= "Medium stone grey" then
-            if player.TeamColor == targetPlayer.TeamColor then return false end
+    -- 2. Revisar Player.TeamColor
+    local myColor = player.TeamColor
+    local targetColor = targetPlayer.TeamColor
+    if myColor and targetColor then
+        if myColor.Name ~= "White" and myColor.Name ~= "Medium stone grey" then
+            if myColor == targetColor then return false end
         end
     end
     
-    -- 3. Verificar atributos personalizados (común en Duels)
+    -- 3. Revisar Atributos del Jugador (Muy común en Duels)
     local myTeamAttr = player:GetAttribute("Team") or player:GetAttribute("team")
     local targetTeamAttr = targetPlayer:GetAttribute("Team") or targetPlayer:GetAttribute("team")
-    if myTeamAttr and targetTeamAttr and myTeamAttr == targetTeamAttr then 
-        return false 
+    if myTeamAttr ~= nil and targetTeamAttr ~= nil then
+        if myTeamAttr == targetTeamAttr then return false end
+    end
+
+    -- 4. Revisar Atributos del Personaje
+    local char = player.Character
+    local targetChar = targetPlayer.Character
+    if char and targetChar then
+        local myCharAttr = char:GetAttribute("Team") or char:GetAttribute("team")
+        local targetCharAttr = targetChar:GetAttribute("Team") or targetChar:GetAttribute("team")
+        if myCharAttr ~= nil and targetCharAttr ~= nil then
+            if myCharAttr == targetCharAttr then return false end
+        end
     end
     
-    return true -- Si pasa todo, es enemigo
+    return true -- Si no coinciden en nada, es enemigo
 end
 
 -- ==========================================
@@ -279,13 +292,45 @@ slider(knifePage,"Delay al Lanzar",0.01,0.50,state.knifeThrowDelay,function(v) s
 local knifeInfo=card(knifePage,72); label(knifeInfo,"Presiona L2 para equipar, lanzar y guardar el cuchillo automáticamente.",UDim2.new(1,-24,1,-12),UDim2.new(0,12,0,6),12,C.sub,false)
 
 -- ==========================================
--- MACRO 360 (TEAM CHECK + BOTÓN MÓVIL)
+-- MACRO 360 (CON BOTÓN FLOTANTE SINCRONIZADO)
 -- ==========================================
 local macro360Page = newPage("Macro360")
 local asInfo = card(macro360Page, 60)
 label(asInfo, "Busca enemigos, dispara invisiblemente usando el Hook. Solo funciona con armas de fuego.", UDim2.new(1,-24,1,-12), UDim2.new(0,12,0,6), 12, C.sub, false)
 
-local toggle360UI = switch(macro360Page, "Activar Auto Shoot / Macro 360", false, function(v) state.macro360Enabled = v end)
+-- Variables para guardar las referencias de los botones
+local toggle360MenuBtn = nil
+local floatingBtn = nil
+
+-- Función maestra para actualizar todo
+local function setMacro360State(nuevoEstado)
+    state.macro360Enabled = nuevoEstado
+    
+    -- Actualizar el botón del Menú
+    if toggle360MenuBtn then
+        toggle360MenuBtn.Text = nuevoEstado and "ACTIVADO" or "DESACTIVADO"
+        toggle360MenuBtn.BackgroundColor3 = nuevoEstado and C.blue or C.card
+    end
+    
+    -- Actualizar el Botón Flotante (Verde o Rojo)
+    if floatingBtn then
+        if nuevoEstado then
+            floatingBtn.Text = "MACRO 360: ON"
+            floatingBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 0) -- Verde Brillante
+            floatingBtn.UIStroke.Color = Color3.fromRGB(0, 255, 100)
+        else
+            floatingBtn.Text = "MACRO 360: OFF"
+            floatingBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0) -- Rojo Brillante
+            floatingBtn.UIStroke.Color = Color3.fromRGB(255, 100, 100)
+        end
+    end
+end
+
+-- Crear el botón del menú con la nueva función maestra
+toggle360MenuBtn = switch(macro360Page, "Activar Auto Shoot / Macro 360", false, function(v) 
+    setMacro360State(v) 
+end)
+
 slider(macro360Page, "Tamaño del FOV", 10, 500, state.macro360Fov, function(v) state.macro360Fov = v end)
 slider(macro360Page, "Probabilidad de acierto (%)", 1, 100, state.macro360HitChance, function(v) state.macro360HitChance = v end)
 slider(macro360Page, "Tiempo de reacción (s)", 0, 1, state.macro360Reaction, function(v) state.macro360Reaction = v end)
@@ -293,13 +338,11 @@ slider(macro360Page, "Delay entre Disparos (s)", 0.01, 1.0, state.macro360Cooldo
 
 local isBusy360 = false
 
--- ==========================================
--- BOTÓN FLOTANTE (Arreglado para Móvil)
--- ==========================================
-local floatingBtn = create("TextButton", {
+-- Crear Botón Flotante
+floatingBtn = create("TextButton", {
     Size = UDim2.new(0, 120, 0, 45),
     Position = UDim2.new(0, 20, 0.5, 0),
-    BackgroundColor3 = C.red,
+    BackgroundColor3 = Color3.fromRGB(200, 0, 0),
     Text = "MACRO 360: OFF",
     TextColor3 = Color3.fromRGB(255, 255, 255),
     Font = Enum.Font.GothamBold,
@@ -308,53 +351,34 @@ local floatingBtn = create("TextButton", {
     ZIndex = 100
 }, gui)
 corner(floatingBtn, 8)
-local btnStroke = stroke(floatingBtn, Color3.fromRGB(255,255,255), 1, 0.5)
+stroke(floatingBtn, Color3.fromRGB(255,100,100), 1, 0.5)
 
+-- Hacerlo arrastrable
 local draggingBtn = false
 local dragStartBtn, startPosBtn
-local touchStartTime = 0
-local touchStartPos = nil
-
 floatingBtn.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         draggingBtn = true
         dragStartBtn = input.Position
         startPosBtn = floatingBtn.Position
-        touchStartTime = tick()
-        touchStartPos = input.Position
     end
 end)
-
 UserInputService.InputChanged:Connect(function(input)
     if draggingBtn and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
         local delta = input.Position - dragStartBtn
         floatingBtn.Position = UDim2.new(startPosBtn.X.Scale, startPosBtn.X.Offset + delta.X, startPosBtn.Y.Scale, startPosBtn.Y.Offset + delta.Y)
     end
 end)
-
 UserInputService.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        if draggingBtn then
-            draggingBtn = false
-            local holdTime = tick() - touchStartTime
-            local moveDist = (input.Position - touchStartPos).Magnitude
-            
-            -- Si fue un toque rápido y no se movió mucho, es un clic
-            if holdTime < 0.3 and moveDist < 10 then
-                state.macro360Enabled = not state.macro360Enabled
-                toggle360UI:Set(state.macro360Enabled)
-                if state.macro360Enabled then
-                    floatingBtn.Text = "MACRO 360: ON"
-                    floatingBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 50)
-                    btnStroke.Color = Color3.fromRGB(0, 255, 100)
-                else
-                    floatingBtn.Text = "MACRO 360: OFF"
-                    floatingBtn.BackgroundColor3 = C.red
-                    btnStroke.Color = Color3.fromRGB(255, 255, 255)
-                end
-            end
-        end
+        draggingBtn = false
     end
+end)
+
+-- Clic del botón flotante para activar/desactivar
+floatingBtn.MouseButton1Click:Connect(function()
+    -- Invertir el estado actual y llamar a la función maestra
+    setMacro360State(not state.macro360Enabled)
 end)
 
 -- ==========================================
@@ -375,7 +399,7 @@ task.spawn(function()
             local myPos = char.HumanoidRootPart.Position
             
             for _, p in ipairs(Players:GetPlayers()) do
-                -- 🔥 AQUÍ SE USA EL TEAM CHECK 🔥
+                -- 🔥 AQUÍ SE USA EL TEAM CHECK ROBUSTO 🔥
                 if isEnemy(p) and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
                     local eHum = p.Character:FindFirstChildOfClass("Humanoid")
                     if eHum and eHum.Health > 0 and not p.Character:FindFirstChildOfClass("ForceField") then
@@ -455,7 +479,7 @@ task.spawn(function()
 end)
 
 -- ==========================================
--- PESTAÑA: SONIDOS
+-- PESTAÑA: SONIDOS (Igual que antes)
 -- ==========================================
 local soundsPage=newPage("Sonidos")
 local categoryBar=card(soundsPage,44)
