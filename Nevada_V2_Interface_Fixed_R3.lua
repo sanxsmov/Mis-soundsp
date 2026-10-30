@@ -1,9 +1,10 @@
--- NEVADA V29 | FINAL DEFINITIVO (Sonidos + Team Check + Silent Aim + UI Optimizada)
+-- NEVADA V32 | Skybox Automatico de GitHub + Team Check + Sonidos + Silent Aim
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 local requestFn = (syn and syn.request) or (http and http.request) or request or http_request
@@ -13,6 +14,12 @@ local FOLDERS = {"sounds", "SoundsV2"}
 local RAW = "https://raw.githubusercontent.com/" .. OWNER .. "/" .. REPO .. "/" .. BRANCH .. "/"
 local API_ROOT = "https://api.github.com/repos/" .. OWNER .. "/" .. REPO .. "/contents/"
 
+-- Configuración de Skybox
+local SKYBOX_REPO = "sanxsmov/Onyx-web"
+local SKYBOX_FOLDER = "skyboxes"
+local SKYBOX_RAW = "https://raw.githubusercontent.com/" .. SKYBOX_REPO .. "/main/" .. SKYBOX_FOLDER .. "/"
+local SKYBOX_API = "https://api.github.com/repos/" .. SKYBOX_REPO .. "/contents/" .. SKYBOX_FOLDER
+
 local state = {
   macro = false, equipDelay = 0.05, shootDelay = 0.10,
   knifeMacroEnabled = false, knifeEquipDelay = 0.10, knifeThrowDelay = 0.10,
@@ -21,6 +28,8 @@ local state = {
   macro360HitChance = 100, 
   macro360Reaction = 0,
   macro360Cooldown = 0.05, 
+  autoLoadSky = false,
+  selectedSky = "",
   selected = {Arma={Name="Ninguno",URL=""}, Saltar={Name="Ninguno",URL=""}, Matar={Name="Ninguno",URL=""}},
   enabled = {Arma=true, Saltar=true, Matar=true}, muted = {Arma=false, Saltar=false, Matar=false},
   folder = FOLDERS[1]
@@ -28,7 +37,47 @@ local state = {
 local sounds, soundCache, activeTab, soundCategory = {}, {}, "Inicio", "Arma"
 
 -- ==========================================
--- TEAM CHECK Y ANTI-LOBBY (Lógica de Scoreboard)
+-- LÓGICA DE SKYBOX AUTOMÁTICO
+-- ==========================================
+local function downloadImg(url, name)
+    if not (writefile and isfile and getcustomasset) then return nil end
+    local path = "NevadaSky_" .. name .. ".png"
+    if not isfile(path) then
+        local ok, body = pcall(function() return game:HttpGet(url) end)
+        if ok and body and #body > 0 then
+            pcall(writefile, path, body)
+        else
+            return nil
+        end
+    end
+    local success, asset = pcall(getcustomasset, path)
+    if success then return asset end
+    return nil
+end
+
+local function applySkyFromGitHub(skyName)
+    local baseUrl = SKYBOX_RAW .. skyName .. "/"
+    local aBk = downloadImg(baseUrl .. "bk.png", skyName.."_bk")
+    local aDn = downloadImg(baseUrl .. "dn.png", skyName.."_dn")
+    local aFt = downloadImg(baseUrl .. "ft.png", skyName.."_ft")
+    local aLf = downloadImg(baseUrl .. "lf.png", skyName.."_lf")
+    local aRt = downloadImg(baseUrl .. "rt.png", skyName.."_rt")
+    local aUp = downloadImg(baseUrl .. "up.png", skyName.."_up")
+
+    if aBk and aDn and aFt and aLf and aRt and aUp then
+        pcall(function()
+            local sky = Lighting:FindFirstChildOfClass("Sky")
+            if not sky then sky = Instance.new("Sky"); sky.Parent = Lighting end
+            sky.SkyboxBk = aBk; sky.SkyboxDn = aDn; sky.SkyboxFt = aFt
+            sky.SkyboxLf = aLf; sky.SkyboxRt = aRt; sky.SkyboxUp = aUp
+        end)
+        return true
+    end
+    return false
+end
+
+-- ==========================================
+-- TEAM CHECK Y ANTI-LOBBY
 -- ==========================================
 local function getPlayerTeam(p)
     if not p then return nil end
@@ -44,9 +93,7 @@ local function getPlayerTeam(p)
         for _, teamName in ipairs({"TeamRed", "TeamBlue"}) do
             local teamFolder = score:FindFirstChild(teamName)
             if teamFolder then
-                if teamFolder:FindFirstChild(p.Name) then
-                    return teamName == "TeamRed" and "Red" or "Blue"
-                end
+                if teamFolder:FindFirstChild(p.Name) then return teamName == "TeamRed" and "Red" or "Blue" end
                 for _, entry in ipairs(teamFolder:GetChildren()) do
                     local txt = entry:FindFirstChild("PlayerName", true)
                     if txt and txt:IsA("TextLabel") and string.lower(txt.Text) == string.lower(p.Name) then
@@ -63,10 +110,8 @@ local function isEnemy(targetPlayer)
     if not targetPlayer or targetPlayer == player then return false end
     local myTeam = getPlayerTeam(player)
     local targetTeam = getPlayerTeam(targetPlayer)
-    if myTeam and targetTeam then
-        return string.lower(myTeam) ~= string.lower(targetTeam)
-    end
-    return false -- Si no sabemos el equipo, NO disparamos para evitar teamkill
+    if myTeam and targetTeam then return string.lower(myTeam) ~= string.lower(targetTeam) end
+    return false
 end
 
 local function estaEnLobby()
@@ -77,18 +122,15 @@ local function estaEnLobby()
         local name = player.Team.Name:lower()
         if name:find("lobby") or name:find("spectat") or name:find("menu") then return true end
     end
-    -- Si el marcador no está cargado, estamos en el lobby
     local gui = player:FindFirstChild("PlayerGui")
     local main = gui and gui:FindFirstChild("Main")
     local frame = main and main:FindFirstChild("MainGameFrame")
     if not frame or not frame:FindFirstChild("IngameScore") then return true end
-    
     return false
 end
 
 local function esPistola(tool)
     if not tool or not tool:IsA("Tool") then return false end
-    -- En Duels (Asesinos VS Sheriffs) las pistolas tienen "showBeam"
     return tool:FindFirstChild("showBeam") ~= nil or tool.Name:lower():find("gun") or tool.Name:lower():find("pistol") or tool.Name:lower():find("revolver")
 end
 
@@ -149,7 +191,6 @@ local function playSound(url)
   task.delay(20, function() if s.Parent then s:Destroy() end end)
 end
 
--- LÓGICA DE REEMPLAZO DE SONIDO
 local ORIGINAL_SHOT="10209603"
 local ORIGINAL_KILL="296102734"
 local watchedSounds=setmetatable({}, {__mode="k"})
@@ -322,6 +363,7 @@ actionCard(home,"Sonidos","Catálogo de tu repositorio de GitHub","Abrir sonidos
 actionCard(home,"Macro Arma","Disparo rápido automático","Ver macro",function() showPage("Macro") end)
 actionCard(home,"Macro Cuchillo","Lanzamiento rápido (L2)","Ver macro",function() showPage("Cuchillo") end)
 actionCard(home,"Macro 360","Disparo invisible a todo el cuerpo","Ver Macro 360",function() showPage("Macro360") end)
+actionCard(home,"Skybox","Cambia el cielo del mapa","Ver cielos",function() showPage("Skybox") end)
 
 local macroPage=newPage("Macro")
 switch(macroPage,"Activar macro de arma",false,function(v) state.macro=v end)
@@ -383,6 +425,110 @@ end)
 UserInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then draggingBtn = false end end)
 floatingBtn.MouseButton1Click:Connect(function() setMacro360State(not state.macro360Enabled) end)
 
+-- ==========================================
+-- PESTAÑA SKYBOX (AUTOMÁTICO)
+-- ==========================================
+local skyboxPage = newPage("Skybox")
+local skyInfo = card(skyboxPage, 60)
+label(skyInfo, "Elige un cielo. El script buscará las carpetas de tu GitHub automáticamente.", UDim2.new(1,-24,1,-12), UDim2.new(0,12,0,6), 12, C.sub, false)
+
+local originalSky = Lighting:FindFirstChildOfClass("Sky")
+local originalSkyProperties = nil
+if originalSky then
+    originalSkyProperties = {
+        SkyboxBk = originalSky.SkyboxBk, SkyboxDn = originalSky.SkyboxDn,
+        SkyboxFt = originalSky.SkyboxFt, SkyboxLf = originalSky.SkyboxLf,
+        SkyboxRt = originalSky.SkyboxRt, SkyboxUp = originalSky.SkyboxUp
+    }
+end
+
+local function applySky(bk, dn, ft, lf, rt, up)
+    pcall(function()
+        local sky = originalSky
+        if not sky or not sky.Parent then sky = Instance.new("Sky"); sky.Parent = Lighting end
+        if bk then sky.SkyboxBk = bk end
+        if dn then sky.SkyboxDn = dn end
+        if ft then sky.SkyboxFt = ft end
+        if lf then sky.SkyboxLf = lf end
+        if rt then sky.SkyboxRt = rt end
+        if up then sky.SkyboxUp = up end
+    end)
+end
+
+-- Botón para Auto-Cargar
+local toggleAutoSky = switch(skyboxPage, "Auto-Cargar último cielo al entrar", false, function(v)
+    state.autoLoadSky = v
+    if v and state.selectedSky ~= "" then
+        applySkyFromGitHub(state.selectedSky)
+    end
+end)
+
+-- Contenedor de la lista de cielos
+local skyList = create("ScrollingFrame", {
+    Size = UDim2.new(1, -8, 0, 200),
+    BackgroundColor3 = C.card,
+    BorderSizePixel = 0,
+    ScrollBarThickness = 4,
+    ScrollBarImageColor3 = C.blue,
+    CanvasSize = UDim2.new(),
+    AutomaticCanvasSize = Enum.AutomaticSize.Y,
+    LayoutOrder = 2
+}, skyboxPage)
+corner(skyList, 10); stroke(skyList, C.edge)
+create("UIPadding", {PaddingTop=UDim.new(0,5), PaddingBottom=UDim.new(0,5), PaddingLeft=UDim.new(0,5), PaddingRight=UDim.new(0,5)}, skyList)
+local skyLayout = create("UIListLayout", {Padding=UDim.new(0,5), SortOrder=Enum.SortOrder.LayoutOrder}, skyList)
+
+-- Función para cargar la lista de carpetas de GitHub
+local function loadSkyList()
+    for _, child in ipairs(skyList:GetChildren()) do
+        if child:IsA("TextButton") then child:Destroy() end
+    end
+    
+    if not requestFn then return end
+    local ok, res = pcall(function() return requestFn({Url=SKYBOX_API, Method="GET", Headers={["User-Agent"]="NevadaV2"}}) end)
+    if not ok or not res or res.StatusCode ~= 200 then return end
+    
+    local parsedOk, data = pcall(function() return HttpService:JSONDecode(res.Body) end)
+    if not parsedOk or type(data) ~= "table" then return end
+    
+    for i, item in ipairs(data) do
+        if item.type == "dir" then
+            local skyName = item.name
+            local btn = create("TextButton", {
+                Size = UDim2.new(1, 0, 0, 35),
+                BackgroundColor3 = C.panel,
+                Text = "☁ " .. skyName,
+                TextColor3 = C.text,
+                Font = Enum.Font.GothamMedium,
+                TextSize = 13,
+                LayoutOrder = i
+            }, skyList)
+            corner(btn, 6); stroke(btn, C.edge)
+            
+            btn.MouseButton1Click:Connect(function()
+                btn.Text = "Descargando..."
+                local success = applySkyFromGitHub(skyName)
+                if success then
+                    btn.Text = "✅ " .. skyName
+                    state.selectedSky = skyName
+                else
+                    btn.Text = "❌ Error: " .. skyName
+                end
+                task.delay(2, function() btn.Text = "☁ " .. skyName end)
+            end)
+        end
+    end
+end
+
+-- Cargar la lista automáticamente al abrir el menú
+task.spawn(loadSkyList)
+
+actionCard(skyboxPage, "Restaurar Cielo Original", "Quita el cielo personalizado.", "Restaurar", function()
+    if originalSkyProperties then
+        applySky(originalSkyProperties.SkyboxBk, originalSkyProperties.SkyboxDn, originalSkyProperties.SkyboxFt, originalSkyProperties.SkyboxLf, originalSkyProperties.SkyboxRt, originalSkyProperties.SkyboxUp)
+    end
+    state.selectedSky = ""
+end)
 
 -- ==========================================
 -- PESTAÑA SONIDOS
@@ -428,14 +574,9 @@ local soundToggle=switch(soundsPage,"Activar este sonido",true,function(v) state
 local muteToggle=switch(soundsPage,"Silenciar este sonido",false,function(v) state.muted[soundCategory]=v end)
 local githubStatus=label(soundsPage,"Catálogo: buscando archivos MP3 en GitHub…",UDim2.new(1,-8,0,28),UDim2.new(0,4,0,0),12,C.sub,false)
 
--- Cargar sonidos en segundo plano para no congelar
 task.spawn(function()
     local loaded = refreshCatalog()
-    if loaded then
-        githubStatus.Text = "GitHub conectado · "..#sounds.." sonidos"
-    else
-        githubStatus.Text = "No se pudo conectar a GitHub"
-    end
+    if loaded then githubStatus.Text = "GitHub conectado · "..#sounds.." sonidos" else githubStatus.Text = "No se pudo conectar a GitHub" end
     refreshSoundList()
 end)
 
@@ -448,8 +589,8 @@ actionCard(configPage,"Actualizar catálogo","Vuelve a consultar GitHub","Actual
     end)
 end)
 
-local navNames={"Inicio","Macro","Cuchillo","Macro360","Sonidos","Configuración"}
-local navIcons={Inicio="⌂",Macro="◎",Cuchillo="🔪",Macro360="🎯",Sonidos="♫",["Configuración"]="⚙"}
+local navNames={"Inicio","Macro","Cuchillo","Macro360","Sonidos","Skybox","Configuración"}
+local navIcons={Inicio="⌂",Macro="◎",Cuchillo="🔪",Macro360="🎯",Sonidos="♫",Skybox="☁",["Configuración"]="⚙"}
 showPage=function(name)
   activeTab=name
   for n,p in pairs(pages) do p.Visible=(n==name) end
@@ -473,16 +614,8 @@ local function runMacro()
   local hum=char:FindFirstChildOfClass("Humanoid"); if not hum or hum.Health<=0 then return end
   local backpack=player:FindFirstChildOfClass("Backpack"); if not backpack then return end
   local tool=char:FindFirstChildOfClass("Tool")
-  
-  -- Filtrar para que la macro no saque el cuchillo
   if tool and not esPistola(tool) then tool = nil end
-  
-  if not tool then
-    for _,item in ipairs(backpack:GetChildren()) do
-      if item:IsA("Tool") and esPistola(item) then tool=item; break end
-    end
-  end
-  
+  if not tool then for _,item in ipairs(backpack:GetChildren()) do if item:IsA("Tool") and esPistola(item) then tool=item; break end end end
   if not tool then return end
   macroBusy=true
   task.spawn(function()
@@ -506,7 +639,6 @@ local function runKnifeMacro()
       for _, item in ipairs(character:FindFirstChildOfClass("Backpack"):GetChildren()) do if item:IsA("Tool") and item:FindFirstChild("Throw") then knife = item break end end
   end
   if not (knife and humanoid) then return end
-  
   knifeBusy = true
   task.spawn(function()
     pcall(function()
