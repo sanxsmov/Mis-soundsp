@@ -1,4 +1,4 @@
--- NEVADA V24 | Hook Raycast + Team Check (Scoreboard de RoxHub) + Botón Flotante
+-- NEVADA V27 | Menú Completo Estable + Silent Aim + Team Check + Botón Flotante
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
@@ -22,102 +22,57 @@ local state = {
   macro360HitChance = 100, 
   macro360Reaction = 0,
   macro360Cooldown = 0.05, 
-  
   selected = {Arma={Name="Ninguno",URL=""}, Saltar={Name="Ninguno",URL=""}, Matar={Name="Ninguno",URL=""}},
   enabled = {Arma=true, Saltar=true, Matar=true}, muted = {Arma=false, Saltar=false, Matar=false},
   folder = FOLDERS[1]
 }
 local sounds, soundCache, activeTab, soundCategory = {}, {}, "Inicio", "Arma"
-local refreshCatalog
-
-local function round2(n) return math.floor(n * 100 + 0.5) / 100 end
 
 -- ==========================================
--- TEAM CHECK EXACTO DE ROXHUB (Leyendo el Scoreboard)
+-- TEAM CHECK Y ANTI-LOBBY
 -- ==========================================
-local function getInGameScoreboard()
+local function getPlayerTeam(p)
+    if not p then return nil end
+    if p.Team and p.Team.Name ~= "" then return p.Team.Name end
+    local attr = p:GetAttribute("Team") or p:GetAttribute("team")
+    if attr and tostring(attr) ~= "" then return tostring(attr) end
+    
     local gui = player:FindFirstChild("PlayerGui")
     local main = gui and gui:FindFirstChild("Main")
     local frame = main and main:FindFirstChild("MainGameFrame")
-    return frame and frame:FindFirstChild("IngameScore") or nil
-end
-
-local function getTeamSnapshot()
-    local snapshot = {}
-    local score = getInGameScoreboard()
+    local score = frame and frame:FindFirstChild("IngameScore")
     if score then
         for _, teamName in ipairs({"TeamRed", "TeamBlue"}) do
             local teamFolder = score:FindFirstChild(teamName)
-            if teamFolder then
-                local team = teamName == "TeamRed" and "Red" or "Blue"
-                for _, entry in ipairs(teamFolder:GetChildren()) do
-                    if entry:IsA("GuiObject") then
-                        -- Guarda el nombre del jugador en minúsculas con su equipo
-                        snapshot[string.lower(entry.Name)] = team
-                    end
-                end
+            if teamFolder and teamFolder:FindFirstChild(p.Name) then
+                return teamName == "TeamRed" and "Red" or "Blue"
             end
         end
     end
-    return snapshot
-end
-
-local function getPlayerTeam(targetPlayer)
-    if not targetPlayer then return nil end
-    local snapshot = getTeamSnapshot()
-    
-    -- 1. Buscar por Nombre en la Scoreboard
-    local team = snapshot[string.lower(targetPlayer.Name)]
-    if team then return team end
-    
-    -- 2. Buscar por DisplayName
-    if targetPlayer.DisplayName then
-        team = snapshot[string.lower(targetPlayer.DisplayName)]
-        if team then return team end
-    end
-    
-    -- 3. Fallback a atributos si la scoreboard está vacía
-    local attr = targetPlayer:GetAttribute("Team") or targetPlayer:GetAttribute("team")
-    if attr and tostring(attr) ~= "" then return tostring(attr) end
-    
-    -- 4. Fallback a Roblox Team
-    if targetPlayer.Team then return targetPlayer.Team.Name end
-    
     return nil
 end
 
 local function isEnemy(targetPlayer)
     if not targetPlayer or targetPlayer == player then return false end
-    
     local myTeam = getPlayerTeam(player)
     local targetTeam = getPlayerTeam(targetPlayer)
-    
-    -- Si ambos tienen equipo, comparar. Si son iguales, NO es enemigo.
-    if myTeam ~= nil and targetTeam ~= nil then
-        return myTeam ~= targetTeam
+    if myTeam and targetTeam then
+        return string.lower(myTeam) ~= string.lower(targetTeam)
     end
-    
-    -- Si no se puede determinar el equipo, asumimos que es enemigo (para no romper el script)
-    return true 
+    return false -- Si no sabemos el equipo, no disparamos para evitar TeamKill
 end
 
--- ==========================================
--- SISTEMA ANTI-LOBBY
--- ==========================================
 local SAFE_ZONES = {
     {Center = Vector3.new(-320.50, 280.82, 16.00), Radius = 500},
     {Center = Vector3.new(1564.14, -155.45, 40.04), Radius = 300}
 }
-
 local function estaEnLobby()
     local character = player.Character
     if not character then return true end
     if character:FindFirstChildOfClass("ForceField") then return true end
     if player.Team then
         local name = player.Team.Name:lower()
-        if name:find("lobby") or name:find("spectat") or name:find("espectador") or name:find("menu") or name:find("dead") then 
-            return true 
-        end
+        if name:find("lobby") or name:find("spectat") or name:find("menu") then return true end
     end
     local root = character:FindFirstChild("HumanoidRootPart")
     if root then
@@ -128,20 +83,15 @@ local function estaEnLobby()
     return false
 end
 
--- ==========================================
--- DETECCIÓN DE PISTOLA
--- ==========================================
 local function esPistola(tool)
     if not tool or not tool:IsA("Tool") then return false end
-    local beam = tool:FindFirstChild("showBeam")
-    return beam ~= nil and beam:IsA("RemoteEvent")
+    return tool:FindFirstChild("showBeam") ~= nil
 end
 
 -- ==========================================
--- HOOK DE RAYCAST (Silent Aim)
+-- HOOK RAYCAST (Silent Aim)
 -- ==========================================
 getgenv().NevadaTargetPart = nil
-
 local oldNamecall
 if hookmetamethod and getnamecallmethod and checkcaller then
     oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
@@ -158,8 +108,6 @@ if hookmetamethod and getnamecallmethod and checkcaller then
                             return oldNamecall(self, origin, newDir, p3)
                         end
                     end
-                else
-                    getgenv().NevadaTargetPart = nil
                 end
             end
         end
@@ -167,6 +115,9 @@ if hookmetamethod and getnamecallmethod and checkcaller then
     end)
 end
 
+-- ==========================================
+-- FUNCIONES DE SONIDO
+-- ==========================================
 local function playSound(url)
   if type(url) ~= "string" or url == "" then return end
   local asset = soundCache[url]
@@ -194,6 +145,9 @@ local function playSound(url)
   task.delay(20, function() if s.Parent then s:Destroy() end end)
 end
 
+-- ==========================================
+-- INTERFAZ GRÁFICA COMPLETA (Optimizada)
+-- ==========================================
 if playerGui:FindFirstChild("NevadaV2") then playerGui.NevadaV2:Destroy() end
 local gui = Instance.new("ScreenGui")
 gui.Name, gui.ResetOnSpawn, gui.IgnoreGuiInset = "NevadaV2", false, true
@@ -289,6 +243,16 @@ local function actionCard(parent,title,desc,btnText,fn)
   local f=card(parent,70); label(f,title,UDim2.new(0.66,0,0,27),UDim2.new(0,14,0,7),14,C.text,true); label(f,desc,UDim2.new(0.66,0,0,25),UDim2.new(0,14,0,35),11,C.sub,false)
   button(f,btnText,UDim2.fromOffset(125,34),UDim2.new(1,-139,0.5,-17),fn); return f
 end
+local function slider(parent,title,minV,maxV,initial,callback)
+  local f=card(parent,72); local value=initial
+  local txt=label(f,title..": "..tostring(value),UDim2.new(1,-24,0,25),UDim2.new(0,13,0,6),13,C.text,true)
+  local bar=button(f,"",UDim2.new(1,-28,0,12),UDim2.new(0,14,0,43),function() end); bar.BackgroundColor3=Color3.fromRGB(33,42,59)
+  local fill=create("Frame",{Size=UDim2.new((value-minV)/(maxV-minV),0,1,0),BackgroundColor3=C.blue,BorderSizePixel=0},bar); corner(fill,5)
+  local function setFromX(x)
+    local p=math.clamp((x-bar.AbsolutePosition.X)/math.max(bar.AbsoluteSize.X,1),0,1); value=math.floor((minV+p*(maxV-minV))*100)/100; fill.Size=UDim2.new(p,0,1,0); txt.Text=title..": "..tostring(value); callback(value)
+  end
+  bar.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then setFromX(i.Position.X) end end)
+end
 
 local showPage
 local home=newPage("Inicio")
@@ -300,16 +264,6 @@ actionCard(home,"Macro 360","Disparo invisible a todo el cuerpo","Ver Macro 360"
 
 local macroPage=newPage("Macro")
 switch(macroPage,"Activar macro de arma",false,function(v) state.macro=v end)
-local function slider(parent,title,minV,maxV,initial,callback)
-  local f=card(parent,72); local value=initial
-  local txt=label(f,title..": "..tostring(value),UDim2.new(1,-24,0,25),UDim2.new(0,13,0,6),13,C.text,true)
-  local bar=button(f,"",UDim2.new(1,-28,0,12),UDim2.new(0,14,0,43),function() end); bar.BackgroundColor3=Color3.fromRGB(33,42,59)
-  local fill=create("Frame",{Size=UDim2.new((value-minV)/(maxV-minV),0,1,0),BackgroundColor3=C.blue,BorderSizePixel=0},bar); corner(fill,5)
-  local function setFromX(x)
-    local p=math.clamp((x-bar.AbsolutePosition.X)/math.max(bar.AbsoluteSize.X,1),0,1); value=round2(minV+p*(maxV-minV)); fill.Size=UDim2.new(p,0,1,0); txt.Text=title..": "..tostring(value); callback(value)
-  end
-  bar.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then setFromX(i.Position.X) end end)
-end
 slider(macroPage,"Tiempo de equipar",0.01,0.50,state.equipDelay,function(v) state.equipDelay=v end)
 slider(macroPage,"Tiempo de disparo",0.01,0.50,state.shootDelay,function(v) state.shootDelay=v end)
 
@@ -317,73 +271,45 @@ local knifePage=newPage("Cuchillo")
 switch(knifePage,"Activar Macro Cuchillo (L2)",false,function(v) state.knifeMacroEnabled = v end)
 slider(knifePage,"Delay al Equipar",0.01,0.50,state.knifeEquipDelay,function(v) state.knifeEquipDelay = v end)
 slider(knifePage,"Delay al Lanzar",0.01,0.50,state.knifeThrowDelay,function(v) state.knifeThrowDelay = v end)
-local knifeInfo=card(knifePage,72); label(knifeInfo,"Presiona L2 para equipar, lanzar y guardar el cuchillo automáticamente.",UDim2.new(1,-24,1,-12),UDim2.new(0,12,0,6),12,C.sub,false)
 
--- ==========================================
 -- MACRO 360
--- ==========================================
 local macro360Page = newPage("Macro360")
-local asInfo = card(macro360Page, 60)
-label(asInfo, "Busca enemigos, dispara invisiblemente usando el Hook. Solo funciona con armas de fuego.", UDim2.new(1,-24,1,-12), UDim2.new(0,12,0,6), 12, C.sub, false)
-
 local toggle360MenuBtn = nil
 local floatingBtn = nil
-local isBusy360 = false
 
 local function setMacro360State(nuevoEstado)
     state.macro360Enabled = nuevoEstado
-    
     if toggle360MenuBtn then
         toggle360MenuBtn.Text = nuevoEstado and "ACTIVADO" or "DESACTIVADO"
         toggle360MenuBtn.BackgroundColor3 = nuevoEstado and C.blue or C.card
     end
-    
     if floatingBtn then
         if nuevoEstado then
             floatingBtn.Text = "MACRO 360: ON"
-            floatingBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
-            if floatingBtn:FindFirstChild("UIStroke") then floatingBtn.UIStroke.Color = Color3.fromRGB(0, 255, 100) end
+            floatingBtn.BackgroundColor3 = C.green
+            for _,v in pairs(floatingBtn:GetChildren()) do if v:IsA("UIStroke") then v.Color = C.green end end
         else
             floatingBtn.Text = "MACRO 360: OFF"
-            floatingBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
-            if floatingBtn:FindFirstChild("UIStroke") then floatingBtn.UIStroke.Color = Color3.fromRGB(255, 100, 100) end
+            floatingBtn.BackgroundColor3 = C.red
+            for _,v in pairs(floatingBtn:GetChildren()) do if v:IsA("UIStroke") then v.Color = C.red end end
         end
     end
 end
 
-toggle360MenuBtn = switch(macro360Page, "Activar Auto Shoot / Macro 360", false, function(v) 
-    setMacro360State(v) 
-end)
-
+toggle360MenuBtn = switch(macro360Page, "Activar Auto Shoot / Macro 360", false, function(v) setMacro360State(v) end)
 slider(macro360Page, "Tamaño del FOV", 10, 500, state.macro360Fov, function(v) state.macro360Fov = v end)
 slider(macro360Page, "Probabilidad de acierto (%)", 1, 100, state.macro360HitChance, function(v) state.macro360HitChance = v end)
 slider(macro360Page, "Tiempo de reacción (s)", 0, 1, state.macro360Reaction, function(v) state.macro360Reaction = v end)
 slider(macro360Page, "Delay entre Disparos (s)", 0.01, 1.0, state.macro360Cooldown, function(v) state.macro360Cooldown = v end)
 
--- Botón Flotante
-floatingBtn = create("TextButton", {
-    Size = UDim2.new(0, 120, 0, 45),
-    Position = UDim2.new(0, 20, 0.5, 0),
-    BackgroundColor3 = Color3.fromRGB(200, 0, 0),
-    Text = "MACRO 360: OFF",
-    TextColor3 = Color3.fromRGB(255, 255, 255),
-    Font = Enum.Font.GothamBold,
-    TextSize = 12,
-    AutoButtonColor = false,
-    ZIndex = 100
-}, gui)
-corner(floatingBtn, 8)
-local fStroke = stroke(floatingBtn, Color3.fromRGB(255,100,100), 1, 0.5)
-fStroke.Name = "UIStroke" -- Nombrar para encontrarlo en la función
+-- BOTÓN FLOTANTE
+floatingBtn = create("TextButton", {Size = UDim2.new(0, 120, 0, 45), Position = UDim2.new(0, 20, 0.5, 0), BackgroundColor3 = C.red, Text = "MACRO 360: OFF", TextColor3 = C.text, Font = Enum.Font.GothamBold, TextSize = 12, AutoButtonColor = false, ZIndex = 100}, gui)
+corner(floatingBtn, 8); stroke(floatingBtn, C.red, 1, 0.5)
 
 local draggingBtn = false
 local dragStartBtn, startPosBtn
 floatingBtn.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        draggingBtn = true
-        dragStartBtn = input.Position
-        startPosBtn = floatingBtn.Position
-    end
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then draggingBtn = true; dragStartBtn = input.Position; startPosBtn = floatingBtn.Position end
 end)
 UserInputService.InputChanged:Connect(function(input)
     if draggingBtn and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
@@ -391,116 +317,10 @@ UserInputService.InputChanged:Connect(function(input)
         floatingBtn.Position = UDim2.new(startPosBtn.X.Scale, startPosBtn.X.Offset + delta.X, startPosBtn.Y.Scale, startPosBtn.Y.Offset + delta.Y)
     end
 end)
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        draggingBtn = false
-    end
-end)
+UserInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then draggingBtn = false end end)
+floatingBtn.MouseButton1Click:Connect(function() setMacro360State(not state.macro360Enabled) end)
 
-floatingBtn.MouseButton1Click:Connect(function()
-    setMacro360State(not state.macro360Enabled)
-end)
-
--- ==========================================
--- BUCLE DE LA MACRO 360 (USANDO EL NUEVO TEAM CHECK)
--- ==========================================
-task.spawn(function()
-    local params = RaycastParams.new()
-    params.FilterType = Enum.RaycastFilterType.Exclude
-    
-    while task.wait(0.01) do 
-        if state.macro360Enabled and not isBusy360 and not estaEnLobby() then
-            local char = player.Character
-            if not char or not char:FindFirstChild("HumanoidRootPart") then continue end
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if not hum or hum.Health <= 0 then continue end
-            
-            local bestPart, bestDist = nil, math.huge
-            local myPos = char.HumanoidRootPart.Position
-            
-            for _, p in ipairs(Players:GetPlayers()) do
-                -- 🔥 AQUÍ SE USA EL TEAM CHECK DE ROXHUB 🔥
-                if isEnemy(p) and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                    local eHum = p.Character:FindFirstChildOfClass("Humanoid")
-                    if eHum and eHum.Health > 0 and not p.Character:FindFirstChildOfClass("ForceField") then
-                        local dist = (p.Character.HumanoidRootPart.Position - myPos).Magnitude
-                        if dist < state.macro360Fov and dist < bestDist then
-                            params.FilterDescendantsInstances = { char, p.Character }
-                            local ray = workspace:Raycast(myPos, p.Character.HumanoidRootPart.Position - myPos, params)
-                            
-                            if not ray then
-                                for _, part in ipairs(p.Character:GetChildren()) do
-                                    if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" and part.Name ~= "Humanoid" then
-                                        local partDist = (part.Position - myPos).Magnitude
-                                        if partDist < bestDist then
-                                            local partRay = workspace:Raycast(myPos, part.Position - myPos, params)
-                                            if not partRay or partRay.Instance:IsDescendantOf(p.Character) then
-                                                bestDist = partDist
-                                                bestPart = part
-                                            end
-                                        end
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-            
-            if bestPart then
-                isBusy360 = true
-                
-                if state.macro360Reaction > 0 then
-                    task.wait(state.macro360Reaction)
-                end
-                
-                local chance = math.random(1, 100)
-                if chance <= state.macro360HitChance then
-                    local backpack = player:FindFirstChildOfClass("Backpack")
-                    local tool = char:FindFirstChildOfClass("Tool")
-                    
-                    if tool and not esPistola(tool) then tool = nil end
-                    
-                    if not tool and backpack then
-                        for _, item in ipairs(backpack:GetChildren()) do
-                            if esPistola(item) then
-                                tool = item
-                                break
-                            end
-                        end
-                    end
-                    
-                    if tool then
-                        local wasEquipped = (tool.Parent == char)
-                        if not wasEquipped then
-                            hum:EquipTool(tool)
-                            task.wait(0.01)
-                        end
-                        
-                        if tool.Parent == char then
-                            getgenv().NevadaTargetPart = bestPart
-                            pcall(function() tool:Activate() end)
-                            task.wait(0.05)
-                            pcall(function() tool:Deactivate() end)
-                            getgenv().NevadaTargetPart = nil
-                            
-                            if not wasEquipped then
-                                pcall(function() hum:UnequipTools() end)
-                            end
-                        end
-                    end
-                end
-                
-                task.wait(state.macro360Cooldown)
-                isBusy360 = false
-            end
-        end
-    end
-end)
-
--- ==========================================
--- PESTAÑA: SONIDOS (Igual que antes)
--- ==========================================
+-- SONIDOS (Carga optimizada)
 local soundsPage=newPage("Sonidos")
 local categoryBar=card(soundsPage,44)
 local categoryButtons={}
@@ -588,38 +408,10 @@ for i,name in ipairs(navNames) do
 end
 showPage("Inicio")
 
-local function fetchFolder(folder)
-  if not requestFn then return false end
-  local ok,res=pcall(function() return requestFn({Url=API_ROOT..folder,Method="GET",Headers={ ["User-Agent"]="NevadaV2" }}) end)
-  if not ok or not res or (res.StatusCode~=200 and res.StatusCode~=201) or type(res.Body)~="string" then return false end
-  local parsedOk,data=pcall(function() return HttpService:JSONDecode(res.Body) end)
-  if not parsedOk or type(data)~="table" then return false end
-  local found={}
-  for _,item in ipairs(data) do
-    if item.type=="file" and type(item.name)=="string" and item.name:lower():match("%.mp3$") then
-      local url=item.download_url or (RAW..folder.."/"..item.name)
-      table.insert(found,{Name=item.name:gsub("%.[Mm][Pp]3$",""),URL=url,File=item.name})
-    end
-  end
-  if #found>0 then sounds=found; state.folder=folder; return true end
-  return false
-end
-
-refreshCatalog=function()
-  githubStatus.Text="Catálogo: buscando archivos MP3 en GitHub…"
-  local loaded=false
-  for _,folder in ipairs(FOLDERS) do if fetchFolder(folder) then loaded=true; break end end
-  table.sort(sounds,function(a,b) return a.Name:lower()<b.Name:lower() end)
-  if not loaded then githubStatus.Text="No se pudo leer el catálogo." else githubStatus.Text="GitHub conectado · "..#sounds.." sonidos · carpeta "..state.folder end
-  refreshSoundList()
-end
-task.spawn(refreshCatalog)
-
 -- ==========================================
--- LÓGICA DE MACROS (Arma y Cuchillo)
+-- LÓGICA DE MACROS Y BUCLE
 -- ==========================================
 local macroBusy=false
-local lastMacro=0
 local function runMacro()
   if not state.macro or macroBusy then return end
   local char=player.Character; if not char then return end
@@ -632,59 +424,33 @@ local function runMacro()
     end
   end
   if not tool then return end
-  local now=os.clock(); local requiredGap=math.max(0.01, tonumber(state.shootDelay) or 0.10)
-  if now-lastMacro<requiredGap then return end
-  macroBusy=true; lastMacro=now
+  macroBusy=true
   task.spawn(function()
-    local shouldHolster=false
     pcall(function()
-      if not state.macro or player.Character~=char then return end
-      if tool.Parent==backpack then hum:EquipTool(tool); shouldHolster=true end
-      task.wait(math.max(0.01, tonumber(state.equipDelay) or 0.05))
-      if state.macro and player.Character==char and hum.Health>0 and tool.Parent==char then
-        shouldHolster=true; tool:Activate()
-        task.wait(math.max(0.01, tonumber(state.shootDelay) or 0.10))
-        pcall(function() tool:Deactivate() end)
-      end
+      if tool.Parent==backpack then hum:EquipTool(tool); task.wait(state.equipDelay) end
+      if tool.Parent==char then tool:Activate(); task.wait(state.shootDelay); pcall(function() tool:Deactivate() end) end
+      pcall(function() hum:UnequipTools() end)
     end)
-    if shouldHolster and player.Character==char and hum.Parent==char then pcall(function() hum:UnequipTools() end) end
     macroBusy=false
   end)
 end
 
 local knifeBusy = false
-local lastKnife = 0
-local function obtenerCuchilloMacro()
-    local character = player.Character
-    local backpack = player:FindFirstChildOfClass("Backpack")
-    for _, container in ipairs({character, backpack}) do
-        if container then
-            for _, item in ipairs(container:GetChildren()) do
-                if item:IsA("Tool") and (item:FindFirstChild("Throw", true) or item:FindFirstChild("KnifeClient", true) or item:FindFirstChild("KnifeServer", true)) then
-                    return item
-                end
-            end
-        end
-    end
-    return nil
-end
-
 local function runKnifeMacro()
   if not state.knifeMacroEnabled or knifeBusy then return end
   local character = player.Character
   local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-  local knife = obtenerCuchilloMacro()
+  local knife = nil
+  for _, item in ipairs(character:GetChildren()) do if item:IsA("Tool") and item:FindFirstChild("Throw") then knife = item break end end
+  if not knife and character:FindFirstChildOfClass("Backpack") then
+      for _, item in ipairs(character:FindFirstChildOfClass("Backpack"):GetChildren()) do if item:IsA("Tool") and item:FindFirstChild("Throw") then knife = item break end end
+  end
   if not (knife and humanoid) then return end
-  local now = os.clock()
-  if now - lastKnife < 0.1 then return end
+  
   knifeBusy = true
-  lastKnife = now
   task.spawn(function()
     pcall(function()
-        humanoid:EquipTool(knife)
-        local equipDeadline = os.clock() + math.max(state.knifeEquipDelay, 0.05)
-        repeat task.wait() until knife.Parent == character or os.clock() >= equipDeadline
-        task.wait(math.max(0, state.knifeEquipDelay))
+        if knife.Parent ~= character then humanoid:EquipTool(knife); task.wait(0.1) end
         pcall(function() knife:Activate() end)
         task.wait(state.knifeThrowDelay)
         pcall(function() if humanoid and humanoid.Parent then humanoid:UnequipTools() end end)
@@ -696,61 +462,62 @@ end
 UserInputService.InputBegan:Connect(function(input, processed)
   if processed then return end
   if input.UserInputType==Enum.UserInputType.MouseButton1 or input.KeyCode==Enum.KeyCode.ButtonR2 then runMacro() end
+  if input.KeyCode == Enum.KeyCode.L2 then runKnifeMacro() end
 end)
-
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if not state.knifeMacroEnabled then return end
-    if input.KeyCode == Enum.KeyCode.L2 then runKnifeMacro() end
-end)
-
--- ==========================================
--- SONIDOS INTERCEPTADOS
--- ==========================================
-local ORIGINAL_SHOT="10209603"
-local ORIGINAL_KILL="296102734"
-local watchedSounds=setmetatable({}, {__mode="k"})
-
-local function watchNativeSound(obj)
-  if not obj:IsA("Sound") or watchedSounds[obj] then return end
-  watchedSounds[obj]=true
-  local function check()
-    if not obj.Parent then return end
-    local id = tostring(obj.SoundId or ""):match("(%d+)")
-    local category = nil
-    if id == ORIGINAL_SHOT or (obj.Name:lower():find("gun") and obj:FindFirstAncestorWhichIsA("Tool")) then category = "Arma"
-    elseif id == ORIGINAL_KILL or obj.Name:lower():find("kill") then category = "Matar" end
-    if not category then return end
-    local custom=state.selected[category]
-    if not state.enabled[category] or state.muted[category] or not custom or custom.URL=="" then return end
-    pcall(function() obj.Volume=0 end)
-    playSound(custom.URL)
-  end
-  obj.Played:Connect(check)
-  if obj.IsPlaying or obj.Playing then task.defer(check) end
-end
-
-local function scanSoundTree(root)
-  if not root then return end
-  if root:IsA("Sound") then watchNativeSound(root) end
-  for _,obj in ipairs(root:GetDescendants()) do if obj:IsA("Sound") then watchNativeSound(obj) end end
-  root.DescendantAdded:Connect(watchNativeSound)
-end
-scanSoundTree(workspace)
-scanSoundTree(SoundService)
 
 task.spawn(function()
-  task.wait(1)
-  if readfile and isfile and isfile(CONFIG_FILE) then
-    local ok,decoded=pcall(function() return HttpService:JSONDecode(readfile(CONFIG_FILE)) end)
-    if ok and type(decoded)=="table" then
-      if type(decoded.macro)=="boolean" then state.macro=decoded.macro end
-      if type(decoded.knifeMacroEnabled)=="boolean" then state.knifeMacroEnabled=decoded.knifeMacroEnabled end
-      if type(decoded.macro360Enabled)=="boolean" then state.macro360Enabled=decoded.macro360Enabled end
-      if tonumber(decoded.macro360Fov) then state.macro360Fov=math.clamp(decoded.macro360Fov,10,500) end
-      if tonumber(decoded.macro360HitChance) then state.macro360HitChance=math.clamp(decoded.macro360HitChance,1,100) end
-      if tonumber(decoded.macro360Reaction) then state.macro360Reaction=math.clamp(decoded.macro360Reaction,0,1) end
-      if tonumber(decoded.macro360Cooldown) then state.macro360Cooldown=math.clamp(decoded.macro360Cooldown,0.01,1.0) end
-      refreshDetails()
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    while task.wait(0.05) do 
+        if state.macro360Enabled and not estaEnLobby() then
+            local char = player.Character
+            if not char or not char:FindFirstChild("HumanoidRootPart") then continue end
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if not hum or hum.Health <= 0 then continue end
+            local bestPart, bestDist = nil, math.huge
+            local myPos = char.HumanoidRootPart.Position
+            for _, p in ipairs(Players:GetPlayers()) do
+                if isEnemy(p) and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                    local eHum = p.Character:FindFirstChildOfClass("Humanoid")
+                    if eHum and eHum.Health > 0 and not p.Character:FindFirstChildOfClass("ForceField") then
+                        local dist = (p.Character.HumanoidRootPart.Position - myPos).Magnitude
+                        if dist < state.macro360Fov and dist < bestDist then
+                            params.FilterDescendantsInstances = { char, p.Character }
+                            local ray = workspace:Raycast(myPos, p.Character.HumanoidRootPart.Position - myPos, params)
+                            if not ray then
+                                for _, part in ipairs(p.Character:GetChildren()) do
+                                    if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" and part.Name ~= "Humanoid" then
+                                        local partDist = (part.Position - myPos).Magnitude
+                                        if partDist < bestDist then
+                                            local pRay = workspace:Raycast(myPos, part.Position - myPos, params)
+                                            if not pRay or pRay.Instance:IsDescendantOf(p.Character) then bestDist = partDist; bestPart = part end
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+            if bestPart then
+                local backpack = player:FindFirstChildOfClass("Backpack")
+                local tool = char:FindFirstChildOfClass("Tool")
+                if tool and not esPistola(tool) then tool = nil end
+                if not tool and backpack then for _, item in ipairs(backpack:GetChildren()) do if esPistola(item) then tool = item; break end end end
+                if tool then
+                    local wasEq = (tool.Parent == char)
+                    if not wasEq then hum:EquipTool(tool); task.wait(0.05) end
+                    if tool.Parent == char then
+                        getgenv().NevadaTargetPart = bestPart
+                        pcall(function() tool:Activate() end)
+                        task.wait(0.05)
+                        pcall(function() tool:Deactivate() end)
+                        getgenv().NevadaTargetPart = nil
+                        if not wasEq then pcall(function() hum:UnequipTools() end) end
+                    end
+                end
+                task.wait(state.macro360Cooldown)
+            end
+        end
     end
-  end
 end)
