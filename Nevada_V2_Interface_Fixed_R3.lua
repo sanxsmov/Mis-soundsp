@@ -1,4 +1,4 @@
--- NEVADA V27 | Menú Completo Estable + Silent Aim + Team Check + Botón Flotante
+-- NEVADA V29 | FINAL DEFINITIVO (Sonidos + Team Check + Silent Aim + UI Optimizada)
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
@@ -12,7 +12,6 @@ local OWNER, REPO, BRANCH = "sanxsmov", "Mis-soundsp", "main"
 local FOLDERS = {"sounds", "SoundsV2"}
 local RAW = "https://raw.githubusercontent.com/" .. OWNER .. "/" .. REPO .. "/" .. BRANCH .. "/"
 local API_ROOT = "https://api.github.com/repos/" .. OWNER .. "/" .. REPO .. "/contents/"
-local CONFIG_FILE = "nevada_v2_config.json"
 
 local state = {
   macro = false, equipDelay = 0.05, shootDelay = 0.10,
@@ -29,7 +28,7 @@ local state = {
 local sounds, soundCache, activeTab, soundCategory = {}, {}, "Inicio", "Arma"
 
 -- ==========================================
--- TEAM CHECK Y ANTI-LOBBY
+-- TEAM CHECK Y ANTI-LOBBY (Lógica de Scoreboard)
 -- ==========================================
 local function getPlayerTeam(p)
     if not p then return nil end
@@ -44,8 +43,16 @@ local function getPlayerTeam(p)
     if score then
         for _, teamName in ipairs({"TeamRed", "TeamBlue"}) do
             local teamFolder = score:FindFirstChild(teamName)
-            if teamFolder and teamFolder:FindFirstChild(p.Name) then
-                return teamName == "TeamRed" and "Red" or "Blue"
+            if teamFolder then
+                if teamFolder:FindFirstChild(p.Name) then
+                    return teamName == "TeamRed" and "Red" or "Blue"
+                end
+                for _, entry in ipairs(teamFolder:GetChildren()) do
+                    local txt = entry:FindFirstChild("PlayerName", true)
+                    if txt and txt:IsA("TextLabel") and string.lower(txt.Text) == string.lower(p.Name) then
+                        return teamName == "TeamRed" and "Red" or "Blue"
+                    end
+                end
             end
         end
     end
@@ -59,13 +66,9 @@ local function isEnemy(targetPlayer)
     if myTeam and targetTeam then
         return string.lower(myTeam) ~= string.lower(targetTeam)
     end
-    return false -- Si no sabemos el equipo, no disparamos para evitar TeamKill
+    return false -- Si no sabemos el equipo, NO disparamos para evitar teamkill
 end
 
-local SAFE_ZONES = {
-    {Center = Vector3.new(-320.50, 280.82, 16.00), Radius = 500},
-    {Center = Vector3.new(1564.14, -155.45, 40.04), Radius = 300}
-}
 local function estaEnLobby()
     local character = player.Character
     if not character then return true end
@@ -74,18 +77,19 @@ local function estaEnLobby()
         local name = player.Team.Name:lower()
         if name:find("lobby") or name:find("spectat") or name:find("menu") then return true end
     end
-    local root = character:FindFirstChild("HumanoidRootPart")
-    if root then
-        for _, zone in ipairs(SAFE_ZONES) do
-            if (root.Position - zone.Center).Magnitude <= zone.Radius then return true end
-        end
-    end
+    -- Si el marcador no está cargado, estamos en el lobby
+    local gui = player:FindFirstChild("PlayerGui")
+    local main = gui and gui:FindFirstChild("Main")
+    local frame = main and main:FindFirstChild("MainGameFrame")
+    if not frame or not frame:FindFirstChild("IngameScore") then return true end
+    
     return false
 end
 
 local function esPistola(tool)
     if not tool or not tool:IsA("Tool") then return false end
-    return tool:FindFirstChild("showBeam") ~= nil
+    -- En Duels (Asesinos VS Sheriffs) las pistolas tienen "showBeam"
+    return tool:FindFirstChild("showBeam") ~= nil or tool.Name:lower():find("gun") or tool.Name:lower():find("pistol") or tool.Name:lower():find("revolver")
 end
 
 -- ==========================================
@@ -116,7 +120,7 @@ if hookmetamethod and getnamecallmethod and checkcaller then
 end
 
 -- ==========================================
--- FUNCIONES DE SONIDO
+-- SONIDOS Y REPRODUCTOR
 -- ==========================================
 local function playSound(url)
   if type(url) ~= "string" or url == "" then return end
@@ -145,8 +149,65 @@ local function playSound(url)
   task.delay(20, function() if s.Parent then s:Destroy() end end)
 end
 
+-- LÓGICA DE REEMPLAZO DE SONIDO
+local ORIGINAL_SHOT="10209603"
+local ORIGINAL_KILL="296102734"
+local watchedSounds=setmetatable({}, {__mode="k"})
+
+local function watchNativeSound(obj)
+  if not obj:IsA("Sound") or watchedSounds[obj] then return end
+  watchedSounds[obj]=true
+  local function check()
+    if not obj.Parent then return end
+    local id = tostring(obj.SoundId or ""):match("(%d+)")
+    local category = nil
+    if id == ORIGINAL_SHOT or (obj.Name:lower():find("gun") and obj:FindFirstAncestorWhichIsA("Tool")) then category = "Arma"
+    elseif id == ORIGINAL_KILL or obj.Name:lower():find("kill") then category = "Matar" end
+    if not category then return end
+    local custom=state.selected[category]
+    if not state.enabled[category] or state.muted[category] or not custom or custom.URL=="" then return end
+    pcall(function() obj.Volume=0 end)
+    playSound(custom.URL)
+  end
+  obj.Played:Connect(check)
+  if obj.IsPlaying or obj.Playing then task.defer(check) end
+end
+
+local function scanSoundTree(root)
+  if not root then return end
+  if root:IsA("Sound") then watchNativeSound(root) end
+  for _,obj in ipairs(root:GetDescendants()) do if obj:IsA("Sound") then watchNativeSound(obj) end end
+  root.DescendantAdded:Connect(watchNativeSound)
+end
+scanSoundTree(workspace)
+scanSoundTree(SoundService)
+
+local function fetchFolder(folder)
+  if not requestFn then return false end
+  local ok,res=pcall(function() return requestFn({Url=API_ROOT..folder,Method="GET",Headers={ ["User-Agent"]="NevadaV2" }}) end)
+  if not ok or not res or (res.StatusCode~=200 and res.StatusCode~=201) or type(res.Body)~="string" then return false end
+  local parsedOk,data=pcall(function() return HttpService:JSONDecode(res.Body) end)
+  if not parsedOk or type(data)~="table" then return false end
+  local found={}
+  for _,item in ipairs(data) do
+    if item.type=="file" and type(item.name)=="string" and item.name:lower():match("%.mp3$") then
+      local url=item.download_url or (RAW..folder.."/"..item.name)
+      table.insert(found,{Name=item.name:gsub("%.[Mm][Pp]3$",""),URL=url,File=item.name})
+    end
+  end
+  if #found>0 then sounds=found; state.folder=folder; return true end
+  return false
+end
+
+local function refreshCatalog()
+  local loaded=false
+  for _,folder in ipairs(FOLDERS) do if fetchFolder(folder) then loaded=true; break end end
+  table.sort(sounds,function(a,b) return a.Name:lower()<b.Name:lower() end)
+  return loaded
+end
+
 -- ==========================================
--- INTERFAZ GRÁFICA COMPLETA (Optimizada)
+-- INTERFAZ GRÁFICA
 -- ==========================================
 if playerGui:FindFirstChild("NevadaV2") then playerGui.NevadaV2:Destroy() end
 local gui = Instance.new("ScreenGui")
@@ -272,7 +333,9 @@ switch(knifePage,"Activar Macro Cuchillo (L2)",false,function(v) state.knifeMacr
 slider(knifePage,"Delay al Equipar",0.01,0.50,state.knifeEquipDelay,function(v) state.knifeEquipDelay = v end)
 slider(knifePage,"Delay al Lanzar",0.01,0.50,state.knifeThrowDelay,function(v) state.knifeThrowDelay = v end)
 
+-- ==========================================
 -- MACRO 360
+-- ==========================================
 local macro360Page = newPage("Macro360")
 local toggle360MenuBtn = nil
 local floatingBtn = nil
@@ -320,7 +383,10 @@ end)
 UserInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then draggingBtn = false end end)
 floatingBtn.MouseButton1Click:Connect(function() setMacro360State(not state.macro360Enabled) end)
 
--- SONIDOS (Carga optimizada)
+
+-- ==========================================
+-- PESTAÑA SONIDOS
+-- ==========================================
 local soundsPage=newPage("Sonidos")
 local categoryBar=card(soundsPage,44)
 local categoryButtons={}
@@ -362,36 +428,25 @@ local soundToggle=switch(soundsPage,"Activar este sonido",true,function(v) state
 local muteToggle=switch(soundsPage,"Silenciar este sonido",false,function(v) state.muted[soundCategory]=v end)
 local githubStatus=label(soundsPage,"Catálogo: buscando archivos MP3 en GitHub…",UDim2.new(1,-8,0,28),UDim2.new(0,4,0,0),12,C.sub,false)
 
-local configPage=newPage("Configuración")
-actionCard(configPage,"Guardar configuración","Guarda selección de sonidos y opciones","Guardar",function()
-  if not (writefile and isfile) then githubStatus.Text="Guardar: este ejecutor no ofrece writefile."; return end
-  local ok, encoded=pcall(function() return HttpService:JSONEncode(state) end)
-  if ok and pcall(writefile,CONFIG_FILE,encoded) then githubStatus.Text="Configuración guardada." else githubStatus.Text="No se pudo guardar." end
-end)
-actionCard(configPage,"Cargar configuración","Restaura los valores guardados","Cargar",function()
-  if not (readfile and isfile) or not isfile(CONFIG_FILE) then githubStatus.Text="No hay configuración guardada."; return end
-  local ok, decoded=pcall(function() return HttpService:JSONDecode(readfile(CONFIG_FILE)) end)
-  if ok and type(decoded)=="table" then
-    if type(decoded.macro)=="boolean" then state.macro=decoded.macro end
-    if type(decoded.knifeMacroEnabled)=="boolean" then state.knifeMacroEnabled=decoded.knifeMacroEnabled end
-    if type(decoded.macro360Enabled)=="boolean" then state.macro360Enabled=decoded.macro360Enabled end
-    if tonumber(decoded.macro360Fov) then state.macro360Fov=math.clamp(decoded.macro360Fov,10,500) end
-    if tonumber(decoded.macro360HitChance) then state.macro360HitChance=math.clamp(decoded.macro360HitChance,1,100) end
-    if tonumber(decoded.macro360Reaction) then state.macro360Reaction=math.clamp(decoded.macro360Reaction,0,1) end
-    if tonumber(decoded.macro360Cooldown) then state.macro360Cooldown=math.clamp(decoded.macro360Cooldown,0.01,1.0) end
-    if tonumber(decoded.equipDelay) then state.equipDelay=math.clamp(decoded.equipDelay,0.01,0.5) end
-    if tonumber(decoded.shootDelay) then state.shootDelay=math.clamp(decoded.shootDelay,0.01,0.5) end
-    if tonumber(decoded.knifeEquipDelay) then state.knifeEquipDelay=math.clamp(decoded.knifeEquipDelay,0.01,0.5) end
-    if tonumber(decoded.knifeThrowDelay) then state.knifeThrowDelay=math.clamp(decoded.knifeThrowDelay,0.01,0.5) end
-    for _,k in ipairs({"Arma","Saltar","Matar"}) do
-      if type(decoded.selected)=="table" and type(decoded.selected[k])=="table" then state.selected[k]=decoded.selected[k] end
-      if type(decoded.enabled)=="table" and type(decoded.enabled[k])=="boolean" then state.enabled[k]=decoded.enabled[k] end
-      if type(decoded.muted)=="table" and type(decoded.muted[k])=="boolean" then state.muted[k]=decoded.muted[k] end
+-- Cargar sonidos en segundo plano para no congelar
+task.spawn(function()
+    local loaded = refreshCatalog()
+    if loaded then
+        githubStatus.Text = "GitHub conectado · "..#sounds.." sonidos"
+    else
+        githubStatus.Text = "No se pudo conectar a GitHub"
     end
-    refreshDetails(); refreshSoundList(); githubStatus.Text="Configuración cargada."
-  else githubStatus.Text="Archivo inválido." end
+    refreshSoundList()
 end)
-actionCard(configPage,"Actualizar catálogo","Vuelve a consultar GitHub","Actualizar",function() if refreshCatalog then task.spawn(refreshCatalog) end end)
+
+local configPage=newPage("Configuración")
+actionCard(configPage,"Actualizar catálogo","Vuelve a consultar GitHub","Actualizar",function() 
+    githubStatus.Text = "Buscando..."
+    task.spawn(function()
+        if refreshCatalog() then githubStatus.Text = "Catálogo actualizado · "..#sounds.." sonidos" else githubStatus.Text = "Error al actualizar" end
+        refreshSoundList()
+    end)
+end)
 
 local navNames={"Inicio","Macro","Cuchillo","Macro360","Sonidos","Configuración"}
 local navIcons={Inicio="⌂",Macro="◎",Cuchillo="🔪",Macro360="🎯",Sonidos="♫",["Configuración"]="⚙"}
@@ -409,7 +464,7 @@ end
 showPage("Inicio")
 
 -- ==========================================
--- LÓGICA DE MACROS Y BUCLE
+-- LÓGICA DE MACROS Y BUCLE MACRO 360
 -- ==========================================
 local macroBusy=false
 local function runMacro()
@@ -418,11 +473,16 @@ local function runMacro()
   local hum=char:FindFirstChildOfClass("Humanoid"); if not hum or hum.Health<=0 then return end
   local backpack=player:FindFirstChildOfClass("Backpack"); if not backpack then return end
   local tool=char:FindFirstChildOfClass("Tool")
+  
+  -- Filtrar para que la macro no saque el cuchillo
+  if tool and not esPistola(tool) then tool = nil end
+  
   if not tool then
     for _,item in ipairs(backpack:GetChildren()) do
-      if item:IsA("Tool") then tool=item; break end
+      if item:IsA("Tool") and esPistola(item) then tool=item; break end
     end
   end
+  
   if not tool then return end
   macroBusy=true
   task.spawn(function()
