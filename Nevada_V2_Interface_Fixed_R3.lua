@@ -1,4 +1,4 @@
--- NEVADA V35.2 | Interfaz Corregida (Solucionado el problema de pantalla en negro)
+-- NEVADA V32 | Skybox Automatico de GitHub + Team Check + Sonidos + Silent Aim
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
@@ -14,28 +14,11 @@ local FOLDERS = {"sounds", "SoundsV2"}
 local RAW = "https://raw.githubusercontent.com/" .. OWNER .. "/" .. REPO .. "/" .. BRANCH .. "/"
 local API_ROOT = "https://api.github.com/repos/" .. OWNER .. "/" .. REPO .. "/contents/"
 
+-- Configuración de Skybox
 local SKYBOX_REPO = "sanxsmov/Onyx-web"
 local SKYBOX_FOLDER = "skyboxes"
 local SKYBOX_RAW = "https://raw.githubusercontent.com/" .. SKYBOX_REPO .. "/main/" .. SKYBOX_FOLDER .. "/"
 local SKYBOX_API = "https://api.github.com/repos/" .. SKYBOX_REPO .. "/contents/" .. SKYBOX_FOLDER
-
--- ==========================================
--- BASE DE DATOS DE PAQUETES DE ANIMACIÓN
--- ==========================================
-local AnimationPacks = {
-    ["Default"] = {Idle = "507766666", Walk = "507777826", Run = "507767714", Jump = "507765000", Fall = "507767968", Swim = "507784897", SwimIdle = "507785072"},
-    ["Hombre Lobo"] = {Idle = "1113752682", Walk = "1113751657", Run = "1113750642", Jump = "1113752682", Fall = "1113752682", Swim = "1113750642", SwimIdle = "1113752682"},
-    ["Ninja"] = {Idle = "616006778", Walk = "656121766", Run = "656118852", Jump = "616008936", Fall = "616005863", Swim = "616143378", SwimIdle = "616144772"},
-    ["Zombie"] = {Idle = "10921344533", Walk = "10921355261", Run = "616163682", Jump = "10921351278", Fall = "10921350320", Swim = "10921352344", SwimIdle = "10921353442"},
-    ["Robot"] = {Idle = "616088211", Walk = "616095330", Run = "616091570", Jump = "616090535", Fall = "616087089", Swim = "616092998", SwimIdle = "616094091"},
-    ["Levitation"] = {Idle = "616006778", Walk = "616013216", Run = "616010382", Jump = "616008936", Fall = "616005863", Swim = "616011509", SwimIdle = "616012453"},
-    ["Toy"] = {Idle = "10921301576", Walk = "10921312010", Run = "10921306285", Jump = "10921308158", Fall = "10921307241", Swim = "10921309319", SwimIdle = "10921310341"},
-    ["Superhero"] = {Idle = "10921288909", Walk = "10921298616", Run = "10921291831", Jump = "10921294559", Fall = "10921293373", Swim = "10921295495", SwimIdle = "10921297391"},
-    ["Cartoony"] = {Idle = "10921071918", Walk = "10921082452", Run = "10921076136", Jump = "10921078135", Fall = "10921077030", Swim = "10921079380", SwimIdle = "10921081059"},
-    ["Vampire"] = {Idle = "10921315373", Walk = "10921326949", Run = "10921320299", Jump = "10921322186", Fall = "10921321317", Swim = "10921324408", SwimIdle = "10921325443"},
-    ["Elder"] = {Idle = "10921101664", Walk = "10921111375", Run = "10921104374", Jump = "10921107367", Fall = "10921105765", Swim = "10921108971", SwimIdle = "10921110146"},
-    ["Stylish"] = {Idle = "10921272275", Walk = "10921283326", Run = "10921276116", Jump = "10921279832", Fall = "10921278648", Swim = "10921281000", SwimIdle = "10921281964"},
-}
 
 local state = {
   macro = false, equipDelay = 0.05, shootDelay = 0.10,
@@ -49,84 +32,30 @@ local state = {
   selectedSky = "",
   selected = {Arma={Name="Ninguno",URL=""}, Saltar={Name="Ninguno",URL=""}, Matar={Name="Ninguno",URL=""}},
   enabled = {Arma=true, Saltar=true, Matar=true}, muted = {Arma=false, Saltar=false, Matar=false},
-  folder = FOLDERS[1],
-  animEnabled = false,
-  selectedAnimPack = "Default"
+  folder = FOLDERS[1]
 }
 local sounds, soundCache, activeTab, soundCategory = {}, {}, "Inicio", "Arma"
 
 -- ==========================================
--- LÓGICA DE ANIMACIONES
+-- LÓGICA DE SKYBOX AUTOMÁTICO
 -- ==========================================
-local function applyAnimationPack(packName)
-    if not state.animEnabled then return end
-    local char = player.Character
-    if not char then return end
-    local animate = char:FindFirstChild("Animate")
-    if not animate then return end
-    local humanoid = char:FindFirstChildOfClass("Humanoid")
-    
-    if humanoid then
-        local animator = humanoid:FindFirstChildOfClass("Animator")
-        if animator then
-            for _, track in ipairs(animator:GetPlayingAnimationTracks()) do track:Stop(0) end
-        end
-    end
-    animate.Disabled = true
-
-    local pack = AnimationPacks[packName]
-    if pack then
-        local function setAnim(folderName, animName, id)
-            if not id then return end
-            local folder = animate:FindFirstChild(folderName)
-            if folder then
-                local anim = folder:FindFirstChild(animName)
-                if anim and anim:IsA("Animation") then anim.AnimationId = "rbxassetid://" .. id end
-            end
-        end
-        setAnim("idle", "Animation1", pack.Idle)
-        setAnim("idle", "Animation2", pack.Idle)
-        setAnim("walk", "WalkAnim", pack.Walk)
-        setAnim("run", "RunAnim", pack.Run)
-        setAnim("jump", "JumpAnim", pack.Jump)
-        setAnim("fall", "FallAnim", pack.Fall)
-        setAnim("swim", "Swim", pack.Swim)
-        setAnim("swimidle", "SwimIdle", pack.SwimIdle)
-    end
-    task.wait(0.1)
-    animate.Disabled = false
-end
-
-local function onCharacterAdded(char)
-    task.wait(1.5)
-    applyAnimationPack(state.selectedAnimPack)
-end
-
-if player.Character then onCharacterAdded(player.Character) end
-player.CharacterAdded:Connect(onCharacterAdded)
-
--- ==========================================
--- SKYBOX FUNCTIONS
--- ==========================================
-local originalSky = Lighting:FindFirstChildOfClass("Sky")
-local originalSkyProperties = nil
-if originalSky then
-    originalSkyProperties = { SkyboxBk = originalSky.SkyboxBk, SkyboxDn = originalSky.SkyboxDn, SkyboxFt = originalSky.SkyboxFt, SkyboxLf = originalSky.SkyboxLf, SkyboxRt = originalSky.SkyboxRt, SkyboxUp = originalSky.SkyboxUp }
-end
-
 local function downloadImg(url, name)
     if not (writefile and isfile and getcustomasset) then return nil end
     local path = "NevadaSky_" .. name .. ".png"
     if not isfile(path) then
         local ok, body = pcall(function() return game:HttpGet(url) end)
-        if ok and body and #body > 0 then pcall(writefile, path, body) else return nil end
+        if ok and body and #body > 0 then
+            pcall(writefile, path, body)
+        else
+            return nil
+        end
     end
     local success, asset = pcall(getcustomasset, path)
     if success then return asset end
     return nil
 end
 
-function applySkyFromGitHub(skyName)
+local function applySkyFromGitHub(skyName)
     local baseUrl = SKYBOX_RAW .. skyName .. "/"
     local aBk = downloadImg(baseUrl .. "bk.png", skyName.."_bk")
     local aDn = downloadImg(baseUrl .. "dn.png", skyName.."_dn")
@@ -137,8 +66,8 @@ function applySkyFromGitHub(skyName)
 
     if aBk and aDn and aFt and aLf and aRt and aUp then
         pcall(function()
-            local sky = originalSky
-            if not sky or not sky.Parent then sky = Instance.new("Sky"); sky.Parent = Lighting end
+            local sky = Lighting:FindFirstChildOfClass("Sky")
+            if not sky then sky = Instance.new("Sky"); sky.Parent = Lighting end
             sky.SkyboxBk = aBk; sky.SkyboxDn = aDn; sky.SkyboxFt = aFt
             sky.SkyboxLf = aLf; sky.SkyboxRt = aRt; sky.SkyboxUp = aUp
         end)
@@ -155,6 +84,7 @@ local function getPlayerTeam(p)
     if p.Team and p.Team.Name ~= "" then return p.Team.Name end
     local attr = p:GetAttribute("Team") or p:GetAttribute("team")
     if attr and tostring(attr) ~= "" then return tostring(attr) end
+    
     local gui = player:FindFirstChild("PlayerGui")
     local main = gui and gui:FindFirstChild("Main")
     local frame = main and main:FindFirstChild("MainGameFrame")
@@ -181,7 +111,6 @@ local function isEnemy(targetPlayer)
     local myTeam = getPlayerTeam(player)
     local targetTeam = getPlayerTeam(targetPlayer)
     if myTeam and targetTeam then return string.lower(myTeam) ~= string.lower(targetTeam) end
-    if not myTeam and not targetTeam then return true end
     return false
 end
 
@@ -205,7 +134,9 @@ local function esPistola(tool)
     return tool:FindFirstChild("showBeam") ~= nil or tool.Name:lower():find("gun") or tool.Name:lower():find("pistol") or tool.Name:lower():find("revolver")
 end
 
+-- ==========================================
 -- HOOK RAYCAST (Silent Aim)
+-- ==========================================
 getgenv().NevadaTargetPart = nil
 local oldNamecall
 if hookmetamethod and getnamecallmethod and checkcaller then
@@ -270,12 +201,9 @@ local function watchNativeSound(obj)
   local function check()
     if not obj.Parent then return end
     local id = tostring(obj.SoundId or ""):match("(%d+)")
-    local n = obj.Name:lower()
-    local isGun = n:find("gun") or n:find("shot") or n:find("fire")
-    local isKill = n:find("kill")
     local category = nil
-    if id == ORIGINAL_SHOT or isGun then category = "Arma"
-    elseif id == ORIGINAL_KILL or isKill then category = "Matar" end
+    if id == ORIGINAL_SHOT or (obj.Name:lower():find("gun") and obj:FindFirstAncestorWhichIsA("Tool")) then category = "Arma"
+    elseif id == ORIGINAL_KILL or obj.Name:lower():find("kill") then category = "Matar" end
     if not category then return end
     local custom=state.selected[category]
     if not state.enabled[category] or state.muted[category] or not custom or custom.URL=="" then return end
@@ -355,8 +283,7 @@ local scale = create("UIScale", {Scale=1}, window)
 local function fitScale()
   local camera=workspace.CurrentCamera; if not camera then return end
   local v=camera.ViewportSize
-  -- [FIX] Clamp mínimo subido de 0.58 a 0.75 para que la UI no quede diminuta en móvil
-  scale.Scale=math.clamp(math.min(v.X/1100,v.Y/680),0.75,1)
+  scale.Scale=math.clamp(math.min(v.X/1100,v.Y/680),0.58,1)
 end
 fitScale()
 if workspace.CurrentCamera then workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(fitScale) end
@@ -366,8 +293,7 @@ local divider=create("Frame",{Size=UDim2.new(0,1,1,0),Position=UDim2.new(0,190,0
 label(sidebar,"▲",UDim2.new(1,0,0,48),UDim2.new(0,0,0,20),29,C.text,true).TextXAlignment=Enum.TextXAlignment.Center
 label(sidebar,"N E V A D A",UDim2.new(1,0,0,34),UDim2.new(0,0,0,63),21,C.text,true).TextXAlignment=Enum.TextXAlignment.Center
 label(sidebar,"V2",UDim2.new(1,0,0,20),UDim2.new(0,0,0,96),12,C.sub,false).TextXAlignment=Enum.TextXAlignment.Center
--- [FIX] navHolder: 300 -> 400 para que quepan los 8 botones (Sonidos, Skybox, Configuración)
-local navHolder=create("Frame",{Size=UDim2.new(1,-18,0,400),Position=UDim2.new(0,9,0,140),BackgroundTransparency=1},sidebar)
+local navHolder=create("Frame",{Size=UDim2.new(1,-18,0,220),Position=UDim2.new(0,9,0,140),BackgroundTransparency=1},sidebar)
 create("UIListLayout",{Padding=UDim.new(0,7),SortOrder=Enum.SortOrder.LayoutOrder},navHolder)
 label(sidebar,"NEVADA V2\nTu experiencia, sin límites.",UDim2.new(1,-24,0,48),UDim2.new(0,12,1,-62),11,C.sub,false)
 
@@ -396,32 +322,17 @@ end)
 
 local content=create("Frame",{Size=UDim2.new(1,-210,1,-82),Position=UDim2.new(0,205,0,72),BackgroundTransparency=1},window)
 local pages={}
-
 local function newPage(name)
-  local p=create("ScrollingFrame",{
-      Name=name,
-      Size=UDim2.fromScale(1,1),
-      BackgroundTransparency=1,
-      BorderSizePixel=0,
-      ScrollBarThickness=4,
-      ScrollBarImageColor3=C.blue,
-      Visible=false,
-      AutomaticCanvasSize=Enum.AutomaticSize.Y,
-      CanvasSize=UDim2.new(0,0,0,0)
-  }, content)
+  local p=create("ScrollingFrame",{Name=name,Size=UDim2.fromScale(1,1),BackgroundTransparency=1,BorderSizePixel=0,ScrollBarThickness=4,ScrollBarImageColor3=C.blue,Visible=false,CanvasSize=UDim2.new()},content)
   local l=create("UIListLayout",{Padding=UDim.new(0,10),SortOrder=Enum.SortOrder.LayoutOrder},p)
+  l:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() p.CanvasSize=UDim2.new(0,0,0,l.AbsoluteContentSize.Y+16) end)
   pages[name]=p; return p
 end
-
-local cardLayoutCounters = {}
 local function card(parent,height)
-  cardLayoutCounters[parent] = (cardLayoutCounters[parent] or 0) + 1
-  local f=create("Frame",{Size=UDim2.new(1,-8,0,height),BackgroundColor3=C.card,BorderSizePixel=0, LayoutOrder=cardLayoutCounters[parent]},parent)
-  corner(f,11); stroke(f); return f
+  local f=create("Frame",{Size=UDim2.new(1,-8,0,height),BackgroundColor3=C.card,BorderSizePixel=0},parent); corner(f,11); stroke(f); return f
 end
-
-local function switch(parent,text,initial,callback)
-  local row=card(parent,48)
+local function switch(parent,text,initial,callback,y)
+  local row=card(parent,48); row.LayoutOrder=y or 1
   label(row,text,UDim2.new(1,-100,1,0),UDim2.new(0,14,0,0),14,C.text,true)
   local b
   b=button(row,initial and "ACTIVADO" or "DESACTIVADO",UDim2.fromOffset(92,30),UDim2.new(1,-104,0.5,-15),function()
@@ -430,12 +341,10 @@ local function switch(parent,text,initial,callback)
   b.BackgroundColor3=initial and C.blue or C.card
   return b
 end
-
 local function actionCard(parent,title,desc,btnText,fn)
   local f=card(parent,70); label(f,title,UDim2.new(0.66,0,0,27),UDim2.new(0,14,0,7),14,C.text,true); label(f,desc,UDim2.new(0.66,0,0,25),UDim2.new(0,14,0,35),11,C.sub,false)
   button(f,btnText,UDim2.fromOffset(125,34),UDim2.new(1,-139,0.5,-17),fn); return f
 end
-
 local function slider(parent,title,minV,maxV,initial,callback)
   local f=card(parent,72); local value=initial
   local txt=label(f,title..": "..tostring(value),UDim2.new(1,-24,0,25),UDim2.new(0,13,0,6),13,C.text,true)
@@ -455,7 +364,6 @@ actionCard(home,"Macro Arma","Disparo rápido automático","Ver macro",function(
 actionCard(home,"Macro Cuchillo","Lanzamiento rápido (L2)","Ver macro",function() showPage("Cuchillo") end)
 actionCard(home,"Macro 360","Disparo invisible a todo el cuerpo","Ver Macro 360",function() showPage("Macro360") end)
 actionCard(home,"Skybox","Cambia el cielo del mapa","Ver cielos",function() showPage("Skybox") end)
-actionCard(home,"Animaciones","Cambia tus animaciones default","Ver animaciones",function() showPage("Animaciones") end)
 
 local macroPage=newPage("Macro")
 switch(macroPage,"Activar macro de arma",false,function(v) state.macro=v end)
@@ -467,51 +375,9 @@ switch(knifePage,"Activar Macro Cuchillo (L2)",false,function(v) state.knifeMacr
 slider(knifePage,"Delay al Equipar",0.01,0.50,state.knifeEquipDelay,function(v) state.knifeEquipDelay = v end)
 slider(knifePage,"Delay al Lanzar",0.01,0.50,state.knifeThrowDelay,function(v) state.knifeThrowDelay = v end)
 
--- PESTAÑA ANIMACIONES
-local animsPage = newPage("Animaciones")
-local animToggle = switch(animsPage, "Activar Animaciones Custom", state.animEnabled, function(v) 
-    state.animEnabled = v 
-    if v then applyAnimationPack(state.selectedAnimPack) end
-end)
-
--- [FIX] CRÍTICO: Frame NO soporta AutomaticCanvasSize (solo ScrollingFrame).
---      Al intentar setearlo, Roblox lanza error y detiene TODO el script aquí,
---      por eso el contenido de la UI quedaba vacío.
-local animListFrame = create("Frame", {
-    Size = UDim2.new(1, -8, 0, 580),  -- 12 packs × 48px = 576px, redondeado a 580
-    BackgroundTransparency = 1,
-    LayoutOrder = 99
-}, animsPage)
-local animLayout = create("UIListLayout", {Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder}, animListFrame)
-
-for packName, _ in pairs(AnimationPacks) do
-    local btn = button(animListFrame, "🎬 " .. packName, UDim2.new(1, 0, 0, 40), UDim2.new(), function()
-        state.selectedAnimPack = packName
-        state.animEnabled = true
-        animToggle.Text = "ACTIVADO"
-        animToggle.BackgroundColor3 = C.blue
-        applyAnimationPack(packName)
-        
-        for _, child in ipairs(animListFrame:GetChildren()) do
-            if child:IsA("TextButton") then
-                child.BackgroundColor3 = C.card
-                child.TextColor3 = C.text
-            end
-        end
-        btn.BackgroundColor3 = C.blue
-        btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    end)
-end
-
-actionCard(animsPage, "Restaurar Default", "Vuelve a las animaciones originales de Roblox.", "Restaurar", function()
-    state.selectedAnimPack = "Default"
-    state.animEnabled = false
-    animToggle.Text = "DESACTIVADO"
-    animToggle.BackgroundColor3 = C.card
-    applyAnimationPack("Default")
-end)
-
+-- ==========================================
 -- MACRO 360
+-- ==========================================
 local macro360Page = newPage("Macro360")
 local toggle360MenuBtn = nil
 local floatingBtn = nil
@@ -541,6 +407,7 @@ slider(macro360Page, "Probabilidad de acierto (%)", 1, 100, state.macro360HitCha
 slider(macro360Page, "Tiempo de reacción (s)", 0, 1, state.macro360Reaction, function(v) state.macro360Reaction = v end)
 slider(macro360Page, "Delay entre Disparos (s)", 0.01, 1.0, state.macro360Cooldown, function(v) state.macro360Cooldown = v end)
 
+-- BOTÓN FLOTANTE
 floatingBtn = create("TextButton", {Size = UDim2.new(0, 120, 0, 45), Position = UDim2.new(0, 20, 0.5, 0), BackgroundColor3 = C.red, Text = "MACRO 360: OFF", TextColor3 = C.text, Font = Enum.Font.GothamBold, TextSize = 12, AutoButtonColor = false, ZIndex = 100}, gui)
 corner(floatingBtn, 8); stroke(floatingBtn, C.red, 1, 0.5)
 
@@ -558,10 +425,22 @@ end)
 UserInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then draggingBtn = false end end)
 floatingBtn.MouseButton1Click:Connect(function() setMacro360State(not state.macro360Enabled) end)
 
--- PESTAÑA SKYBOX
+-- ==========================================
+-- PESTAÑA SKYBOX (AUTOMÁTICO)
+-- ==========================================
 local skyboxPage = newPage("Skybox")
 local skyInfo = card(skyboxPage, 60)
 label(skyInfo, "Elige un cielo. El script buscará las carpetas de tu GitHub automáticamente.", UDim2.new(1,-24,1,-12), UDim2.new(0,12,0,6), 12, C.sub, false)
+
+local originalSky = Lighting:FindFirstChildOfClass("Sky")
+local originalSkyProperties = nil
+if originalSky then
+    originalSkyProperties = {
+        SkyboxBk = originalSky.SkyboxBk, SkyboxDn = originalSky.SkyboxDn,
+        SkyboxFt = originalSky.SkyboxFt, SkyboxLf = originalSky.SkyboxLf,
+        SkyboxRt = originalSky.SkyboxRt, SkyboxUp = originalSky.SkyboxUp
+    }
+end
 
 local function applySky(bk, dn, ft, lf, rt, up)
     pcall(function()
@@ -576,57 +455,84 @@ local function applySky(bk, dn, ft, lf, rt, up)
     end)
 end
 
+-- Botón para Auto-Cargar
 local toggleAutoSky = switch(skyboxPage, "Auto-Cargar último cielo al entrar", false, function(v)
     state.autoLoadSky = v
-    if v and state.selectedSky ~= "" then applySkyFromGitHub(state.selectedSky) end
+    if v and state.selectedSky ~= "" then
+        applySkyFromGitHub(state.selectedSky)
+    end
 end)
 
--- [FIX] LayoutOrder 99 -> 3 para que la lista aparezca ANTES del botón "Restaurar"
+-- Contenedor de la lista de cielos
 local skyList = create("ScrollingFrame", {
-    Size = UDim2.new(1, -8, 0, 220),
+    Size = UDim2.new(1, -8, 0, 200),
     BackgroundColor3 = C.card,
     BorderSizePixel = 0,
     ScrollBarThickness = 4,
     ScrollBarImageColor3 = C.blue,
     CanvasSize = UDim2.new(),
     AutomaticCanvasSize = Enum.AutomaticSize.Y,
-    LayoutOrder = 3
+    LayoutOrder = 2
 }, skyboxPage)
 corner(skyList, 10); stroke(skyList, C.edge)
 create("UIPadding", {PaddingTop=UDim.new(0,5), PaddingBottom=UDim.new(0,5), PaddingLeft=UDim.new(0,5), PaddingRight=UDim.new(0,5)}, skyList)
 local skyLayout = create("UIListLayout", {Padding=UDim.new(0,5), SortOrder=Enum.SortOrder.LayoutOrder}, skyList)
 
+-- Función para cargar la lista de carpetas de GitHub
 local function loadSkyList()
-    for _, child in ipairs(skyList:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
+    for _, child in ipairs(skyList:GetChildren()) do
+        if child:IsA("TextButton") then child:Destroy() end
+    end
+    
     if not requestFn then return end
     local ok, res = pcall(function() return requestFn({Url=SKYBOX_API, Method="GET", Headers={["User-Agent"]="NevadaV2"}}) end)
     if not ok or not res or res.StatusCode ~= 200 then return end
+    
     local parsedOk, data = pcall(function() return HttpService:JSONDecode(res.Body) end)
     if not parsedOk or type(data) ~= "table" then return end
+    
     for i, item in ipairs(data) do
         if item.type == "dir" then
             local skyName = item.name
-            local btn = create("TextButton", {Size = UDim2.new(1, 0, 0, 35), BackgroundColor3 = C.panel, Text = "☁ " .. skyName, TextColor3 = C.text, Font = Enum.Font.GothamMedium, TextSize = 13, LayoutOrder = i}, skyList)
+            local btn = create("TextButton", {
+                Size = UDim2.new(1, 0, 0, 35),
+                BackgroundColor3 = C.panel,
+                Text = "☁ " .. skyName,
+                TextColor3 = C.text,
+                Font = Enum.Font.GothamMedium,
+                TextSize = 13,
+                LayoutOrder = i
+            }, skyList)
             corner(btn, 6); stroke(btn, C.edge)
+            
             btn.MouseButton1Click:Connect(function()
                 btn.Text = "Descargando..."
                 local success = applySkyFromGitHub(skyName)
-                if success then btn.Text = "✅ " .. skyName; state.selectedSky = skyName else btn.Text = "❌ Error: " .. skyName end
+                if success then
+                    btn.Text = "✅ " .. skyName
+                    state.selectedSky = skyName
+                else
+                    btn.Text = "❌ Error: " .. skyName
+                end
                 task.delay(2, function() btn.Text = "☁ " .. skyName end)
             end)
         end
     end
 end
+
+-- Cargar la lista automáticamente al abrir el menú
 task.spawn(loadSkyList)
 
-local restoreCard = actionCard(skyboxPage, "Restaurar Cielo Original", "Quita el cielo personalizado.", "Restaurar", function()
-    if originalSkyProperties then applySky(originalSkyProperties.SkyboxBk, originalSkyProperties.SkyboxDn, originalSkyProperties.SkyboxFt, originalSkyProperties.SkyboxLf, originalSkyProperties.SkyboxRt, originalSkyProperties.SkyboxUp) end
+actionCard(skyboxPage, "Restaurar Cielo Original", "Quita el cielo personalizado.", "Restaurar", function()
+    if originalSkyProperties then
+        applySky(originalSkyProperties.SkyboxBk, originalSkyProperties.SkyboxDn, originalSkyProperties.SkyboxFt, originalSkyProperties.SkyboxLf, originalSkyProperties.SkyboxRt, originalSkyProperties.SkyboxUp)
+    end
     state.selectedSky = ""
 end)
--- [FIX] Forzar LayoutOrder después del skyList
-restoreCard.LayoutOrder = 4
 
+-- ==========================================
 -- PESTAÑA SONIDOS
+-- ==========================================
 local soundsPage=newPage("Sonidos")
 local categoryBar=card(soundsPage,44)
 local categoryButtons={}
@@ -638,7 +544,6 @@ listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() li
 local soundDetails=card(soundsPage,168)
 local selectedTitle=label(soundDetails,"Seleccionado: Ninguno",UDim2.new(1,-24,0,28),UDim2.new(0,12,0,8),15,C.text,true)
 local selectedFile=label(soundDetails,"Archivo: —",UDim2.new(1,-24,0,24),UDim2.new(0,12,0,38),12,C.sub,false)
-
 local function refreshDetails()
   local s=state.selected[soundCategory]; selectedTitle.Text="Seleccionado: "..s.Name; selectedFile.Text="Archivo: "..(s.URL:match("([^/]+)$") or "—")
 end
@@ -650,12 +555,13 @@ local function refreshSoundList()
       local row=create("Frame",{Size=UDim2.new(1,-4,0,43),BackgroundColor3=C.panel,BorderSizePixel=0},list); corner(row,7)
       label(row,s.Name,UDim2.new(0.55,0,1,0),UDim2.new(0,10,0,0),13,C.text,true)
       button(row,"▶ Probar",UDim2.fromOffset(82,29),UDim2.new(1,-176,0.5,-14),function() playSound(s.URL) end)
-      button(row,"Elegir",UDim2.fromOffset(76,29),UDim2.new(1,-86,0.5,-14),function() state.selected[soundCategory]={Name=s.Name,URL=s.URL}; refreshDetails() end)
+      button(row,"Elegir",UDim2.fromOffset(76,29),UDim2.new(1,-86,0.5,-14),function()
+        state.selected[soundCategory]={Name=s.Name,URL=s.URL}; refreshDetails()
+      end)
     end
   end
 end
 listSearch:GetPropertyChangedSignal("Text"):Connect(refreshSoundList)
-
 local function makeCategory(name,x)
   local b=button(categoryBar,name,UDim2.new(1/3,-8,0,32),UDim2.new(x,4,0.5,-16),function()
     soundCategory=name; refreshDetails(); refreshSoundList()
@@ -664,12 +570,9 @@ local function makeCategory(name,x)
   categoryButtons[name]=b
 end
 makeCategory("Arma",0); makeCategory("Saltar",1/3); makeCategory("Matar",2/3)
-
 local soundToggle=switch(soundsPage,"Activar este sonido",true,function(v) state.enabled[soundCategory]=v end)
 local muteToggle=switch(soundsPage,"Silenciar este sonido",false,function(v) state.muted[soundCategory]=v end)
 local githubStatus=label(soundsPage,"Catálogo: buscando archivos MP3 en GitHub…",UDim2.new(1,-8,0,28),UDim2.new(0,4,0,0),12,C.sub,false)
--- [FIX] LayoutOrder alto para que el status quede ABAJO (default 0 lo ponía arriba de todo)
-githubStatus.LayoutOrder = 99
 
 task.spawn(function()
     local loaded = refreshCatalog()
@@ -686,8 +589,8 @@ actionCard(configPage,"Actualizar catálogo","Vuelve a consultar GitHub","Actual
     end)
 end)
 
-local navNames={"Inicio","Macro","Cuchillo","Animaciones","Macro360","Sonidos","Skybox","Configuración"}
-local navIcons={Inicio="⌂",Macro="◎",Cuchillo="🔪",Animaciones="🏃",Macro360="🎯",Sonidos="♫",Skybox="☁",["Configuración"]="⚙"}
+local navNames={"Inicio","Macro","Cuchillo","Macro360","Sonidos","Skybox","Configuración"}
+local navIcons={Inicio="⌂",Macro="◎",Cuchillo="🔪",Macro360="🎯",Sonidos="♫",Skybox="☁",["Configuración"]="⚙"}
 showPage=function(name)
   activeTab=name
   for n,p in pairs(pages) do p.Visible=(n==name) end
@@ -751,7 +654,7 @@ end
 UserInputService.InputBegan:Connect(function(input, processed)
   if processed then return end
   if input.UserInputType==Enum.UserInputType.MouseButton1 or input.KeyCode==Enum.KeyCode.ButtonR2 then runMacro() end
-  if input.KeyCode == Enum.KeyCode.ButtonL2 then runKnifeMacro() end
+  if input.KeyCode == Enum.KeyCode.L2 then runKnifeMacro() end
 end)
 
 task.spawn(function()
