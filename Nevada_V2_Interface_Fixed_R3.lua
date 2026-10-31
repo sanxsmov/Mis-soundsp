@@ -355,7 +355,8 @@ local scale = create("UIScale", {Scale=1}, window)
 local function fitScale()
   local camera=workspace.CurrentCamera; if not camera then return end
   local v=camera.ViewportSize
-  scale.Scale=math.clamp(math.min(v.X/1100,v.Y/680),0.58,1)
+  -- [FIX] Clamp mínimo subido de 0.58 a 0.75 para que la UI no quede diminuta en móvil
+  scale.Scale=math.clamp(math.min(v.X/1100,v.Y/680),0.75,1)
 end
 fitScale()
 if workspace.CurrentCamera then workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(fitScale) end
@@ -365,7 +366,8 @@ local divider=create("Frame",{Size=UDim2.new(0,1,1,0),Position=UDim2.new(0,190,0
 label(sidebar,"▲",UDim2.new(1,0,0,48),UDim2.new(0,0,0,20),29,C.text,true).TextXAlignment=Enum.TextXAlignment.Center
 label(sidebar,"N E V A D A",UDim2.new(1,0,0,34),UDim2.new(0,0,0,63),21,C.text,true).TextXAlignment=Enum.TextXAlignment.Center
 label(sidebar,"V2",UDim2.new(1,0,0,20),UDim2.new(0,0,0,96),12,C.sub,false).TextXAlignment=Enum.TextXAlignment.Center
-local navHolder=create("Frame",{Size=UDim2.new(1,-18,0,300),Position=UDim2.new(0,9,0,140),BackgroundTransparency=1},sidebar)
+-- [FIX] navHolder: 300 -> 400 para que quepan los 8 botones (Sonidos, Skybox, Configuración)
+local navHolder=create("Frame",{Size=UDim2.new(1,-18,0,400),Position=UDim2.new(0,9,0,140),BackgroundTransparency=1},sidebar)
 create("UIListLayout",{Padding=UDim.new(0,7),SortOrder=Enum.SortOrder.LayoutOrder},navHolder)
 label(sidebar,"NEVADA V2\nTu experiencia, sin límites.",UDim2.new(1,-24,0,48),UDim2.new(0,12,1,-62),11,C.sub,false)
 
@@ -395,7 +397,6 @@ end)
 local content=create("Frame",{Size=UDim2.new(1,-210,1,-82),Position=UDim2.new(0,205,0,72),BackgroundTransparency=1},window)
 local pages={}
 
--- CORRECCIÓN 1: AutomaticCanvasSize para que no se hagan invisibles las tarjetas
 local function newPage(name)
   local p=create("ScrollingFrame",{
       Name=name,
@@ -405,14 +406,13 @@ local function newPage(name)
       ScrollBarThickness=4,
       ScrollBarImageColor3=C.blue,
       Visible=false,
-      AutomaticCanvasSize=Enum.AutomaticSize.Y, -- ESTO SOLUCIONA LA PANTALLA NEGRA
+      AutomaticCanvasSize=Enum.AutomaticSize.Y,
       CanvasSize=UDim2.new(0,0,0,0)
   }, content)
   local l=create("UIListLayout",{Padding=UDim.new(0,10),SortOrder=Enum.SortOrder.LayoutOrder},p)
   pages[name]=p; return p
 end
 
--- CORRECCIÓN 2: Asegurar que las tarjetas se apilen correctamente
 local cardLayoutCounters = {}
 local function card(parent,height)
   cardLayoutCounters[parent] = (cardLayoutCounters[parent] or 0) + 1
@@ -474,7 +474,14 @@ local animToggle = switch(animsPage, "Activar Animaciones Custom", state.animEna
     if v then applyAnimationPack(state.selectedAnimPack) end
 end)
 
-local animListFrame = create("Frame", {Size = UDim2.new(1, -8, 0, 0), BackgroundTransparency = 1, AutomaticCanvasSize = Enum.AutomaticSize.Y, LayoutOrder = 99}, animsPage)
+-- [FIX] CRÍTICO: Frame NO soporta AutomaticCanvasSize (solo ScrollingFrame).
+--      Al intentar setearlo, Roblox lanza error y detiene TODO el script aquí,
+--      por eso el contenido de la UI quedaba vacío.
+local animListFrame = create("Frame", {
+    Size = UDim2.new(1, -8, 0, 580),  -- 12 packs × 48px = 576px, redondeado a 580
+    BackgroundTransparency = 1,
+    LayoutOrder = 99
+}, animsPage)
 local animLayout = create("UIListLayout", {Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder}, animListFrame)
 
 for packName, _ in pairs(AnimationPacks) do
@@ -574,7 +581,17 @@ local toggleAutoSky = switch(skyboxPage, "Auto-Cargar último cielo al entrar", 
     if v and state.selectedSky ~= "" then applySkyFromGitHub(state.selectedSky) end
 end)
 
-local skyList = create("ScrollingFrame", {Size = UDim2.new(1, -8, 0, 200), BackgroundColor3 = C.card, BorderSizePixel = 0, ScrollBarThickness = 4, ScrollBarImageColor3 = C.blue, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, LayoutOrder = 99}, skyboxPage)
+-- [FIX] LayoutOrder 99 -> 3 para que la lista aparezca ANTES del botón "Restaurar"
+local skyList = create("ScrollingFrame", {
+    Size = UDim2.new(1, -8, 0, 220),
+    BackgroundColor3 = C.card,
+    BorderSizePixel = 0,
+    ScrollBarThickness = 4,
+    ScrollBarImageColor3 = C.blue,
+    CanvasSize = UDim2.new(),
+    AutomaticCanvasSize = Enum.AutomaticSize.Y,
+    LayoutOrder = 3
+}, skyboxPage)
 corner(skyList, 10); stroke(skyList, C.edge)
 create("UIPadding", {PaddingTop=UDim.new(0,5), PaddingBottom=UDim.new(0,5), PaddingLeft=UDim.new(0,5), PaddingRight=UDim.new(0,5)}, skyList)
 local skyLayout = create("UIListLayout", {Padding=UDim.new(0,5), SortOrder=Enum.SortOrder.LayoutOrder}, skyList)
@@ -602,10 +619,12 @@ local function loadSkyList()
 end
 task.spawn(loadSkyList)
 
-actionCard(skyboxPage, "Restaurar Cielo Original", "Quita el cielo personalizado.", "Restaurar", function()
+local restoreCard = actionCard(skyboxPage, "Restaurar Cielo Original", "Quita el cielo personalizado.", "Restaurar", function()
     if originalSkyProperties then applySky(originalSkyProperties.SkyboxBk, originalSkyProperties.SkyboxDn, originalSkyProperties.SkyboxFt, originalSkyProperties.SkyboxLf, originalSkyProperties.SkyboxRt, originalSkyProperties.SkyboxUp) end
     state.selectedSky = ""
 end)
+-- [FIX] Forzar LayoutOrder después del skyList
+restoreCard.LayoutOrder = 4
 
 -- PESTAÑA SONIDOS
 local soundsPage=newPage("Sonidos")
@@ -649,6 +668,8 @@ makeCategory("Arma",0); makeCategory("Saltar",1/3); makeCategory("Matar",2/3)
 local soundToggle=switch(soundsPage,"Activar este sonido",true,function(v) state.enabled[soundCategory]=v end)
 local muteToggle=switch(soundsPage,"Silenciar este sonido",false,function(v) state.muted[soundCategory]=v end)
 local githubStatus=label(soundsPage,"Catálogo: buscando archivos MP3 en GitHub…",UDim2.new(1,-8,0,28),UDim2.new(0,4,0,0),12,C.sub,false)
+-- [FIX] LayoutOrder alto para que el status quede ABAJO (default 0 lo ponía arriba de todo)
+githubStatus.LayoutOrder = 99
 
 task.spawn(function()
     local loaded = refreshCatalog()
