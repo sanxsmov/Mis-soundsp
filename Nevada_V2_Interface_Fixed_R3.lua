@@ -1,4 +1,4 @@
--- NEVADA V35 | EDICIÓN PREMIUM FINAL (UI Moderna + Todas las Funciones)
+-- NEVADA V36 | EDICIÓN PREMIUM ESTABLE (Carga asíncrona para no crashear)
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
@@ -16,19 +16,16 @@ local RAW = "https://raw.githubusercontent.com/" .. OWNER .. "/" .. REPO .. "/" 
 local API_ROOT = "https://api.github.com/repos/" .. OWNER .. "/" .. REPO .. "/contents/"
 local SKYBOX_REPO = "sanxsmov/Onyx-web"
 local SKYBOX_RAW = "https://raw.githubusercontent.com/" .. SKYBOX_REPO .. "/main/skyboxes/"
-local SKYBOX_API = "https://api.github.com/repos/" .. SKYBOX_REPO .. "/contents/skyboxes"
 
 local state = {
     macro = false, equipDelay = 0.05, shootDelay = 0.10,
     knifeMacroEnabled = false, knifeEquipDelay = 0.10, knifeThrowDelay = 0.10,
     macro360Enabled = false, macro360Fov = 120, macro360HitChance = 100, macro360Reaction = 0, macro360Cooldown = 0.05,
     autoLoadSky = false, selectedSky = "", selectedAnim = "",
-    selected = {Arma={Name="Ninguno",URL=""}, Saltar={Name="Ninguno",URL=""}, Matar={Name="Ninguno",URL=""}},
-    enabled = {Arma=true, Saltar=true, Matar=true}, muted = {Arma=false, Saltar=false, Matar=false},
-    folder = "sounds"
+    selected = {Arma={Name="Ninguno",URL=""}},
+    enabled = {Arma=true}
 }
 local sounds, soundCache = {}, {}
-local activeTab = nil
 
 -- ==========================================
 -- CONFIGURACIÓN
@@ -48,7 +45,7 @@ end
 loadConfig()
 
 -- ==========================================
--- ANIMACIONES GLOBALES
+-- LÓGICA DE ANIMACIONES
 -- ==========================================
 local Animations = {
     ["Ninguna"] = {},
@@ -56,7 +53,6 @@ local Animations = {
     ["Ninja"] = {idle=656117400, walk=656121766, run=656118852, jump=656117878, fall=656115606},
     ["Robot"] = {idle=616088211, walk=616095330, run=616091570, jump=616090535, fall=616087089},
     ["Pirata"] = {idle=750781874, walk=750785693, run=750783738, jump=750782230, fall=750780242},
-    ["Astronauta"] = {idle=891621366, walk=891667138, run=891636393, jump=891627522, fall=891617961},
 }
 
 local function applyAnimation(animName)
@@ -71,8 +67,6 @@ local function applyAnimation(animName)
                 if v.Name == "Animation1" or v.Name == "Animation2" then v.AnimationId = "http://www.roblox.com/asset/?id=507766666"
                 elseif v.Name == "WalkAnim" then v.AnimationId = "http://www.roblox.com/asset/?id=507777826"
                 elseif v.Name == "RunAnim" then v.AnimationId = "http://www.roblox.com/asset/?id=507767714"
-                elseif v.Name == "JumpAnim" then v.AnimationId = "http://www.roblox.com/asset/?id=507765000"
-                elseif v.Name == "FallAnim" then v.AnimationId = "http://www.roblox.com/asset/?id=507767968"
                 end
             end
         end
@@ -100,7 +94,7 @@ player.CharacterAdded:Connect(function(char)
 end)
 
 -- ==========================================
--- SKYBOX Y DESCARGAS
+-- SKYBOX
 -- ==========================================
 local originalSky = Lighting:FindFirstChildOfClass("Sky")
 local originalSkyProperties = nil
@@ -268,7 +262,7 @@ local function watchNativeSound(obj)
     elseif id == ORIGINAL_KILL or obj.Name:lower():find("kill") then category = "Matar" end
     if not category then return end
     local custom=state.selected[category]
-    if not state.enabled[category] or state.muted[category] or not custom or custom.URL=="" then return end
+    if not state.enabled[category] or not custom or custom.URL=="" then return end
     pcall(function() obj.Volume=0 end)
     playSound(custom.URL)
   end
@@ -298,19 +292,12 @@ local function fetchFolder(folder)
       table.insert(found,{Name=item.name:gsub("%.[Mm][Pp]3$",""),URL=url,File=item.name})
     end
   end
-  if #found>0 then sounds=found; state.folder=folder; return true end
+  if #found>0 then sounds=found; return true end
   return false
 end
 
-local function refreshCatalog()
-  local loaded=false
-  for _,folder in ipairs({"sounds", "SoundsV2"}) do if fetchFolder(folder) then loaded=true; break end end
-  table.sort(sounds,function(a,b) return a.Name:lower()<b.Name:lower() end)
-  return loaded
-end
-
 -- ==========================================
--- INTERFAZ PREMIUM (Optimizada)
+-- INTERFAZ PREMIUM (CARGA ASÍNCRONA)
 -- ==========================================
 if playerGui:FindFirstChild("NevadaPremium") then playerGui.NevadaPremium:Destroy() end
 local gui = Instance.new("ScreenGui")
@@ -331,23 +318,18 @@ local function stroke(obj, color, thickness) create("UIStroke", {Color=color or 
 local window = create("Frame", {Size=UDim2.new(0, 550, 0, 380), Position=UDim2.new(0.5, -275, 0.5, -190), BackgroundColor3=C.bg, BorderSizePixel=0, ClipsDescendants=true}, gui)
 corner(window, 15); stroke(window, C.edge, 1.5)
 
--- Barra Superior
 local topBar = create("Frame", {Size=UDim2.new(1, 0, 0, 40), BackgroundColor3=C.panel}, window)
 create("TextLabel", {Size=UDim2.new(1, -20, 1, 0), Position=UDim2.new(0, 15, 0, 0), BackgroundTransparency=1, Text="NEVADA | PREMIUM", Font=Enum.Font.GothamBold, TextSize=16, TextColor3=C.accent, TextXAlignment=Enum.TextXAlignment.Left}, topBar)
 local close = create("TextButton", {Size=UDim2.new(0, 30, 0, 30), Position=UDim2.new(1, -35, 0, 5), BackgroundColor3=C.red, Text="X", TextColor3=C.text, Font=Enum.Font.GothamBold}, topBar)
 corner(close, 6)
 close.MouseButton1Click:Connect(function() gui:Destroy() end)
 
--- Sidebar (Tabs)
 local sidebar = create("Frame", {Size=UDim2.new(0, 140, 1, -40), Position=UDim2.new(0, 0, 0, 40), BackgroundColor3=C.panel}, window)
 create("UIListLayout", {Padding=UDim.new(0, 5), SortOrder=Enum.SortOrder.LayoutOrder, HorizontalAlignment=Enum.HorizontalAlignment.Center}, sidebar)
 create("UIPadding", {PaddingTop=UDim.new(0, 10)}, sidebar)
 
--- Content
 local content = create("Frame", {Size=UDim2.new(1, -140, 1, -40), Position=UDim2.new(0, 140, 0, 40), BackgroundTransparency=1}, window)
-
-local pages = {}
-local tabs = {}
+local pages, tabs = {}, {}
 local activeTab = nil
 
 local function switchPage(name)
@@ -356,8 +338,6 @@ local function switchPage(name)
     for n, p in pairs(pages) do
         if n == name then
             p.Visible = true
-            p.Position = UDim2.new(0, 20, 0, 0)
-            TweenService:Create(p, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {Position = UDim2.new(0, 10, 0, 0)}):Play()
         else p.Visible = false end
     end
     for n, b in pairs(tabs) do
@@ -372,25 +352,20 @@ local function createTab(name, iconText)
     tabs[name] = btn
     btn.MouseButton1Click:Connect(function() switchPage(name) end)
     
-    local page = create("ScrollingFrame", {Size=UDim2.new(1, -20, 1, -10), BackgroundTransparency=1, ScrollBarThickness=3, CanvasSize=UDim2.new()}, content)
+    -- IMPORTANTE: AutomaticCanvasSize para que los elementos no desaparezcan
+    local page = create("ScrollingFrame", {Size=UDim2.new(1, -20, 1, -10), BackgroundTransparency=1, ScrollBarThickness=3, CanvasSize=UDim2.new(), AutomaticCanvasSize=Enum.AutomaticSize.Y}, content)
     create("UIListLayout", {Padding=UDim.new(0, 10), SortOrder=Enum.SortOrder.LayoutOrder}, page)
     pages[name] = page
     return page
 end
 
-local homePage = createTab("Inicio", "⌂")
-local combatPage = createTab("Combate", "⚔")
-local animPage = createTab("Animaciones", "💃")
-local visualPage = createTab("Visuales", "☁")
-local settingsPage = createTab("Config", "⚙")
-switchPage("Inicio")
-
--- Helpers UI
+-- Helpers de UI (Añadimos task.wait para evitar crasheos)
 local function addCard(parent, title, desc, height)
     local f = create("Frame", {Size=UDim2.new(1, 0, 0, height or 60), BackgroundColor3=C.card, LayoutOrder = #parent:GetChildren()}, parent)
     corner(f, 8); stroke(f, C.edge)
     create("TextLabel", {Size=UDim2.new(1, -20, 0, 20), Position=UDim2.new(0, 10, 0, 8), BackgroundTransparency=1, Text=title, Font=Enum.Font.GothamBold, TextSize=14, TextColor3=C.text, TextXAlignment=Enum.TextXAlignment.Left}, f)
     if desc then create("TextLabel", {Size=UDim2.new(1, -20, 0, 15), Position=UDim2.new(0, 10, 0, 26), BackgroundTransparency=1, Text=desc, Font=Enum.Font.Gotham, TextSize=11, TextColor3=C.sub, TextXAlignment=Enum.TextXAlignment.Left}, f) end
+    task.wait(0.01)
     return f
 end
 
@@ -405,7 +380,7 @@ local function addToggle(parent, title, default, callback)
         callback(isOn)
         saveConfig()
     end)
-    return btn
+    task.wait(0.01)
 end
 
 local function addSlider(parent, title, minV, maxV, default, callback)
@@ -427,66 +402,92 @@ local function addSlider(parent, title, minV, maxV, default, callback)
     hit.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then dragging = true; update(i) end end)
     UserInputService.InputChanged:Connect(function(i) if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then update(i) end end)
     UserInputService.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then dragging = false end end)
+    task.wait(0.01)
 end
 
 local function addDropdown(parent, title, options, default, callback)
     local f = addCard(parent, title, nil, 40)
-    local btn = create("TextButton", {Size=UDim2.new(0, 120, 0, 25), Position=UDim2.new(1, -130, 0.5, -12), BackgroundColor3=C.bg, Text=tostring(default), TextColor3=C.accent, Font=Enum.Font.GothamMedium, TextSize=12}, f)
+    local btn = create("TextButton", {Size=UDim2.new(0, 120, 0, 25), Position=UDim2.new(1, -130, 0.5, -12), BackgroundColor3=C.bg, Text=tostring(default), TextColor3=C.accent, Font=Enum.Font.GothamMedium, TextSize=12, ZIndex=2}, f)
     corner(btn, 6); stroke(btn, C.edge)
     
-    local list = create("ScrollingFrame", {Size=UDim2.new(0, 120, 0, math.min(#options * 25, 100)), Position=UDim2.new(1, -130, 1, 2), BackgroundColor3=C.bg, Visible=false, ZIndex=10}, f)
+    local list = create("ScrollingFrame", {Size=UDim2.new(0, 120, 0, math.min(#options * 25, 100)), Position=UDim2.new(1, -130, 1, 2), BackgroundColor3=C.bg, Visible=false, ZIndex=10, AutomaticCanvasSize=Enum.AutomaticSize.Y}, f)
     corner(list, 6); stroke(list, C.accent)
     create("UIListLayout", {SortOrder=Enum.SortOrder.LayoutOrder}, list)
     
     for i, opt in ipairs(options) do
-        local oBtn = create("TextButton", {Size=UDim2.new(1, 0, 0, 25), BackgroundTransparency=1, Text=opt, TextColor3=C.text, Font=Enum.Font.Gotham, TextSize=11, LayoutOrder=i}, list)
+        local oBtn = create("TextButton", {Size=UDim2.new(1, 0, 0, 25), BackgroundTransparency=1, Text=opt, TextColor3=C.text, Font=Enum.Font.Gotham, TextSize=11, LayoutOrder=i, ZIndex=11}, list)
         oBtn.MouseButton1Click:Connect(function()
             btn.Text = opt
             list.Visible = false
             callback(opt)
             saveConfig()
         end)
+        task.wait(0.01)
     end
     btn.MouseButton1Click:Connect(function() list.Visible = not list.Visible end)
+    task.wait(0.01)
 end
 
 -- ==========================================
--- CONSTRUCCIÓN DE PÁGINAS
+-- CARGA DE PÁGINAS (Protegido con task.spawn)
 -- ==========================================
-addCard(homePage, "Bienvenido a Nevada Premium", "Team Check, Silent Aim, Animaciones y más.", 60)
+task.spawn(function()
+    local homePage = createTab("Inicio", "⌂")
+    local combatPage = createTab("Combate", "⚔")
+    local animPage = createTab("Animaciones", "💃")
+    local visualPage = createTab("Visuales", "☁")
+    
+    switchPage("Inicio")
+    
+    -- INICIO
+    addCard(homePage, "Bienvenido a Nevada Premium", "Interfaz estable V36.", 60)
 
--- COMBATE
-local toggle360 = addToggle(combatPage, "Macro 360 (Silent Aim)", state.macro360Enabled, function(v) state.macro360Enabled = v; setMacro360State(v) end)
-addSlider(combatPage, "FOV Size", 10, 500, state.macro360Fov, function(v) state.macro360Fov = v end)
-addSlider(combatPage, "Hit Chance %", 1, 100, state.macro360HitChance, function(v) state.macro360HitChance = v end)
-addSlider(combatPage, "Cooldown (s)", 0.01, 1, state.macro360Cooldown, function(v) state.macro360Cooldown = v end)
-addToggle(combatPage, "Macro Cuchillo (L2)", state.knifeMacroEnabled, function(v) state.knifeMacroEnabled = v end)
+    -- COMBATE
+    local toggle360
+    toggle360 = addToggle(combatPage, "Macro 360 (Silent Aim)", state.macro360Enabled, function(v) 
+        state.macro360Enabled = v 
+        setMacro360State(v) 
+    end)
+    addSlider(combatPage, "FOV Size", 10, 500, state.macro360Fov, function(v) state.macro360Fov = v end)
+    addSlider(combatPage, "Hit Chance %", 1, 100, state.macro360HitChance, function(v) state.macro360HitChance = v end)
+    addSlider(combatPage, "Cooldown (s)", 0.01, 1, state.macro360Cooldown, function(v) state.macro360Cooldown = v end)
+    addToggle(combatPage, "Macro Cuchillo (L2)", state.knifeMacroEnabled, function(v) state.knifeMacroEnabled = v end)
 
--- ANIMACIONES
-local animNames = {"Ninguna", "Zombie", "Ninja", "Robot", "Pirata", "Astronauta"}
-addDropdown(animPage, "Cambiar Animación", animNames, state.selectedAnim ~= "" and state.selectedAnim or "Ninguna", function(opt)
-    state.selectedAnim = opt
-    applyAnimation(opt)
-end)
+    -- ANIMACIONES
+    local animNames = {"Ninguna", "Zombie", "Ninja", "Robot", "Pirata"}
+    addDropdown(animPage, "Cambiar Animación", animNames, state.selectedAnim ~= "" and state.selectedAnim or "Ninguna", function(opt)
+        state.selectedAnim = opt
+        applyAnimation(opt)
+    end)
 
--- VISUALES (Sonidos y Skybox)
-local soundOptions = {"Ninguno"}
-for _, s in ipairs(sounds) do table.insert(soundOptions, s.Name) end
-addDropdown(visualPage, "Sonido de Disparo", soundOptions, state.selected.Arma.Name, function(opt)
-    for _, s in ipairs(sounds) do if s.Name == opt then state.selected.Arma = {Name=s.Name, URL=s.URL} end end
-end)
-addToggle(visualPage, "Auto-Cargar Skybox", state.autoLoadSky, function(v) 
-    state.autoLoadSky = v
-    if v and state.selectedSky ~= "" then applySkyFromGitHub(state.selectedSky) end
-end)
-local skyBtn = create("TextButton", {Size=UDim2.new(1, -20, 0, 35), Position=UDim2.new(0, 10, 0, 50), BackgroundColor3=C.accent, Text="Aplicar Skybox (Aurora)", TextColor3=C.text, Font=Enum.Font.GothamBold}, visualPage:FindFirstChildOfClass("Frame"))
-corner(skyBtn, 6)
-skyBtn.MouseButton1Click:Connect(function()
-    state.selectedSky = "aurora"
-    applySkyFromGitHub("aurora")
-    saveConfig()
-    skyBtn.Text = "¡Aurora Aplicada!"
-    task.delay(2, function() skyBtn.Text = "Aplicar Skybox (Aurora)" end)
+    -- VISUALES
+    addToggle(visualPage, "Auto-Cargar Skybox", state.autoLoadSky, function(v) 
+        state.autoLoadSky = v
+        if v and state.selectedSky ~= "" then applySkyFromGitHub(state.selectedSky) end
+    end)
+    
+    local skyBtn = create("TextButton", {Size=UDim2.new(1, -20, 0, 35), BackgroundColor3=C.accent, Text="Aplicar Skybox (Aurora)", TextColor3=C.text, Font=Enum.Font.GothamBold}, visualPage)
+    corner(skyBtn, 6)
+    skyBtn.MouseButton1Click:Connect(function()
+        skyBtn.Text = "Descargando..."
+        local ok = applySkyFromGitHub("aurora")
+        state.selectedSky = "aurora"
+        saveConfig()
+        skyBtn.Text = ok and "¡Aurora Aplicada!" or "Error al aplicar"
+        task.delay(2, function() skyBtn.Text = "Aplicar Skybox (Aurora)" end)
+    end)
+
+    -- Cargar Sonidos y llenar el Dropdown
+    fetchFolder("sounds") or fetchFolder("SoundsV2")
+    if #sounds > 0 then
+        local soundOptions = {"Ninguno"}
+        for _, s in ipairs(sounds) do table.insert(soundOptions, s.Name) end
+        addDropdown(visualPage, "Sonido de Disparo", soundOptions, state.selected.Arma.Name, function(opt)
+            for _, s in ipairs(sounds) do 
+                if s.Name == opt then state.selected.Arma = {Name=s.Name, URL=s.URL} end 
+            end
+        end)
+    end
 end)
 
 -- ==========================================
@@ -508,7 +509,7 @@ UserInputService.InputChanged:Connect(function(input)
 end)
 UserInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then draggingBtn = false end end)
 
-local function setMacro360State(v)
+function setMacro360State(v)
     state.macro360Enabled = v
     if floatingBtn then
         if v then
@@ -526,7 +527,7 @@ end
 
 floatingBtn.MouseButton1Click:Connect(function() setMacro360State(not state.macro360Enabled) end)
 
--- BUCLE MACRO 360
+-- BUCLE MACRO 360 (Target Lock)
 task.spawn(function()
     local params = RaycastParams.new()
     params.FilterType = Enum.RaycastFilterType.Exclude
@@ -611,9 +612,7 @@ task.spawn(function()
     end
 end)
 
--- ==========================================
--- MACROS DE TECLADO (R2 y L2)
--- ==========================================
+-- MACROS R2 y L2
 local macroBusy=false
 local function runMacro()
   if not state.macro or macroBusy then return end
@@ -664,14 +663,7 @@ UserInputService.InputBegan:Connect(function(input, processed)
   if input.KeyCode == Enum.KeyCode.L2 then runKnifeMacro() end
 end)
 
--- Cargar Sonidos y Skybox al iniciar
-task.spawn(function()
-    refreshCatalog()
-    local soundOptions = {"Ninguno"}
-    for _, s in ipairs(sounds) do table.insert(soundOptions, s.Name) end
-    if soundDropdown then soundDropdown:Refresh(soundOptions) end
-end)
-
+-- Autoload Skybox
 if state.autoLoadSky and state.selectedSky ~= "" then
     task.spawn(function()
         task.wait(1)
