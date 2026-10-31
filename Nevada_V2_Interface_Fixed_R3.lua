@@ -1,54 +1,119 @@
--- NEVADA V32 | Skybox Automatico de GitHub + Team Check + Sonidos + Silent Aim
+-- NEVADA V35 | EDICIÓN PREMIUM FINAL (UI Moderna + Todas las Funciones)
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
+local TweenService = game:GetService("TweenService")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 local requestFn = (syn and syn.request) or (http and http.request) or request or http_request
 
+local CONFIG_FILE = "Nevada_Premium_Config.json"
 local OWNER, REPO, BRANCH = "sanxsmov", "Mis-soundsp", "main"
-local FOLDERS = {"sounds", "SoundsV2"}
 local RAW = "https://raw.githubusercontent.com/" .. OWNER .. "/" .. REPO .. "/" .. BRANCH .. "/"
 local API_ROOT = "https://api.github.com/repos/" .. OWNER .. "/" .. REPO .. "/contents/"
-
--- Configuración de Skybox
 local SKYBOX_REPO = "sanxsmov/Onyx-web"
-local SKYBOX_FOLDER = "skyboxes"
-local SKYBOX_RAW = "https://raw.githubusercontent.com/" .. SKYBOX_REPO .. "/main/" .. SKYBOX_FOLDER .. "/"
-local SKYBOX_API = "https://api.github.com/repos/" .. SKYBOX_REPO .. "/contents/" .. SKYBOX_FOLDER
+local SKYBOX_RAW = "https://raw.githubusercontent.com/" .. SKYBOX_REPO .. "/main/skyboxes/"
+local SKYBOX_API = "https://api.github.com/repos/" .. SKYBOX_REPO .. "/contents/skyboxes"
 
 local state = {
-  macro = false, equipDelay = 0.05, shootDelay = 0.10,
-  knifeMacroEnabled = false, knifeEquipDelay = 0.10, knifeThrowDelay = 0.10,
-  macro360Enabled = false, 
-  macro360Fov = 120, 
-  macro360HitChance = 100, 
-  macro360Reaction = 0,
-  macro360Cooldown = 0.05, 
-  autoLoadSky = false,
-  selectedSky = "",
-  selected = {Arma={Name="Ninguno",URL=""}, Saltar={Name="Ninguno",URL=""}, Matar={Name="Ninguno",URL=""}},
-  enabled = {Arma=true, Saltar=true, Matar=true}, muted = {Arma=false, Saltar=false, Matar=false},
-  folder = FOLDERS[1]
+    macro = false, equipDelay = 0.05, shootDelay = 0.10,
+    knifeMacroEnabled = false, knifeEquipDelay = 0.10, knifeThrowDelay = 0.10,
+    macro360Enabled = false, macro360Fov = 120, macro360HitChance = 100, macro360Reaction = 0, macro360Cooldown = 0.05,
+    autoLoadSky = false, selectedSky = "", selectedAnim = "",
+    selected = {Arma={Name="Ninguno",URL=""}, Saltar={Name="Ninguno",URL=""}, Matar={Name="Ninguno",URL=""}},
+    enabled = {Arma=true, Saltar=true, Matar=true}, muted = {Arma=false, Saltar=false, Matar=false},
+    folder = "sounds"
 }
-local sounds, soundCache, activeTab, soundCategory = {}, {}, "Inicio", "Arma"
+local sounds, soundCache = {}, {}
+local activeTab = nil
 
 -- ==========================================
--- LÓGICA DE SKYBOX AUTOMÁTICO
+-- CONFIGURACIÓN
 -- ==========================================
+local function saveConfig()
+    if not writefile then return end
+    local ok, encoded = pcall(function() return HttpService:JSONEncode(state) end)
+    if ok then pcall(writefile, CONFIG_FILE, encoded) end
+end
+local function loadConfig()
+    if not (readfile and isfile and isfile(CONFIG_FILE)) then return end
+    local ok, decoded = pcall(function() return HttpService:JSONDecode(readfile(CONFIG_FILE)) end)
+    if ok and type(decoded) == "table" then
+        for k, v in pairs(decoded) do if state[k] ~= nil then state[k] = v end end
+    end
+end
+loadConfig()
+
+-- ==========================================
+-- ANIMACIONES GLOBALES
+-- ==========================================
+local Animations = {
+    ["Ninguna"] = {},
+    ["Zombie"] = {idle=616006778, walk=616013216, run=616010382, jump=616008936, fall=616005863},
+    ["Ninja"] = {idle=656117400, walk=656121766, run=656118852, jump=656117878, fall=656115606},
+    ["Robot"] = {idle=616088211, walk=616095330, run=616091570, jump=616090535, fall=616087089},
+    ["Pirata"] = {idle=750781874, walk=750785693, run=750783738, jump=750782230, fall=750780242},
+    ["Astronauta"] = {idle=891621366, walk=891667138, run=891636393, jump=891627522, fall=891617961},
+}
+
+local function applyAnimation(animName)
+    local char = player.Character
+    if not char then return end
+    local animate = char:FindFirstChild("Animate")
+    if not animate then return end
+    
+    if animName == "Ninguna" or not Animations[animName] then
+        for _, v in pairs(animate:GetDescendants()) do
+            if v:IsA("Animation") then
+                if v.Name == "Animation1" or v.Name == "Animation2" then v.AnimationId = "http://www.roblox.com/asset/?id=507766666"
+                elseif v.Name == "WalkAnim" then v.AnimationId = "http://www.roblox.com/asset/?id=507777826"
+                elseif v.Name == "RunAnim" then v.AnimationId = "http://www.roblox.com/asset/?id=507767714"
+                elseif v.Name == "JumpAnim" then v.AnimationId = "http://www.roblox.com/asset/?id=507765000"
+                elseif v.Name == "FallAnim" then v.AnimationId = "http://www.roblox.com/asset/?id=507767968"
+                end
+            end
+        end
+        return
+    end
+
+    local data = Animations[animName]
+    for _, v in pairs(animate:GetDescendants()) do
+        if v:IsA("Animation") then
+            if (v.Name == "Animation1" or v.Name == "Animation2") and data.idle then v.AnimationId = "rbxassetid://" .. data.idle
+            elseif v.Name == "WalkAnim" and data.walk then v.AnimationId = "rbxassetid://" .. data.walk
+            elseif v.Name == "RunAnim" and data.run then v.AnimationId = "rbxassetid://" .. data.run
+            elseif v.Name == "JumpAnim" and data.jump then v.AnimationId = "rbxassetid://" .. data.jump
+            elseif v.Name == "FallAnim" and data.fall then v.AnimationId = "rbxassetid://" .. data.fall
+            end
+        end
+    end
+end
+
+player.CharacterAdded:Connect(function(char)
+    if state.selectedAnim and state.selectedAnim ~= "" and state.selectedAnim ~= "Ninguna" then
+        task.wait(1.5)
+        applyAnimation(state.selectedAnim)
+    end
+end)
+
+-- ==========================================
+-- SKYBOX Y DESCARGAS
+-- ==========================================
+local originalSky = Lighting:FindFirstChildOfClass("Sky")
+local originalSkyProperties = nil
+if originalSky then
+    originalSkyProperties = {SkyboxBk = originalSky.SkyboxBk, SkyboxDn = originalSky.SkyboxDn, SkyboxFt = originalSky.SkyboxFt, SkyboxLf = originalSky.SkyboxLf, SkyboxRt = originalSky.SkyboxRt, SkyboxUp = originalSky.SkyboxUp}
+end
+
 local function downloadImg(url, name)
     if not (writefile and isfile and getcustomasset) then return nil end
     local path = "NevadaSky_" .. name .. ".png"
     if not isfile(path) then
         local ok, body = pcall(function() return game:HttpGet(url) end)
-        if ok and body and #body > 0 then
-            pcall(writefile, path, body)
-        else
-            return nil
-        end
+        if ok and body and #body > 0 then pcall(writefile, path, body) else return nil end
     end
     local success, asset = pcall(getcustomasset, path)
     if success then return asset end
@@ -66,8 +131,8 @@ local function applySkyFromGitHub(skyName)
 
     if aBk and aDn and aFt and aLf and aRt and aUp then
         pcall(function()
-            local sky = Lighting:FindFirstChildOfClass("Sky")
-            if not sky then sky = Instance.new("Sky"); sky.Parent = Lighting end
+            local sky = originalSky
+            if not sky or not sky.Parent then sky = Instance.new("Sky"); sky.Parent = Lighting end
             sky.SkyboxBk = aBk; sky.SkyboxDn = aDn; sky.SkyboxFt = aFt
             sky.SkyboxLf = aLf; sky.SkyboxRt = aRt; sky.SkyboxUp = aUp
         end)
@@ -84,7 +149,6 @@ local function getPlayerTeam(p)
     if p.Team and p.Team.Name ~= "" then return p.Team.Name end
     local attr = p:GetAttribute("Team") or p:GetAttribute("team")
     if attr and tostring(attr) ~= "" then return tostring(attr) end
-    
     local gui = player:FindFirstChild("PlayerGui")
     local main = gui and gui:FindFirstChild("Main")
     local frame = main and main:FindFirstChild("MainGameFrame")
@@ -135,7 +199,7 @@ local function esPistola(tool)
 end
 
 -- ==========================================
--- HOOK RAYCAST (Silent Aim)
+-- SILENT AIM (HOOK)
 -- ==========================================
 getgenv().NevadaTargetPart = nil
 local oldNamecall
@@ -162,7 +226,7 @@ if hookmetamethod and getnamecallmethod and checkcaller then
 end
 
 -- ==========================================
--- SONIDOS Y REPRODUCTOR
+-- SONIDOS (GITHUB)
 -- ==========================================
 local function playSound(url)
   if type(url) ~= "string" or url == "" then return end
@@ -179,9 +243,7 @@ local function playSound(url)
       local ok, result = pcall(getcustomasset, name)
       if not ok then return end
       asset = result
-    else
-      asset = url
-    end
+    else asset = url end
     soundCache[url] = asset
   end
   local s = Instance.new("Sound")
@@ -242,174 +304,196 @@ end
 
 local function refreshCatalog()
   local loaded=false
-  for _,folder in ipairs(FOLDERS) do if fetchFolder(folder) then loaded=true; break end end
+  for _,folder in ipairs({"sounds", "SoundsV2"}) do if fetchFolder(folder) then loaded=true; break end end
   table.sort(sounds,function(a,b) return a.Name:lower()<b.Name:lower() end)
   return loaded
 end
 
 -- ==========================================
--- INTERFAZ GRÁFICA
+-- INTERFAZ PREMIUM (Optimizada)
 -- ==========================================
-if playerGui:FindFirstChild("NevadaV2") then playerGui.NevadaV2:Destroy() end
+if playerGui:FindFirstChild("NevadaPremium") then playerGui.NevadaPremium:Destroy() end
 local gui = Instance.new("ScreenGui")
-gui.Name, gui.ResetOnSpawn, gui.IgnoreGuiInset = "NevadaV2", false, true
+gui.Name, gui.ResetOnSpawn, gui.IgnoreGuiInset = "NevadaPremium", false, true
 gui.Parent = playerGui
 
-local C = {bg=Color3.fromRGB(7,10,17), panel=Color3.fromRGB(10,14,23), card=Color3.fromRGB(14,19,30), edge=Color3.fromRGB(48,59,78), text=Color3.fromRGB(241,245,255), sub=Color3.fromRGB(164,177,201), blue=Color3.fromRGB(120,157,224), green=Color3.fromRGB(50,220,153), red=Color3.fromRGB(200, 50, 50)}
+local C = {bg=Color3.fromRGB(10,11,15), panel=Color3.fromRGB(15,17,22), card=Color3.fromRGB(22,25,32), edge=Color3.fromRGB(45,50,65), text=Color3.fromRGB(255,255,255), sub=Color3.fromRGB(140,150,165), accent=Color3.fromRGB(90,140,255), green=Color3.fromRGB(50,220,120), red=Color3.fromRGB(220,60,70)}
 local function create(class, props, parent)
-  local obj = Instance.new(class)
-  for k,v in pairs(props or {}) do obj[k] = v end
-  obj.Parent = parent
-  return obj
+    local obj = Instance.new(class)
+    for k,v in pairs(props or {}) do obj[k] = v end
+    obj.Parent = parent
+    return obj
 end
 local function corner(obj, radius) create("UICorner", {CornerRadius=UDim.new(0,radius or 10)}, obj) end
 local function stroke(obj, color, thickness) create("UIStroke", {Color=color or C.edge, Thickness=thickness or 1, Transparency=0.2}, obj) end
-local function label(parent, text, size, pos, fontSize, color, bold)
-  return create("TextLabel", {BackgroundTransparency=1, Text=text, Size=size, Position=pos, Font=bold and Enum.Font.GothamBold or Enum.Font.Gotham, TextSize=fontSize or 14, TextColor3=color or C.text, TextXAlignment=Enum.TextXAlignment.Left, TextYAlignment=Enum.TextYAlignment.Center, TextWrapped=true}, parent)
-end
-local function button(parent, text, size, pos, callback)
-  local b=create("TextButton", {Size=size, Position=pos, BackgroundColor3=C.card, Text=text, TextColor3=C.text, Font=Enum.Font.GothamMedium, TextSize=13, AutoButtonColor=true}, parent)
-  corner(b,8); stroke(b)
-  b.MouseButton1Click:Connect(callback)
-  return b
-end
 
-local window
-local openButton
-openButton = button(gui,"NEVADA",UDim2.fromOffset(94,34),UDim2.new(0,14,0.18,0),function() if window then window.Visible=true; openButton.Visible=false end end)
-window = create("Frame", {Size=UDim2.new(0.94,0,0.84,0), Position=UDim2.new(0.03,0,0.08,0), BackgroundColor3=C.bg, BorderSizePixel=0, ClipsDescendants=true},gui)
-corner(window,16); stroke(window,C.edge,1.3)
-local scale = create("UIScale", {Scale=1}, window)
-local function fitScale()
-  local camera=workspace.CurrentCamera; if not camera then return end
-  local v=camera.ViewportSize
-  scale.Scale=math.clamp(math.min(v.X/1100,v.Y/680),0.58,1)
-end
-fitScale()
-if workspace.CurrentCamera then workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(fitScale) end
+-- Ventana Principal
+local window = create("Frame", {Size=UDim2.new(0, 550, 0, 380), Position=UDim2.new(0.5, -275, 0.5, -190), BackgroundColor3=C.bg, BorderSizePixel=0, ClipsDescendants=true}, gui)
+corner(window, 15); stroke(window, C.edge, 1.5)
 
-local sidebar=create("Frame",{Size=UDim2.new(0,190,1,0),BackgroundColor3=Color3.fromRGB(6,9,15),BorderSizePixel=0},window)
-local divider=create("Frame",{Size=UDim2.new(0,1,1,0),Position=UDim2.new(0,190,0,0),BackgroundColor3=C.edge,BorderSizePixel=0},window)
-label(sidebar,"▲",UDim2.new(1,0,0,48),UDim2.new(0,0,0,20),29,C.text,true).TextXAlignment=Enum.TextXAlignment.Center
-label(sidebar,"N E V A D A",UDim2.new(1,0,0,34),UDim2.new(0,0,0,63),21,C.text,true).TextXAlignment=Enum.TextXAlignment.Center
-label(sidebar,"V2",UDim2.new(1,0,0,20),UDim2.new(0,0,0,96),12,C.sub,false).TextXAlignment=Enum.TextXAlignment.Center
-local navHolder=create("Frame",{Size=UDim2.new(1,-18,0,220),Position=UDim2.new(0,9,0,140),BackgroundTransparency=1},sidebar)
-create("UIListLayout",{Padding=UDim.new(0,7),SortOrder=Enum.SortOrder.LayoutOrder},navHolder)
-label(sidebar,"NEVADA V2\nTu experiencia, sin límites.",UDim2.new(1,-24,0,48),UDim2.new(0,12,1,-62),11,C.sub,false)
+-- Barra Superior
+local topBar = create("Frame", {Size=UDim2.new(1, 0, 0, 40), BackgroundColor3=C.panel}, window)
+create("TextLabel", {Size=UDim2.new(1, -20, 1, 0), Position=UDim2.new(0, 15, 0, 0), BackgroundTransparency=1, Text="NEVADA | PREMIUM", Font=Enum.Font.GothamBold, TextSize=16, TextColor3=C.accent, TextXAlignment=Enum.TextXAlignment.Left}, topBar)
+local close = create("TextButton", {Size=UDim2.new(0, 30, 0, 30), Position=UDim2.new(1, -35, 0, 5), BackgroundColor3=C.red, Text="X", TextColor3=C.text, Font=Enum.Font.GothamBold}, topBar)
+corner(close, 6)
+close.MouseButton1Click:Connect(function() gui:Destroy() end)
 
-local top=create("Frame",{Size=UDim2.new(1,-210,0,68),Position=UDim2.new(0,205,0,0),BackgroundTransparency=1},window)
-label(top,"▲",UDim2.fromOffset(48,55),UDim2.new(0,0,0,4),28,C.text,true)
-local pageTitle=label(top,"Bienvenido a Nevada",UDim2.new(1,-110,0,30),UDim2.new(0,54,0,10),21,C.text,true)
-local pageSubtitle=label(top,"Tu hub todo en uno. Macros, sonidos y más.",UDim2.new(1,-80,0,25),UDim2.new(0,54,0,38),12,C.sub,false)
-local minimize=button(window,"—",UDim2.fromOffset(34,30),UDim2.new(1,-80,0,10),function() window.Visible=false; openButton.Visible=true end)
-local close=button(window,"×",UDim2.fromOffset(34,30),UDim2.new(1,-42,0,10),function() gui:Destroy() end)
-openButton.Visible=false
+-- Sidebar (Tabs)
+local sidebar = create("Frame", {Size=UDim2.new(0, 140, 1, -40), Position=UDim2.new(0, 0, 0, 40), BackgroundColor3=C.panel}, window)
+create("UIListLayout", {Padding=UDim.new(0, 5), SortOrder=Enum.SortOrder.LayoutOrder, HorizontalAlignment=Enum.HorizontalAlignment.Center}, sidebar)
+create("UIPadding", {PaddingTop=UDim.new(0, 10)}, sidebar)
 
-local dragging, dragStart, startPos = false, nil, nil
-local dragArea=top
-dragArea.InputBegan:Connect(function(input)
-  if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
-    dragging=true; dragStart=input.Position; startPos=window.Position
-    input.Changed:Connect(function() if input.UserInputState==Enum.UserInputState.End then dragging=false end end)
-  end
-end)
-UserInputService.InputChanged:Connect(function(input)
-  if dragging and (input.UserInputType==Enum.UserInputType.MouseMovement or input.UserInputType==Enum.UserInputType.Touch) then
-    local d=input.Position-dragStart
-    window.Position=UDim2.new(startPos.X.Scale,startPos.X.Offset+d.X,startPos.Y.Scale,startPos.Y.Offset+d.Y)
-  end
-end)
+-- Content
+local content = create("Frame", {Size=UDim2.new(1, -140, 1, -40), Position=UDim2.new(0, 140, 0, 40), BackgroundTransparency=1}, window)
 
-local content=create("Frame",{Size=UDim2.new(1,-210,1,-82),Position=UDim2.new(0,205,0,72),BackgroundTransparency=1},window)
-local pages={}
-local function newPage(name)
-  local p=create("ScrollingFrame",{Name=name,Size=UDim2.fromScale(1,1),BackgroundTransparency=1,BorderSizePixel=0,ScrollBarThickness=4,ScrollBarImageColor3=C.blue,Visible=false,CanvasSize=UDim2.new()},content)
-  local l=create("UIListLayout",{Padding=UDim.new(0,10),SortOrder=Enum.SortOrder.LayoutOrder},p)
-  l:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() p.CanvasSize=UDim2.new(0,0,0,l.AbsoluteContentSize.Y+16) end)
-  pages[name]=p; return p
-end
-local function card(parent,height)
-  local f=create("Frame",{Size=UDim2.new(1,-8,0,height),BackgroundColor3=C.card,BorderSizePixel=0},parent); corner(f,11); stroke(f); return f
-end
-local function switch(parent,text,initial,callback,y)
-  local row=card(parent,48); row.LayoutOrder=y or 1
-  label(row,text,UDim2.new(1,-100,1,0),UDim2.new(0,14,0,0),14,C.text,true)
-  local b
-  b=button(row,initial and "ACTIVADO" or "DESACTIVADO",UDim2.fromOffset(92,30),UDim2.new(1,-104,0.5,-15),function()
-    initial=not initial; b.Text=initial and "ACTIVADO" or "DESACTIVADO"; b.BackgroundColor3=initial and C.blue or C.card; callback(initial)
-  end)
-  b.BackgroundColor3=initial and C.blue or C.card
-  return b
-end
-local function actionCard(parent,title,desc,btnText,fn)
-  local f=card(parent,70); label(f,title,UDim2.new(0.66,0,0,27),UDim2.new(0,14,0,7),14,C.text,true); label(f,desc,UDim2.new(0.66,0,0,25),UDim2.new(0,14,0,35),11,C.sub,false)
-  button(f,btnText,UDim2.fromOffset(125,34),UDim2.new(1,-139,0.5,-17),fn); return f
-end
-local function slider(parent,title,minV,maxV,initial,callback)
-  local f=card(parent,72); local value=initial
-  local txt=label(f,title..": "..tostring(value),UDim2.new(1,-24,0,25),UDim2.new(0,13,0,6),13,C.text,true)
-  local bar=button(f,"",UDim2.new(1,-28,0,12),UDim2.new(0,14,0,43),function() end); bar.BackgroundColor3=Color3.fromRGB(33,42,59)
-  local fill=create("Frame",{Size=UDim2.new((value-minV)/(maxV-minV),0,1,0),BackgroundColor3=C.blue,BorderSizePixel=0},bar); corner(fill,5)
-  local function setFromX(x)
-    local p=math.clamp((x-bar.AbsolutePosition.X)/math.max(bar.AbsoluteSize.X,1),0,1); value=math.floor((minV+p*(maxV-minV))*100)/100; fill.Size=UDim2.new(p,0,1,0); txt.Text=title..": "..tostring(value); callback(value)
-  end
-  bar.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then setFromX(i.Position.X) end end)
-end
+local pages = {}
+local tabs = {}
+local activeTab = nil
 
-local showPage
-local home=newPage("Inicio")
-local welcome=card(home,108); label(welcome,"Bienvenido a Nevada",UDim2.new(1,-26,0,32),UDim2.new(0,14,0,13),20,C.text,true); label(welcome,"Tu hub todo en uno. Macros, sonidos y más.\nInterfaz Nevada V2",UDim2.new(1,-26,0,45),UDim2.new(0,14,0,51),12,C.sub,false)
-actionCard(home,"Sonidos","Catálogo de tu repositorio de GitHub","Abrir sonidos",function() showPage("Sonidos") end)
-actionCard(home,"Macro Arma","Disparo rápido automático","Ver macro",function() showPage("Macro") end)
-actionCard(home,"Macro Cuchillo","Lanzamiento rápido (L2)","Ver macro",function() showPage("Cuchillo") end)
-actionCard(home,"Macro 360","Disparo invisible a todo el cuerpo","Ver Macro 360",function() showPage("Macro360") end)
-actionCard(home,"Skybox","Cambia el cielo del mapa","Ver cielos",function() showPage("Skybox") end)
-
-local macroPage=newPage("Macro")
-switch(macroPage,"Activar macro de arma",false,function(v) state.macro=v end)
-slider(macroPage,"Tiempo de equipar",0.01,0.50,state.equipDelay,function(v) state.equipDelay=v end)
-slider(macroPage,"Tiempo de disparo",0.01,0.50,state.shootDelay,function(v) state.shootDelay=v end)
-
-local knifePage=newPage("Cuchillo")
-switch(knifePage,"Activar Macro Cuchillo (L2)",false,function(v) state.knifeMacroEnabled = v end)
-slider(knifePage,"Delay al Equipar",0.01,0.50,state.knifeEquipDelay,function(v) state.knifeEquipDelay = v end)
-slider(knifePage,"Delay al Lanzar",0.01,0.50,state.knifeThrowDelay,function(v) state.knifeThrowDelay = v end)
-
--- ==========================================
--- MACRO 360
--- ==========================================
-local macro360Page = newPage("Macro360")
-local toggle360MenuBtn = nil
-local floatingBtn = nil
-
-local function setMacro360State(nuevoEstado)
-    state.macro360Enabled = nuevoEstado
-    if toggle360MenuBtn then
-        toggle360MenuBtn.Text = nuevoEstado and "ACTIVADO" or "DESACTIVADO"
-        toggle360MenuBtn.BackgroundColor3 = nuevoEstado and C.blue or C.card
+local function switchPage(name)
+    if activeTab == name then return end
+    activeTab = name
+    for n, p in pairs(pages) do
+        if n == name then
+            p.Visible = true
+            p.Position = UDim2.new(0, 20, 0, 0)
+            TweenService:Create(p, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {Position = UDim2.new(0, 10, 0, 0)}):Play()
+        else p.Visible = false end
     end
-    if floatingBtn then
-        if nuevoEstado then
-            floatingBtn.Text = "MACRO 360: ON"
-            floatingBtn.BackgroundColor3 = C.green
-            for _,v in pairs(floatingBtn:GetChildren()) do if v:IsA("UIStroke") then v.Color = C.green end end
-        else
-            floatingBtn.Text = "MACRO 360: OFF"
-            floatingBtn.BackgroundColor3 = C.red
-            for _,v in pairs(floatingBtn:GetChildren()) do if v:IsA("UIStroke") then v.Color = C.red end end
-        end
+    for n, b in pairs(tabs) do
+        if n == name then TweenService:Create(b, TweenInfo.new(0.2), {BackgroundColor3 = C.accent, TextColor3 = C.text}):Play()
+        else TweenService:Create(b, TweenInfo.new(0.2), {BackgroundColor3 = C.card, TextColor3 = C.sub}):Play() end
     end
 end
 
-toggle360MenuBtn = switch(macro360Page, "Activar Auto Shoot / Macro 360", false, function(v) setMacro360State(v) end)
-slider(macro360Page, "Tamaño del FOV", 10, 500, state.macro360Fov, function(v) state.macro360Fov = v end)
-slider(macro360Page, "Probabilidad de acierto (%)", 1, 100, state.macro360HitChance, function(v) state.macro360HitChance = v end)
-slider(macro360Page, "Tiempo de reacción (s)", 0, 1, state.macro360Reaction, function(v) state.macro360Reaction = v end)
-slider(macro360Page, "Delay entre Disparos (s)", 0.01, 1.0, state.macro360Cooldown, function(v) state.macro360Cooldown = v end)
+local function createTab(name, iconText)
+    local btn = create("TextButton", {Size=UDim2.new(1, -20, 0, 35), BackgroundColor3=C.card, Text="  " .. iconText .. "  " .. name, TextColor3=C.sub, Font=Enum.Font.GothamMedium, TextSize=13, TextXAlignment=Enum.TextXAlignment.Left, LayoutOrder = #tabs + 1}, sidebar)
+    corner(btn, 8); stroke(btn, C.edge)
+    tabs[name] = btn
+    btn.MouseButton1Click:Connect(function() switchPage(name) end)
+    
+    local page = create("ScrollingFrame", {Size=UDim2.new(1, -20, 1, -10), BackgroundTransparency=1, ScrollBarThickness=3, CanvasSize=UDim2.new()}, content)
+    create("UIListLayout", {Padding=UDim.new(0, 10), SortOrder=Enum.SortOrder.LayoutOrder}, page)
+    pages[name] = page
+    return page
+end
 
--- BOTÓN FLOTANTE
-floatingBtn = create("TextButton", {Size = UDim2.new(0, 120, 0, 45), Position = UDim2.new(0, 20, 0.5, 0), BackgroundColor3 = C.red, Text = "MACRO 360: OFF", TextColor3 = C.text, Font = Enum.Font.GothamBold, TextSize = 12, AutoButtonColor = false, ZIndex = 100}, gui)
-corner(floatingBtn, 8); stroke(floatingBtn, C.red, 1, 0.5)
+local homePage = createTab("Inicio", "⌂")
+local combatPage = createTab("Combate", "⚔")
+local animPage = createTab("Animaciones", "💃")
+local visualPage = createTab("Visuales", "☁")
+local settingsPage = createTab("Config", "⚙")
+switchPage("Inicio")
+
+-- Helpers UI
+local function addCard(parent, title, desc, height)
+    local f = create("Frame", {Size=UDim2.new(1, 0, 0, height or 60), BackgroundColor3=C.card, LayoutOrder = #parent:GetChildren()}, parent)
+    corner(f, 8); stroke(f, C.edge)
+    create("TextLabel", {Size=UDim2.new(1, -20, 0, 20), Position=UDim2.new(0, 10, 0, 8), BackgroundTransparency=1, Text=title, Font=Enum.Font.GothamBold, TextSize=14, TextColor3=C.text, TextXAlignment=Enum.TextXAlignment.Left}, f)
+    if desc then create("TextLabel", {Size=UDim2.new(1, -20, 0, 15), Position=UDim2.new(0, 10, 0, 26), BackgroundTransparency=1, Text=desc, Font=Enum.Font.Gotham, TextSize=11, TextColor3=C.sub, TextXAlignment=Enum.TextXAlignment.Left}, f) end
+    return f
+end
+
+local function addToggle(parent, title, default, callback)
+    local f = addCard(parent, title, nil, 40)
+    local btn = create("TextButton", {Size=UDim2.new(0, 40, 0, 20), Position=UDim2.new(1, -50, 0.5, -10), BackgroundColor3=default and C.green or C.bg, Text="", AutoButtonColor=false}, f)
+    corner(btn, 10)
+    local isOn = default
+    btn.MouseButton1Click:Connect(function()
+        isOn = not isOn
+        TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = isOn and C.green or C.bg}):Play()
+        callback(isOn)
+        saveConfig()
+    end)
+    return btn
+end
+
+local function addSlider(parent, title, minV, maxV, default, callback)
+    local f = addCard(parent, title..": "..tostring(default), nil, 50)
+    local bar = create("Frame", {Size=UDim2.new(1, -30, 0, 4), Position=UDim2.new(0, 15, 0, 35), BackgroundColor3=C.bg}, f)
+    corner(bar, 2)
+    local fill = create("Frame", {Size=UDim2.new((default - minV) / (maxV - minV), 0, 1, 0), BackgroundColor3=C.accent}, bar)
+    corner(fill, 2)
+    local hit = create("TextButton", {Size=UDim2.new(1, 0, 1, 0), BackgroundTransparency=1, Text=""}, bar)
+    local dragging = false
+    local function update(input)
+        local p = math.clamp((input.Position.X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
+        local val = math.floor((minV + p * (maxV - minV)) * 100) / 100
+        fill.Size = UDim2.new(p, 0, 1, 0)
+        f:FindFirstChildOfClass("TextLabel").Text = title..": "..tostring(val)
+        callback(val)
+        saveConfig()
+    end
+    hit.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then dragging = true; update(i) end end)
+    UserInputService.InputChanged:Connect(function(i) if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then update(i) end end)
+    UserInputService.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then dragging = false end end)
+end
+
+local function addDropdown(parent, title, options, default, callback)
+    local f = addCard(parent, title, nil, 40)
+    local btn = create("TextButton", {Size=UDim2.new(0, 120, 0, 25), Position=UDim2.new(1, -130, 0.5, -12), BackgroundColor3=C.bg, Text=tostring(default), TextColor3=C.accent, Font=Enum.Font.GothamMedium, TextSize=12}, f)
+    corner(btn, 6); stroke(btn, C.edge)
+    
+    local list = create("ScrollingFrame", {Size=UDim2.new(0, 120, 0, math.min(#options * 25, 100)), Position=UDim2.new(1, -130, 1, 2), BackgroundColor3=C.bg, Visible=false, ZIndex=10}, f)
+    corner(list, 6); stroke(list, C.accent)
+    create("UIListLayout", {SortOrder=Enum.SortOrder.LayoutOrder}, list)
+    
+    for i, opt in ipairs(options) do
+        local oBtn = create("TextButton", {Size=UDim2.new(1, 0, 0, 25), BackgroundTransparency=1, Text=opt, TextColor3=C.text, Font=Enum.Font.Gotham, TextSize=11, LayoutOrder=i}, list)
+        oBtn.MouseButton1Click:Connect(function()
+            btn.Text = opt
+            list.Visible = false
+            callback(opt)
+            saveConfig()
+        end)
+    end
+    btn.MouseButton1Click:Connect(function() list.Visible = not list.Visible end)
+end
+
+-- ==========================================
+-- CONSTRUCCIÓN DE PÁGINAS
+-- ==========================================
+addCard(homePage, "Bienvenido a Nevada Premium", "Team Check, Silent Aim, Animaciones y más.", 60)
+
+-- COMBATE
+local toggle360 = addToggle(combatPage, "Macro 360 (Silent Aim)", state.macro360Enabled, function(v) state.macro360Enabled = v; setMacro360State(v) end)
+addSlider(combatPage, "FOV Size", 10, 500, state.macro360Fov, function(v) state.macro360Fov = v end)
+addSlider(combatPage, "Hit Chance %", 1, 100, state.macro360HitChance, function(v) state.macro360HitChance = v end)
+addSlider(combatPage, "Cooldown (s)", 0.01, 1, state.macro360Cooldown, function(v) state.macro360Cooldown = v end)
+addToggle(combatPage, "Macro Cuchillo (L2)", state.knifeMacroEnabled, function(v) state.knifeMacroEnabled = v end)
+
+-- ANIMACIONES
+local animNames = {"Ninguna", "Zombie", "Ninja", "Robot", "Pirata", "Astronauta"}
+addDropdown(animPage, "Cambiar Animación", animNames, state.selectedAnim ~= "" and state.selectedAnim or "Ninguna", function(opt)
+    state.selectedAnim = opt
+    applyAnimation(opt)
+end)
+
+-- VISUALES (Sonidos y Skybox)
+local soundOptions = {"Ninguno"}
+for _, s in ipairs(sounds) do table.insert(soundOptions, s.Name) end
+addDropdown(visualPage, "Sonido de Disparo", soundOptions, state.selected.Arma.Name, function(opt)
+    for _, s in ipairs(sounds) do if s.Name == opt then state.selected.Arma = {Name=s.Name, URL=s.URL} end end
+end)
+addToggle(visualPage, "Auto-Cargar Skybox", state.autoLoadSky, function(v) 
+    state.autoLoadSky = v
+    if v and state.selectedSky ~= "" then applySkyFromGitHub(state.selectedSky) end
+end)
+local skyBtn = create("TextButton", {Size=UDim2.new(1, -20, 0, 35), Position=UDim2.new(0, 10, 0, 50), BackgroundColor3=C.accent, Text="Aplicar Skybox (Aurora)", TextColor3=C.text, Font=Enum.Font.GothamBold}, visualPage:FindFirstChildOfClass("Frame"))
+corner(skyBtn, 6)
+skyBtn.MouseButton1Click:Connect(function()
+    state.selectedSky = "aurora"
+    applySkyFromGitHub("aurora")
+    saveConfig()
+    skyBtn.Text = "¡Aurora Aplicada!"
+    task.delay(2, function() skyBtn.Text = "Aplicar Skybox (Aurora)" end)
+end)
+
+-- ==========================================
+-- BOTÓN FLOTANTE Y LÓGICA MACRO 360
+-- ==========================================
+local floatingBtn = create("TextButton", {Size = UDim2.new(0, 120, 0, 45), Position = UDim2.new(0, 20, 0.5, 0), BackgroundColor3 = state.macro360Enabled and C.green or C.red, Text = state.macro360Enabled and "MACRO 360: ON" or "MACRO 360: OFF", TextColor3 = C.text, Font = Enum.Font.GothamBold, TextSize = 12, AutoButtonColor = false, ZIndex = 100}, gui)
+corner(floatingBtn, 8); stroke(floatingBtn, state.macro360Enabled and C.green or C.red, 1, 0.5)
 
 local draggingBtn = false
 local dragStartBtn, startPosBtn
@@ -423,189 +507,112 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 UserInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then draggingBtn = false end end)
-floatingBtn.MouseButton1Click:Connect(function() setMacro360State(not state.macro360Enabled) end)
 
--- ==========================================
--- PESTAÑA SKYBOX (AUTOMÁTICO)
--- ==========================================
-local skyboxPage = newPage("Skybox")
-local skyInfo = card(skyboxPage, 60)
-label(skyInfo, "Elige un cielo. El script buscará las carpetas de tu GitHub automáticamente.", UDim2.new(1,-24,1,-12), UDim2.new(0,12,0,6), 12, C.sub, false)
-
-local originalSky = Lighting:FindFirstChildOfClass("Sky")
-local originalSkyProperties = nil
-if originalSky then
-    originalSkyProperties = {
-        SkyboxBk = originalSky.SkyboxBk, SkyboxDn = originalSky.SkyboxDn,
-        SkyboxFt = originalSky.SkyboxFt, SkyboxLf = originalSky.SkyboxLf,
-        SkyboxRt = originalSky.SkyboxRt, SkyboxUp = originalSky.SkyboxUp
-    }
-end
-
-local function applySky(bk, dn, ft, lf, rt, up)
-    pcall(function()
-        local sky = originalSky
-        if not sky or not sky.Parent then sky = Instance.new("Sky"); sky.Parent = Lighting end
-        if bk then sky.SkyboxBk = bk end
-        if dn then sky.SkyboxDn = dn end
-        if ft then sky.SkyboxFt = ft end
-        if lf then sky.SkyboxLf = lf end
-        if rt then sky.SkyboxRt = rt end
-        if up then sky.SkyboxUp = up end
-    end)
-end
-
--- Botón para Auto-Cargar
-local toggleAutoSky = switch(skyboxPage, "Auto-Cargar último cielo al entrar", false, function(v)
-    state.autoLoadSky = v
-    if v and state.selectedSky ~= "" then
-        applySkyFromGitHub(state.selectedSky)
-    end
-end)
-
--- Contenedor de la lista de cielos
-local skyList = create("ScrollingFrame", {
-    Size = UDim2.new(1, -8, 0, 200),
-    BackgroundColor3 = C.card,
-    BorderSizePixel = 0,
-    ScrollBarThickness = 4,
-    ScrollBarImageColor3 = C.blue,
-    CanvasSize = UDim2.new(),
-    AutomaticCanvasSize = Enum.AutomaticSize.Y,
-    LayoutOrder = 2
-}, skyboxPage)
-corner(skyList, 10); stroke(skyList, C.edge)
-create("UIPadding", {PaddingTop=UDim.new(0,5), PaddingBottom=UDim.new(0,5), PaddingLeft=UDim.new(0,5), PaddingRight=UDim.new(0,5)}, skyList)
-local skyLayout = create("UIListLayout", {Padding=UDim.new(0,5), SortOrder=Enum.SortOrder.LayoutOrder}, skyList)
-
--- Función para cargar la lista de carpetas de GitHub
-local function loadSkyList()
-    for _, child in ipairs(skyList:GetChildren()) do
-        if child:IsA("TextButton") then child:Destroy() end
-    end
-    
-    if not requestFn then return end
-    local ok, res = pcall(function() return requestFn({Url=SKYBOX_API, Method="GET", Headers={["User-Agent"]="NevadaV2"}}) end)
-    if not ok or not res or res.StatusCode ~= 200 then return end
-    
-    local parsedOk, data = pcall(function() return HttpService:JSONDecode(res.Body) end)
-    if not parsedOk or type(data) ~= "table" then return end
-    
-    for i, item in ipairs(data) do
-        if item.type == "dir" then
-            local skyName = item.name
-            local btn = create("TextButton", {
-                Size = UDim2.new(1, 0, 0, 35),
-                BackgroundColor3 = C.panel,
-                Text = "☁ " .. skyName,
-                TextColor3 = C.text,
-                Font = Enum.Font.GothamMedium,
-                TextSize = 13,
-                LayoutOrder = i
-            }, skyList)
-            corner(btn, 6); stroke(btn, C.edge)
-            
-            btn.MouseButton1Click:Connect(function()
-                btn.Text = "Descargando..."
-                local success = applySkyFromGitHub(skyName)
-                if success then
-                    btn.Text = "✅ " .. skyName
-                    state.selectedSky = skyName
-                else
-                    btn.Text = "❌ Error: " .. skyName
-                end
-                task.delay(2, function() btn.Text = "☁ " .. skyName end)
-            end)
+local function setMacro360State(v)
+    state.macro360Enabled = v
+    if floatingBtn then
+        if v then
+            floatingBtn.Text = "MACRO 360: ON"
+            floatingBtn.BackgroundColor3 = C.green
+            for _,s in pairs(floatingBtn:GetChildren()) do if s:IsA("UIStroke") then s.Color = C.green end end
+        else
+            floatingBtn.Text = "MACRO 360: OFF"
+            floatingBtn.BackgroundColor3 = C.red
+            for _,s in pairs(floatingBtn:GetChildren()) do if s:IsA("UIStroke") then s.Color = C.red end end
         end
     end
+    saveConfig()
 end
 
--- Cargar la lista automáticamente al abrir el menú
-task.spawn(loadSkyList)
+floatingBtn.MouseButton1Click:Connect(function() setMacro360State(not state.macro360Enabled) end)
 
-actionCard(skyboxPage, "Restaurar Cielo Original", "Quita el cielo personalizado.", "Restaurar", function()
-    if originalSkyProperties then
-        applySky(originalSkyProperties.SkyboxBk, originalSkyProperties.SkyboxDn, originalSkyProperties.SkyboxFt, originalSkyProperties.SkyboxLf, originalSkyProperties.SkyboxRt, originalSkyProperties.SkyboxUp)
-    end
-    state.selectedSky = ""
-end)
-
--- ==========================================
--- PESTAÑA SONIDOS
--- ==========================================
-local soundsPage=newPage("Sonidos")
-local categoryBar=card(soundsPage,44)
-local categoryButtons={}
-local soundListFrame=card(soundsPage,330)
-local listSearch=create("TextBox",{Size=UDim2.new(1,-20,0,34),Position=UDim2.new(0,10,0,9),BackgroundColor3=C.panel,Text="",PlaceholderText="Buscar sonido...",PlaceholderColor3=C.sub,TextColor3=C.text,Font=Enum.Font.Gotham,TextSize=13,ClearTextOnFocus=false},soundListFrame); corner(listSearch,8); stroke(listSearch)
-local list=create("ScrollingFrame",{Size=UDim2.new(1,-16,1,-54),Position=UDim2.new(0,8,0,48),BackgroundTransparency=1,BorderSizePixel=0,ScrollBarThickness=4,CanvasSize=UDim2.new()},soundListFrame)
-local listLayout=create("UIListLayout",{Padding=UDim.new(0,5),SortOrder=Enum.SortOrder.LayoutOrder},list)
-listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() list.CanvasSize=UDim2.new(0,0,0,listLayout.AbsoluteContentSize.Y+8) end)
-local soundDetails=card(soundsPage,168)
-local selectedTitle=label(soundDetails,"Seleccionado: Ninguno",UDim2.new(1,-24,0,28),UDim2.new(0,12,0,8),15,C.text,true)
-local selectedFile=label(soundDetails,"Archivo: —",UDim2.new(1,-24,0,24),UDim2.new(0,12,0,38),12,C.sub,false)
-local function refreshDetails()
-  local s=state.selected[soundCategory]; selectedTitle.Text="Seleccionado: "..s.Name; selectedFile.Text="Archivo: "..(s.URL:match("([^/]+)$") or "—")
-end
-local function clearSoundRows() for _,ch in ipairs(list:GetChildren()) do if ch:IsA("Frame") then ch:Destroy() end end end
-local function refreshSoundList()
-  clearSoundRows(); local q=listSearch.Text:lower()
-  for _,s in ipairs(sounds) do
-    if q=="" or s.Name:lower():find(q,1,true) then
-      local row=create("Frame",{Size=UDim2.new(1,-4,0,43),BackgroundColor3=C.panel,BorderSizePixel=0},list); corner(row,7)
-      label(row,s.Name,UDim2.new(0.55,0,1,0),UDim2.new(0,10,0,0),13,C.text,true)
-      button(row,"▶ Probar",UDim2.fromOffset(82,29),UDim2.new(1,-176,0.5,-14),function() playSound(s.URL) end)
-      button(row,"Elegir",UDim2.fromOffset(76,29),UDim2.new(1,-86,0.5,-14),function()
-        state.selected[soundCategory]={Name=s.Name,URL=s.URL}; refreshDetails()
-      end)
-    end
-  end
-end
-listSearch:GetPropertyChangedSignal("Text"):Connect(refreshSoundList)
-local function makeCategory(name,x)
-  local b=button(categoryBar,name,UDim2.new(1/3,-8,0,32),UDim2.new(x,4,0.5,-16),function()
-    soundCategory=name; refreshDetails(); refreshSoundList()
-    for k,v in pairs(categoryButtons) do v.BackgroundColor3=(k==name) and C.blue or C.card end
-  end)
-  categoryButtons[name]=b
-end
-makeCategory("Arma",0); makeCategory("Saltar",1/3); makeCategory("Matar",2/3)
-local soundToggle=switch(soundsPage,"Activar este sonido",true,function(v) state.enabled[soundCategory]=v end)
-local muteToggle=switch(soundsPage,"Silenciar este sonido",false,function(v) state.muted[soundCategory]=v end)
-local githubStatus=label(soundsPage,"Catálogo: buscando archivos MP3 en GitHub…",UDim2.new(1,-8,0,28),UDim2.new(0,4,0,0),12,C.sub,false)
-
+-- BUCLE MACRO 360
 task.spawn(function()
-    local loaded = refreshCatalog()
-    if loaded then githubStatus.Text = "GitHub conectado · "..#sounds.." sonidos" else githubStatus.Text = "No se pudo conectar a GitHub" end
-    refreshSoundList()
-end)
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    local lockedTargetPlayer = nil
+    local lockedTargetPart = nil
 
-local configPage=newPage("Configuración")
-actionCard(configPage,"Actualizar catálogo","Vuelve a consultar GitHub","Actualizar",function() 
-    githubStatus.Text = "Buscando..."
-    task.spawn(function()
-        if refreshCatalog() then githubStatus.Text = "Catálogo actualizado · "..#sounds.." sonidos" else githubStatus.Text = "Error al actualizar" end
-        refreshSoundList()
-    end)
-end)
+    while task.wait(0.05) do 
+        if state.macro360Enabled and not estaEnLobby() then
+            local char = player.Character
+            if not char or not char:FindFirstChild("HumanoidRootPart") then continue end
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if not hum or hum.Health <= 0 then continue end
+            local myPos = char.HumanoidRootPart.Position
+            
+            local targetIsValid = false
+            if lockedTargetPlayer and lockedTargetPart and lockedTargetPart.Parent then
+                local eHum = lockedTargetPlayer.Character and lockedTargetPlayer.Character:FindFirstChildOfClass("Humanoid")
+                if eHum and eHum.Health > 0 and isEnemy(lockedTargetPlayer) then
+                    local dist = (lockedTargetPart.Position - myPos).Magnitude
+                    if dist <= state.macro360Fov then
+                        params.FilterDescendantsInstances = { char, lockedTargetPlayer.Character }
+                        local ray = workspace:Raycast(myPos, lockedTargetPart.Position - myPos, params)
+                        if not ray or ray.Instance:IsDescendantOf(lockedTargetPlayer.Character) then targetIsValid = true end
+                    end
+                end
+            end
+            if not targetIsValid then lockedTargetPlayer = nil; lockedTargetPart = nil end
 
-local navNames={"Inicio","Macro","Cuchillo","Macro360","Sonidos","Skybox","Configuración"}
-local navIcons={Inicio="⌂",Macro="◎",Cuchillo="🔪",Macro360="🎯",Sonidos="♫",Skybox="☁",["Configuración"]="⚙"}
-showPage=function(name)
-  activeTab=name
-  for n,p in pairs(pages) do p.Visible=(n==name) end
-  pageTitle.Text=(name=="Inicio") and "Bienvenido a Nevada" or name
-  pageSubtitle.Text=(name=="Inicio") and "Tu hub todo en uno. Macros, sonidos y más." or "Nevada V2 — controles y ajustes"
-  for _,obj in ipairs(navHolder:GetChildren()) do if obj:IsA("TextButton") then obj.BackgroundColor3=(obj.Name==name) and Color3.fromRGB(29,39,57) or Color3.fromRGB(6,9,15) end end
-end
-for i,name in ipairs(navNames) do
-  local b=button(navHolder,navIcons[name].."   "..name,UDim2.new(1,0,0,43),UDim2.new(),function() showPage(name) end)
-  b.Name=name; b.LayoutOrder=i; b.TextXAlignment=Enum.TextXAlignment.Left; b.TextSize=14; b.BackgroundColor3=(name=="Inicio") and Color3.fromRGB(29,39,57) or Color3.fromRGB(6,9,15); b.Position=UDim2.new()
-end
-showPage("Inicio")
+            if not lockedTargetPlayer then
+                local bestPart, bestDist, bestP = nil, math.huge, nil
+                for _, p in ipairs(Players:GetPlayers()) do
+                    if isEnemy(p) and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                        local eHum = p.Character:FindFirstChildOfClass("Humanoid")
+                        if eHum and eHum.Health > 0 and not p.Character:FindFirstChildOfClass("ForceField") then
+                            local dist = (p.Character.HumanoidRootPart.Position - myPos).Magnitude
+                            if dist < state.macro360Fov and dist < bestDist then
+                                params.FilterDescendantsInstances = { char, p.Character }
+                                local ray = workspace:Raycast(myPos, p.Character.HumanoidRootPart.Position - myPos, params)
+                                if not ray then
+                                    for _, part in ipairs(p.Character:GetChildren()) do
+                                        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" and part.Name ~= "Humanoid" then
+                                            local partDist = (part.Position - myPos).Magnitude
+                                            if partDist < bestDist then
+                                                local pRay = workspace:Raycast(myPos, part.Position - myPos, params)
+                                                if not pRay or pRay.Instance:IsDescendantOf(p.Character) then bestDist = partDist; bestPart = part; bestP = p end
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+                if bestPart then lockedTargetPlayer = bestP; lockedTargetPart = bestPart end
+            end
+
+            if lockedTargetPlayer and lockedTargetPart then
+                local backpack = player:FindFirstChildOfClass("Backpack")
+                local tool = char:FindFirstChildOfClass("Tool")
+                if tool and not esPistola(tool) then tool = nil end
+                if not tool and backpack then for _, item in ipairs(backpack:GetChildren()) do if esPistola(item) then tool = item; break end end end
+                if tool then
+                    if tool.Parent ~= char then hum:EquipTool(tool); task.wait(0.1) end
+                    if tool.Parent == char then
+                        if math.random(1, 100) <= state.macro360HitChance then
+                            getgenv().NevadaTargetPart = lockedTargetPart
+                            pcall(function() tool:Activate() end)
+                            task.wait(0.05)
+                            pcall(function() tool:Deactivate() end)
+                            getgenv().NevadaTargetPart = nil
+                        end
+                    end
+                end
+                task.wait(state.macro360Cooldown)
+            end
+        else
+            lockedTargetPlayer = nil; lockedTargetPart = nil
+            local char = player.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if hum then pcall(function() hum:UnequipTools() end) end
+        end
+    end
+end)
 
 -- ==========================================
--- LÓGICA DE MACROS Y BUCLE MACRO 360
+-- MACROS DE TECLADO (R2 y L2)
 -- ==========================================
 local macroBusy=false
 local function runMacro()
@@ -657,59 +664,17 @@ UserInputService.InputBegan:Connect(function(input, processed)
   if input.KeyCode == Enum.KeyCode.L2 then runKnifeMacro() end
 end)
 
+-- Cargar Sonidos y Skybox al iniciar
 task.spawn(function()
-    local params = RaycastParams.new()
-    params.FilterType = Enum.RaycastFilterType.Exclude
-    while task.wait(0.05) do 
-        if state.macro360Enabled and not estaEnLobby() then
-            local char = player.Character
-            if not char or not char:FindFirstChild("HumanoidRootPart") then continue end
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if not hum or hum.Health <= 0 then continue end
-            local bestPart, bestDist = nil, math.huge
-            local myPos = char.HumanoidRootPart.Position
-            for _, p in ipairs(Players:GetPlayers()) do
-                if isEnemy(p) and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                    local eHum = p.Character:FindFirstChildOfClass("Humanoid")
-                    if eHum and eHum.Health > 0 and not p.Character:FindFirstChildOfClass("ForceField") then
-                        local dist = (p.Character.HumanoidRootPart.Position - myPos).Magnitude
-                        if dist < state.macro360Fov and dist < bestDist then
-                            params.FilterDescendantsInstances = { char, p.Character }
-                            local ray = workspace:Raycast(myPos, p.Character.HumanoidRootPart.Position - myPos, params)
-                            if not ray then
-                                for _, part in ipairs(p.Character:GetChildren()) do
-                                    if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" and part.Name ~= "Humanoid" then
-                                        local partDist = (part.Position - myPos).Magnitude
-                                        if partDist < bestDist then
-                                            local pRay = workspace:Raycast(myPos, part.Position - myPos, params)
-                                            if not pRay or pRay.Instance:IsDescendantOf(p.Character) then bestDist = partDist; bestPart = part end
-                                        end
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-            if bestPart then
-                local backpack = player:FindFirstChildOfClass("Backpack")
-                local tool = char:FindFirstChildOfClass("Tool")
-                if tool and not esPistola(tool) then tool = nil end
-                if not tool and backpack then for _, item in ipairs(backpack:GetChildren()) do if esPistola(item) then tool = item; break end end end
-                if tool then
-                    local wasEq = (tool.Parent == char)
-                    if not wasEq then hum:EquipTool(tool); task.wait(0.05) end
-                    if tool.Parent == char then
-                        getgenv().NevadaTargetPart = bestPart
-                        pcall(function() tool:Activate() end)
-                        task.wait(0.05)
-                        pcall(function() tool:Deactivate() end)
-                        getgenv().NevadaTargetPart = nil
-                        if not wasEq then pcall(function() hum:UnequipTools() end) end
-                    end
-                end
-                task.wait(state.macro360Cooldown)
-            end
-        end
-    end
+    refreshCatalog()
+    local soundOptions = {"Ninguno"}
+    for _, s in ipairs(sounds) do table.insert(soundOptions, s.Name) end
+    if soundDropdown then soundDropdown:Refresh(soundOptions) end
 end)
+
+if state.autoLoadSky and state.selectedSky ~= "" then
+    task.spawn(function()
+        task.wait(1)
+        applySkyFromGitHub(state.selectedSky)
+    end)
+end
