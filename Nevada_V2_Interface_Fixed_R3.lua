@@ -1,4 +1,4 @@
--- NEVADA V40 | WindUI Real Completo (Diseño XeroHub + Todas las Funciones)
+-- NEVADA V43 | WindUI Real (Estilo Xero) + TODAS las funciones (Carga Diferida)
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
@@ -8,9 +8,8 @@ local Lighting = game:GetService("Lighting")
 local player = Players.LocalPlayer
 local requestFn = (syn and syn.request) or (http and http.request) or request or http_request
 
-local CONFIG_FILE = "Nevada_WindUI_Config.json"
+local CONFIG_FILE = "Nevada_Xero_Config.json"
 local OWNER, REPO, BRANCH = "sanxsmov", "Mis-soundsp", "main"
-local RAW = "https://raw.githubusercontent.com/" .. OWNER .. "/" .. REPO .. "/" .. BRANCH .. "/"
 local API_ROOT = "https://api.github.com/repos/" .. OWNER .. "/" .. REPO .. "/contents/"
 local SKYBOX_REPO = "sanxsmov/Onyx-web"
 local SKYBOX_RAW = "https://raw.githubusercontent.com/" .. SKYBOX_REPO .. "/main/skyboxes/"
@@ -20,13 +19,13 @@ local state = {
     knifeMacroEnabled = false,
     macro360Enabled = false, macro360Fov = 120, macro360HitChance = 100, macro360Cooldown = 0.05,
     autoLoadSky = false, selectedSky = "", selectedAnim = "",
-    selected = {Arma={Name="Ninguno",URL=""}, Matar={Name="Ninguno",URL=""}},
-    enabled = {Arma=true, Matar=true}, muted = {Arma=false, Matar=false}
+    selected = {Arma={Name="Ninguno",URL=""}},
+    enabled = {Arma=true}
 }
 local sounds, soundCache = {}, {}
 
 -- ==========================================
--- CONFIGURACIÓN (Auto-Guardado)
+-- CONFIGURACIÓN Y LÓGICAS DE FONDO
 -- ==========================================
 local function saveConfig()
     if not writefile then return end
@@ -42,9 +41,6 @@ local function loadConfig()
 end
 loadConfig()
 
--- ==========================================
--- LÓGICAS DE FONDO
--- ==========================================
 -- 1. ANIMACIONES
 local Animations = {
     ["Ninguna"] = {},
@@ -56,16 +52,13 @@ local function applyAnimation(animName)
     local char = player.Character
     if not char then return end
     local animate = char:FindFirstChild("Animate")
-    if not animate then return end
-    if animName == "Ninguna" or not Animations[animName] then return end
+    if not animate or animName == "Ninguna" or not Animations[animName] then return end
     local data = Animations[animName]
     for _, v in pairs(animate:GetDescendants()) do
         if v:IsA("Animation") then
             if (v.Name == "Animation1" or v.Name == "Animation2") and data.idle then v.AnimationId = "rbxassetid://" .. data.idle
             elseif v.Name == "WalkAnim" and data.walk then v.AnimationId = "rbxassetid://" .. data.walk
             elseif v.Name == "RunAnim" and data.run then v.AnimationId = "rbxassetid://" .. data.run
-            elseif v.Name == "JumpAnim" and data.jump then v.AnimationId = "rbxassetid://" .. data.jump
-            elseif v.Name == "FallAnim" and data.fall then v.AnimationId = "rbxassetid://" .. data.fall
             end
         end
     end
@@ -150,7 +143,7 @@ if hookmetamethod and getnamecallmethod and checkcaller then
     end)
 end
 
--- 5. SONIDOS
+-- 5. SONIDOS (Se cargan en segundo plano)
 local function playSound(url)
     if not url or url == "" then return end
     if not soundCache[url] then
@@ -171,10 +164,9 @@ local function watchSound(obj)
     if not obj:IsA("Sound") then return end
     obj.Played:Connect(function()
         local id = tostring(obj.SoundId):match("(%d+)")
-        local cat = (id == "10209603" or obj.Name:lower():find("gun")) and "Arma" or ((id == "296102734" or obj.Name:lower():find("kill")) and "Matar" or nil)
-        if cat and state.enabled[cat] and state.selected[cat].URL ~= "" then
+        if (id == "10209603" or obj.Name:lower():find("gun")) and state.enabled.Arma and state.selected.Arma.URL ~= "" then
             pcall(function() obj.Volume = 0 end)
-            playSound(state.selected[cat].URL)
+            playSound(state.selected.Arma.URL)
         end
     end)
 end
@@ -183,7 +175,7 @@ SoundService.DescendantAdded:Connect(watchSound)
 for _, v in ipairs(workspace:GetDescendants()) do if v:IsA("Sound") then watchSound(v) end end
 
 -- 6. MACROS DE TECLADO (R2 y L2)
-local macroBusy = false
+local macroBusy, knifeBusy = false, false
 local function runMacro()
     if not state.macro or macroBusy then return end
     local char = player.Character; if not char then return end
@@ -203,7 +195,6 @@ local function runMacro()
         macroBusy = false
     end)
 end
-local knifeBusy = false
 local function runKnifeMacro()
     if not state.knifeMacroEnabled or knifeBusy then return end
     local character = player.Character
@@ -218,8 +209,7 @@ local function runKnifeMacro()
     task.spawn(function()
         pcall(function()
             if knife.Parent ~= character then humanoid:EquipTool(knife); task.wait(0.1) end
-            pcall(function() knife:Activate() end)
-            task.wait(0.15)
+            pcall(function() knife:Activate() end); task.wait(0.15)
             pcall(function() if humanoid and humanoid.Parent then humanoid:UnequipTools() end end)
         end)
         knifeBusy = false
@@ -232,22 +222,26 @@ UserInputService.InputBegan:Connect(function(input, processed)
 end)
 
 -- ==========================================
--- CARGAR WINDUI E INTERFAZ
+-- INTERFAZ WINDUI (Carga Visual)
 -- ==========================================
 local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
 
 local Window = WindUI:CreateWindow({
     Title = "Nevada Hub",
-    Author = "Custom",
+    Author = "Xero Style",
     Icon = "shield",
     Folder = "NevadaUI",
-    Size = UDim2.fromOffset(580, 380),
-    Transparent = true,
+    Size = UDim2.fromOffset(550, 360),
     Theme = "Dark"
 })
 
--- Pestaña de Combate
+-- Pestaña COMBATE
 local TabCombat = Window:Tab({ Title = "Combat", Icon = "swords" })
+TabCombat:Toggle({
+    Title = "Activar Macro (Teclado)",
+    Value = state.macro,
+    Callback = function(v) state.macro = v; saveConfig() end
+})
 TabCombat:Section({ Title = "Macro 360 (Silent Aim)" })
 TabCombat:Toggle({
     Title = "Activar Macro 360",
@@ -255,18 +249,15 @@ TabCombat:Toggle({
     Callback = function(v) state.macro360Enabled = v; saveConfig() end
 })
 TabCombat:Slider({
-    Title = "FOV Size",
-    Step = 1, Value = { Min = 10, Max = 500, Default = state.macro360Fov },
+    Title = "FOV Size", Step = 1, Value = { Min = 10, Max = 500, Default = state.macro360Fov },
     Callback = function(v) state.macro360Fov = v; saveConfig() end
 })
 TabCombat:Slider({
-    Title = "Hit Chance %",
-    Step = 1, Value = { Min = 1, Max = 100, Default = state.macro360HitChance },
+    Title = "Hit Chance %", Step = 1, Value = { Min = 1, Max = 100, Default = state.macro360HitChance },
     Callback = function(v) state.macro360HitChance = v; saveConfig() end
 })
 TabCombat:Slider({
-    Title = "Cooldown (s)",
-    Step = 0.01, Value = { Min = 0.01, Max = 1, Default = state.macro360Cooldown },
+    Title = "Cooldown (s)", Step = 0.01, Value = { Min = 0.01, Max = 1, Default = state.macro360Cooldown },
     Callback = function(v) state.macro360Cooldown = v; saveConfig() end
 })
 TabCombat:Toggle({
@@ -275,24 +266,26 @@ TabCombat:Toggle({
     Callback = function(v) state.knifeMacroEnabled = v; saveConfig() end
 })
 
--- Pestaña de Visuales
+-- Pestaña VISUALES
 local TabVisuals = Window:Tab({ Title = "Visuals", Icon = "eye" })
 TabVisuals:Section({ Title = "Skybox" })
 TabVisuals:Toggle({
-    Title = "Auto-Cargar Skybox",
-    Value = state.autoLoadSky,
+    Title = "Auto-Cargar Skybox", Value = state.autoLoadSky,
     Callback = function(v) state.autoLoadSky = v; saveConfig() end
 })
 TabVisuals:Button({
     Title = "Aplicar Skybox (Aurora)",
     Callback = function()
         WindUI:Notify({ Title = "Skybox", Content = "Descargando Aurora...", Duration = 2 })
-        local ok = applySkyFromGitHub("aurora")
-        state.selectedSky = "aurora"; saveConfig()
+        task.spawn(function()
+            local ok = applySkyFromGitHub("aurora")
+            state.selectedSky = "aurora"; saveConfig()
+            if ok then WindUI:Notify({ Title = "Skybox", Content = "¡Aurora Aplicada!", Duration = 2 }) end
+        end)
     end
 })
 
--- Pestaña de Animaciones
+-- Pestaña ANIMACIONES
 local TabAnim = Window:Tab({ Title = "Animations", Icon = "person-standing" })
 TabAnim:Dropdown({
     Title = "Cambiar Animación",
@@ -301,38 +294,45 @@ TabAnim:Dropdown({
     Callback = function(opt) state.selectedAnim = opt; applyAnimation(opt); saveConfig() end
 })
 
--- Pestaña de Sonidos
+-- Pestaña SONIDOS
 local TabSounds = Window:Tab({ Title = "Sounds", Icon = "music" })
+TabSounds:Section({ Title = "Sonidos de Disparo (GitHub)" })
+local soundDropdown
+soundDropdown = TabSounds:Dropdown({
+    Title = "Seleccionar Sonido",
+    Values = {"Cargando..."},
+    Value = "Cargando...",
+    Callback = function(opt)
+        for _, item in ipairs(sounds) do
+            if item.Name == opt then state.selected.Arma = {Name=opt, URL=item.URL}; saveConfig() end
+        end
+    end
+})
+
+-- El truco para no crashear: Cargar los sonidos DESPUÉS de que la UI se dibuje
 task.spawn(function()
     local ok, res = pcall(function() return requestFn({Url=API_ROOT.."sounds",Method="GET",Headers={ ["User-Agent"]="NevadaV2" }}) end)
     if ok and res and res.StatusCode == 200 then
         local data = HttpService:JSONDecode(res.Body)
         local soundNames = {"Ninguno"}
         for _, item in ipairs(data) do
-            if item.name:match("%.mp3$") then table.insert(soundNames, item.name:gsub("%.mp3$", "")) end
-        end
-        TabSounds:Dropdown({
-            Title = "Sonido de Disparo",
-            Values = soundNames,
-            Value = state.selected.Arma.Name,
-            Callback = function(opt)
-                for _, item in ipairs(data) do
-                    if item.name:gsub("%.mp3$", "") == opt then state.selected.Arma = {Name=opt, URL=item.download_url} end
-                end
-                saveConfig()
+            if item.name:match("%.mp3$") then 
+                table.insert(soundNames, item.name:gsub("%.mp3$", "")) 
+                table.insert(sounds, {Name = item.name:gsub("%.mp3$", ""), URL = item.download_url or (RAW.."sounds/"..item.name)})
             end
-        })
+        end
+        if soundDropdown then
+            pcall(function() soundDropdown:Refresh(soundNames) end)
+        end
+    else
+        if soundDropdown then pcall(function() soundDropdown:Refresh({"Error al cargar"}) end) end
     end
 end)
 
 -- ==========================================
--- BOTÓN FLOTANTE Y BUCLE DEL MACRO 360
+-- BOTÓN FLOTANTE Y LÓGICA DE AIMBOT (Retrasada)
 -- ==========================================
-local gui = Instance.new("ScreenGui")
-gui.Name = "NevadaFloating"
-gui.Parent = game:GetService("CoreGui")
-
-local floatBtn = Instance.new("TextButton", gui)
+local floatBtn = Instance.new("TextButton")
 floatBtn.Size = UDim2.new(0, 120, 0, 40)
 floatBtn.Position = UDim2.new(0, 20, 0.5, 0)
 floatBtn.BackgroundColor3 = state.macro360Enabled and Color3.fromRGB(0, 150, 50) or Color3.fromRGB(200, 50, 50)
@@ -340,6 +340,7 @@ floatBtn.Text = state.macro360Enabled and "MACRO 360: ON" or "MACRO 360: OFF"
 floatBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 floatBtn.Font = Enum.Font.GothamBold
 floatBtn.TextSize = 12
+floatBtn.Parent = game:GetService("CoreGui")
 Instance.new("UICorner", floatBtn).CornerRadius = UDim.new(0, 6)
 
 local dragging, dragStart, startPos
@@ -364,11 +365,12 @@ floatBtn.MouseButton1Click:Connect(function()
     saveConfig()
 end)
 
-task.spawn(function()
+-- EL TRUCO FINAL: El bucle de disparo se activa después de 3 segundos para no trabar la UI
+task.delay(3, function()
     local params = RaycastParams.new()
     params.FilterType = Enum.RaycastFilterType.Exclude
     local lockedTargetPlayer, lockedTargetPart = nil, nil
-    while task.wait(0.05) do 
+    while task.wait(0.1) do 
         if state.macro360Enabled and not estaEnLobby() then
             local char = player.Character
             if not char or not char:FindFirstChild("HumanoidRootPart") then continue end
