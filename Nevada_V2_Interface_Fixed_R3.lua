@@ -1,4 +1,4 @@
--- NEVADA V36 | EDICIÓN PREMIUM ESTABLE (Carga asíncrona para no crashear)
+-- NEVADA V37 | EDICIÓN PREMIUM DEFINITIVA (Todo incluido + Carga Segura)
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
@@ -26,9 +26,10 @@ local state = {
     enabled = {Arma=true}
 }
 local sounds, soundCache = {}, {}
+local activeTab = nil
 
 -- ==========================================
--- CONFIGURACIÓN
+-- CONFIGURACIÓN (GUARDAR/CARGAR)
 -- ==========================================
 local function saveConfig()
     if not writefile then return end
@@ -45,7 +46,7 @@ end
 loadConfig()
 
 -- ==========================================
--- LÓGICA DE ANIMACIONES
+-- ANIMACIONES GLOBALES
 -- ==========================================
 local Animations = {
     ["Ninguna"] = {},
@@ -297,7 +298,7 @@ local function fetchFolder(folder)
 end
 
 -- ==========================================
--- INTERFAZ PREMIUM (CARGA ASÍNCRONA)
+-- INTERFAZ PREMIUM (Carga Segura)
 -- ==========================================
 if playerGui:FindFirstChild("NevadaPremium") then playerGui.NevadaPremium:Destroy() end
 local gui = Instance.new("ScreenGui")
@@ -314,7 +315,6 @@ end
 local function corner(obj, radius) create("UICorner", {CornerRadius=UDim.new(0,radius or 10)}, obj) end
 local function stroke(obj, color, thickness) create("UIStroke", {Color=color or C.edge, Thickness=thickness or 1, Transparency=0.2}, obj) end
 
--- Ventana Principal
 local window = create("Frame", {Size=UDim2.new(0, 550, 0, 380), Position=UDim2.new(0.5, -275, 0.5, -190), BackgroundColor3=C.bg, BorderSizePixel=0, ClipsDescendants=true}, gui)
 corner(window, 15); stroke(window, C.edge, 1.5)
 
@@ -329,6 +329,7 @@ create("UIListLayout", {Padding=UDim.new(0, 5), SortOrder=Enum.SortOrder.LayoutO
 create("UIPadding", {PaddingTop=UDim.new(0, 10)}, sidebar)
 
 local content = create("Frame", {Size=UDim2.new(1, -140, 1, -40), Position=UDim2.new(0, 140, 0, 40), BackgroundTransparency=1}, window)
+
 local pages, tabs = {}, {}
 local activeTab = nil
 
@@ -336,9 +337,7 @@ local function switchPage(name)
     if activeTab == name then return end
     activeTab = name
     for n, p in pairs(pages) do
-        if n == name then
-            p.Visible = true
-        else p.Visible = false end
+        if n == name then p.Visible = true else p.Visible = false end
     end
     for n, b in pairs(tabs) do
         if n == name then TweenService:Create(b, TweenInfo.new(0.2), {BackgroundColor3 = C.accent, TextColor3 = C.text}):Play()
@@ -352,14 +351,12 @@ local function createTab(name, iconText)
     tabs[name] = btn
     btn.MouseButton1Click:Connect(function() switchPage(name) end)
     
-    -- IMPORTANTE: AutomaticCanvasSize para que los elementos no desaparezcan
     local page = create("ScrollingFrame", {Size=UDim2.new(1, -20, 1, -10), BackgroundTransparency=1, ScrollBarThickness=3, CanvasSize=UDim2.new(), AutomaticCanvasSize=Enum.AutomaticSize.Y}, content)
     create("UIListLayout", {Padding=UDim.new(0, 10), SortOrder=Enum.SortOrder.LayoutOrder}, page)
     pages[name] = page
     return page
 end
 
--- Helpers de UI (Añadimos task.wait para evitar crasheos)
 local function addCard(parent, title, desc, height)
     local f = create("Frame", {Size=UDim2.new(1, 0, 0, height or 60), BackgroundColor3=C.card, LayoutOrder = #parent:GetChildren()}, parent)
     corner(f, 8); stroke(f, C.edge)
@@ -381,6 +378,7 @@ local function addToggle(parent, title, default, callback)
         saveConfig()
     end)
     task.wait(0.01)
+    return btn
 end
 
 local function addSlider(parent, title, minV, maxV, default, callback)
@@ -429,24 +427,24 @@ local function addDropdown(parent, title, options, default, callback)
 end
 
 -- ==========================================
--- CARGA DE PÁGINAS (Protegido con task.spawn)
+-- CONSTRUCCIÓN DE LA UI
 -- ==========================================
 task.spawn(function()
     local homePage = createTab("Inicio", "⌂")
     local combatPage = createTab("Combate", "⚔")
     local animPage = createTab("Animaciones", "💃")
     local visualPage = createTab("Visuales", "☁")
+    local settingsPage = createTab("Config", "⚙")
     
     switchPage("Inicio")
     
     -- INICIO
-    addCard(homePage, "Bienvenido a Nevada Premium", "Interfaz estable V36.", 60)
+    addCard(homePage, "Bienvenido a Nevada Premium", "Todo incluido en esta versión.", 60)
 
     -- COMBATE
-    local toggle360
-    toggle360 = addToggle(combatPage, "Macro 360 (Silent Aim)", state.macro360Enabled, function(v) 
+    addToggle(combatPage, "Macro 360 (Silent Aim)", state.macro360Enabled, function(v) 
         state.macro360Enabled = v 
-        setMacro360State(v) 
+        if setMacro360State then setMacro360State(v) end
     end)
     addSlider(combatPage, "FOV Size", 10, 500, state.macro360Fov, function(v) state.macro360Fov = v end)
     addSlider(combatPage, "Hit Chance %", 1, 100, state.macro360HitChance, function(v) state.macro360HitChance = v end)
@@ -460,13 +458,13 @@ task.spawn(function()
         applyAnimation(opt)
     end)
 
-    -- VISUALES
+    -- VISUALES (Sonidos y Skybox)
     addToggle(visualPage, "Auto-Cargar Skybox", state.autoLoadSky, function(v) 
         state.autoLoadSky = v
         if v and state.selectedSky ~= "" then applySkyFromGitHub(state.selectedSky) end
     end)
     
-    local skyBtn = create("TextButton", {Size=UDim2.new(1, -20, 0, 35), BackgroundColor3=C.accent, Text="Aplicar Skybox (Aurora)", TextColor3=C.text, Font=Enum.Font.GothamBold}, visualPage)
+    local skyBtn = create("TextButton", {Size=UDim2.new(1, -20, 0, 35), BackgroundColor3=C.accent, Text="Aplicar Skybox (Aurora)", TextColor3=C.text, Font=Enum.Font.GothamBold, LayoutOrder=#visualPage:GetChildren()}, visualPage)
     corner(skyBtn, 6)
     skyBtn.MouseButton1Click:Connect(function()
         skyBtn.Text = "Descargando..."
@@ -477,9 +475,9 @@ task.spawn(function()
         task.delay(2, function() skyBtn.Text = "Aplicar Skybox (Aurora)" end)
     end)
 
-    -- Cargar Sonidos y llenar el Dropdown
-    fetchFolder("sounds") or fetchFolder("SoundsV2")
-    if #sounds > 0 then
+    -- Cargar Sonidos de GitHub
+    local loaded = fetchFolder("sounds") or fetchFolder("SoundsV2")
+    if loaded and #sounds > 0 then
         local soundOptions = {"Ninguno"}
         for _, s in ipairs(sounds) do table.insert(soundOptions, s.Name) end
         addDropdown(visualPage, "Sonido de Disparo", soundOptions, state.selected.Arma.Name, function(opt)
@@ -488,6 +486,15 @@ task.spawn(function()
             end
         end)
     end
+
+    -- CONFIGURACIÓN
+    local saveBtn = create("TextButton", {Size=UDim2.new(1, -20, 0, 35), BackgroundColor3=C.accent, Text="Guardar Configuración Manualmente", TextColor3=C.text, Font=Enum.Font.GothamBold, LayoutOrder=#settingsPage:GetChildren()}, settingsPage)
+    corner(saveBtn, 6)
+    saveBtn.MouseButton1Click:Connect(function()
+        saveConfig()
+        saveBtn.Text = "¡Guardado!"
+        task.delay(2, function() saveBtn.Text = "Guardar Configuración Manualmente" end)
+    end)
 end)
 
 -- ==========================================
@@ -524,10 +531,9 @@ function setMacro360State(v)
     end
     saveConfig()
 end
-
 floatingBtn.MouseButton1Click:Connect(function() setMacro360State(not state.macro360Enabled) end)
 
--- BUCLE MACRO 360 (Target Lock)
+-- BUCLE MACRO 360 (Target Lock + Team Check)
 task.spawn(function()
     local params = RaycastParams.new()
     params.FilterType = Enum.RaycastFilterType.Exclude
