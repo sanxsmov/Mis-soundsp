@@ -1,4 +1,4 @@
--- NEVADA V35.1 | Selector de Animaciones, Sonidos y Skybox (CON HOMBRE LOBO)
+-- NEVADA V35.2 | Interfaz Corregida (Solucionado el problema de pantalla en negro)
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
@@ -20,7 +20,7 @@ local SKYBOX_RAW = "https://raw.githubusercontent.com/" .. SKYBOX_REPO .. "/main
 local SKYBOX_API = "https://api.github.com/repos/" .. SKYBOX_REPO .. "/contents/" .. SKYBOX_FOLDER
 
 -- ==========================================
--- BASE DE DATOS DE PAQUETES DE ANIMACIÓN (HOMBRE LOBO AÑADIDO)
+-- BASE DE DATOS DE PAQUETES DE ANIMACIÓN
 -- ==========================================
 local AnimationPacks = {
     ["Default"] = {Idle = "507766666", Walk = "507777826", Run = "507767714", Jump = "507765000", Fall = "507767968", Swim = "507784897", SwimIdle = "507785072"},
@@ -56,13 +56,12 @@ local state = {
 local sounds, soundCache, activeTab, soundCategory = {}, {}, "Inicio", "Arma"
 
 -- ==========================================
--- LÓGICA DE ANIMACIONES POR PAQUETES
+-- LÓGICA DE ANIMACIONES
 -- ==========================================
 local function applyAnimationPack(packName)
     if not state.animEnabled then return end
     local char = player.Character
     if not char then return end
-    
     local animate = char:FindFirstChild("Animate")
     if not animate then return end
     local humanoid = char:FindFirstChildOfClass("Humanoid")
@@ -70,12 +69,9 @@ local function applyAnimationPack(packName)
     if humanoid then
         local animator = humanoid:FindFirstChildOfClass("Animator")
         if animator then
-            for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
-                track:Stop(0)
-            end
+            for _, track in ipairs(animator:GetPlayingAnimationTracks()) do track:Stop(0) end
         end
     end
-
     animate.Disabled = true
 
     local pack = AnimationPacks[packName]
@@ -85,12 +81,9 @@ local function applyAnimationPack(packName)
             local folder = animate:FindFirstChild(folderName)
             if folder then
                 local anim = folder:FindFirstChild(animName)
-                if anim and anim:IsA("Animation") then
-                    anim.AnimationId = "rbxassetid://" .. id
-                end
+                if anim and anim:IsA("Animation") then anim.AnimationId = "rbxassetid://" .. id end
             end
         end
-
         setAnim("idle", "Animation1", pack.Idle)
         setAnim("idle", "Animation2", pack.Idle)
         setAnim("walk", "WalkAnim", pack.Walk)
@@ -100,7 +93,6 @@ local function applyAnimationPack(packName)
         setAnim("swim", "Swim", pack.Swim)
         setAnim("swimidle", "SwimIdle", pack.SwimIdle)
     end
-
     task.wait(0.1)
     animate.Disabled = false
 end
@@ -189,7 +181,7 @@ local function isEnemy(targetPlayer)
     local myTeam = getPlayerTeam(player)
     local targetTeam = getPlayerTeam(targetPlayer)
     if myTeam and targetTeam then return string.lower(myTeam) ~= string.lower(targetTeam) end
-    if not myTeam and not targetTeam then return true end -- Modo FFA
+    if not myTeam and not targetTeam then return true end
     return false
 end
 
@@ -281,12 +273,10 @@ local function watchNativeSound(obj)
     local n = obj.Name:lower()
     local isGun = n:find("gun") or n:find("shot") or n:find("fire")
     local isKill = n:find("kill")
-    
     local category = nil
     if id == ORIGINAL_SHOT or isGun then category = "Arma"
     elseif id == ORIGINAL_KILL or isKill then category = "Matar" end
     if not category then return end
-    
     local custom=state.selected[category]
     if not state.enabled[category] or state.muted[category] or not custom or custom.URL=="" then return end
     pcall(function() obj.Volume=0 end)
@@ -404,17 +394,34 @@ end)
 
 local content=create("Frame",{Size=UDim2.new(1,-210,1,-82),Position=UDim2.new(0,205,0,72),BackgroundTransparency=1},window)
 local pages={}
+
+-- CORRECCIÓN 1: AutomaticCanvasSize para que no se hagan invisibles las tarjetas
 local function newPage(name)
-  local p=create("ScrollingFrame",{Name=name,Size=UDim2.fromScale(1,1),BackgroundTransparency=1,BorderSizePixel=0,ScrollBarThickness=4,ScrollBarImageColor3=C.blue,Visible=false,CanvasSize=UDim2.new()},content)
+  local p=create("ScrollingFrame",{
+      Name=name,
+      Size=UDim2.fromScale(1,1),
+      BackgroundTransparency=1,
+      BorderSizePixel=0,
+      ScrollBarThickness=4,
+      ScrollBarImageColor3=C.blue,
+      Visible=false,
+      AutomaticCanvasSize=Enum.AutomaticSize.Y, -- ESTO SOLUCIONA LA PANTALLA NEGRA
+      CanvasSize=UDim2.new(0,0,0,0)
+  }, content)
   local l=create("UIListLayout",{Padding=UDim.new(0,10),SortOrder=Enum.SortOrder.LayoutOrder},p)
-  l:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() p.CanvasSize=UDim2.new(0,0,0,l.AbsoluteContentSize.Y+16) end)
   pages[name]=p; return p
 end
+
+-- CORRECCIÓN 2: Asegurar que las tarjetas se apilen correctamente
+local cardLayoutCounters = {}
 local function card(parent,height)
-  local f=create("Frame",{Size=UDim2.new(1,-8,0,height),BackgroundColor3=C.card,BorderSizePixel=0},parent); corner(f,11); stroke(f); return f
+  cardLayoutCounters[parent] = (cardLayoutCounters[parent] or 0) + 1
+  local f=create("Frame",{Size=UDim2.new(1,-8,0,height),BackgroundColor3=C.card,BorderSizePixel=0, LayoutOrder=cardLayoutCounters[parent]},parent)
+  corner(f,11); stroke(f); return f
 end
-local function switch(parent,text,initial,callback,y)
-  local row=card(parent,48); row.LayoutOrder=y or 1
+
+local function switch(parent,text,initial,callback)
+  local row=card(parent,48)
   label(row,text,UDim2.new(1,-100,1,0),UDim2.new(0,14,0,0),14,C.text,true)
   local b
   b=button(row,initial and "ACTIVADO" or "DESACTIVADO",UDim2.fromOffset(92,30),UDim2.new(1,-104,0.5,-15),function()
@@ -423,10 +430,12 @@ local function switch(parent,text,initial,callback,y)
   b.BackgroundColor3=initial and C.blue or C.card
   return b
 end
+
 local function actionCard(parent,title,desc,btnText,fn)
   local f=card(parent,70); label(f,title,UDim2.new(0.66,0,0,27),UDim2.new(0,14,0,7),14,C.text,true); label(f,desc,UDim2.new(0.66,0,0,25),UDim2.new(0,14,0,35),11,C.sub,false)
   button(f,btnText,UDim2.fromOffset(125,34),UDim2.new(1,-139,0.5,-17),fn); return f
 end
+
 local function slider(parent,title,minV,maxV,initial,callback)
   local f=card(parent,72); local value=initial
   local txt=label(f,title..": "..tostring(value),UDim2.new(1,-24,0,25),UDim2.new(0,13,0,6),13,C.text,true)
@@ -465,7 +474,7 @@ local animToggle = switch(animsPage, "Activar Animaciones Custom", state.animEna
     if v then applyAnimationPack(state.selectedAnimPack) end
 end)
 
-local animListFrame = create("Frame", {Size = UDim2.new(1, -8, 0, 0), BackgroundTransparency = 1, AutomaticCanvasSize = Enum.AutomaticSize.Y, LayoutOrder = 2}, animsPage)
+local animListFrame = create("Frame", {Size = UDim2.new(1, -8, 0, 0), BackgroundTransparency = 1, AutomaticCanvasSize = Enum.AutomaticSize.Y, LayoutOrder = 99}, animsPage)
 local animLayout = create("UIListLayout", {Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder}, animListFrame)
 
 for packName, _ in pairs(AnimationPacks) do
@@ -565,7 +574,7 @@ local toggleAutoSky = switch(skyboxPage, "Auto-Cargar último cielo al entrar", 
     if v and state.selectedSky ~= "" then applySkyFromGitHub(state.selectedSky) end
 end)
 
-local skyList = create("ScrollingFrame", {Size = UDim2.new(1, -8, 0, 200), BackgroundColor3 = C.card, BorderSizePixel = 0, ScrollBarThickness = 4, ScrollBarImageColor3 = C.blue, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, LayoutOrder = 2}, skyboxPage)
+local skyList = create("ScrollingFrame", {Size = UDim2.new(1, -8, 0, 200), BackgroundColor3 = C.card, BorderSizePixel = 0, ScrollBarThickness = 4, ScrollBarImageColor3 = C.blue, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, LayoutOrder = 99}, skyboxPage)
 corner(skyList, 10); stroke(skyList, C.edge)
 create("UIPadding", {PaddingTop=UDim.new(0,5), PaddingBottom=UDim.new(0,5), PaddingLeft=UDim.new(0,5), PaddingRight=UDim.new(0,5)}, skyList)
 local skyLayout = create("UIListLayout", {Padding=UDim.new(0,5), SortOrder=Enum.SortOrder.LayoutOrder}, skyList)
