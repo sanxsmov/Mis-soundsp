@@ -1,4 +1,4 @@
--- NEVADA V33 | Skybox Auto + Team Check + Sonidos + Silent Aim + Animaciones Mixer
+-- NEVADA V34 | Skybox Auto + Team Check + Sonidos + Silent Aim + Animaciones Mixer
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
@@ -20,12 +20,12 @@ local SKYBOX_RAW = "https://raw.githubusercontent.com/" .. SKYBOX_REPO .. "/main
 local SKYBOX_API = "https://api.github.com/repos/" .. SKYBOX_REPO .. "/contents/" .. SKYBOX_FOLDER
 
 -- ==========================================
--- BASE DE DATOS DE PAQUETES DE ANIMACIÓN
--- [FIX] Hombre Lobo: IDs correctos del bundle oficial de Roblox
+-- [FIX] IDS DE ANIMACIÓN
+-- Hombre Lobo: Jump=10921337907, Fall=10921333237 (estaban intercambiados)
 -- ==========================================
 local AnimationPacks = {
     ["Default"]    = {Idle="507766666", Walk="507777826", Run="507767714", Jump="507765000", Fall="507767968", Swim="507784897", SwimIdle="507785072"},
-    ["Hombre Lobo"]= {Idle="10921330408", Walk="10921342074", Run="10921336997", Jump="10921338742", Fall="10921337907", Swim="10921340419", SwimIdle="10921341319"},
+    ["Hombre Lobo"]= {Idle="10921330408", Walk="10921342074", Run="10921336997", Jump="10921337907", Fall="10921333237", Swim="10921340419", SwimIdle="10921341319"},
     ["Ninja"]      = {Idle="616006778", Walk="656121766", Run="656118852", Jump="616008936", Fall="616005863", Swim="616143378", SwimIdle="616144772"},
     ["Zombie"]     = {Idle="10921344533", Walk="10921355261", Run="616163682", Jump="10921351278", Fall="10921350320", Swim="10921352344", SwimIdle="10921353442"},
     ["Robot"]      = {Idle="616088211", Walk="616095330", Run="616091570", Jump="616090535", Fall="616087089", Swim="616092998", SwimIdle="616094091"},
@@ -51,13 +51,58 @@ local state = {
   selected = {Arma={Name="Ninguno",URL=""}, Saltar={Name="Ninguno",URL=""}, Matar={Name="Ninguno",URL=""}},
   enabled = {Arma=true, Saltar=true, Matar=true}, muted = {Arma=false, Saltar=false, Matar=false},
   folder = FOLDERS[1],
-  -- [NEW] Animaciones
   animEnabled = false,
-  animMode = "pack",  -- "pack" | "mix"
+  animMode = "pack",
   selectedAnimPack = "Default",
   customMix = {Idle="Default", Walk="Default", Run="Default", Jump="Default", Fall="Default", Swim="Default", SwimIdle="Default"},
 }
 local sounds, soundCache, activeTab, soundCategory = {}, {}, "Inicio", "Arma"
+
+-- ==========================================
+-- [FIX] CAPTURA DE ANIMACIONES ORIGINALES
+-- Guarda los IDs reales que tiene el usuario equipados (bundle de Roblox)
+-- ==========================================
+local originalAnimations = nil
+
+local function captureOriginalAnimations(char)
+    char = char or player.Character
+    if not char then return end
+    local animate = char:FindFirstChild("Animate")
+    if not animate then return end
+    if originalAnimations then return end  -- solo capturar una vez por sesión
+
+    local function getAnim(folderName, animName)
+        local folder = animate:FindFirstChild(folderName)
+        local anim = folder and folder:FindFirstChild(animName)
+        if anim and anim:IsA("Animation") then return anim.AnimationId end
+        return nil
+    end
+
+    originalAnimations = {
+        Idle1 = getAnim("idle", "Animation1"),
+        Idle2 = getAnim("idle", "Animation2"),
+        Walk = getAnim("walk", "WalkAnim"),
+        Run = getAnim("run", "RunAnim"),
+        Jump = getAnim("jump", "JumpAnim"),
+        Fall = getAnim("fall", "FallAnim"),
+        Swim = getAnim("swim", "Swim"),
+        SwimIdle = getAnim("swimidle", "SwimIdle"),
+    }
+end
+
+if player.Character then captureOriginalAnimations(player.Character) end
+
+-- Restaurar un slot individual a la animación original del usuario
+local function restoreSlot(char, folderName, animName, origKey)
+    if not originalAnimations or not originalAnimations[origKey] then return end
+    local animate = char:FindFirstChild("Animate")
+    if not animate then return end
+    local folder = animate:FindFirstChild(folderName)
+    local anim = folder and folder:FindFirstChild(animName)
+    if anim and anim:IsA("Animation") then
+        anim.AnimationId = originalAnimations[origKey]
+    end
+end
 
 -- ==========================================
 -- APLICAR PACK COMPLETO
@@ -78,32 +123,33 @@ local function applyAnimationPack(packName)
     end
     animate.Disabled = true
 
-    local pack = AnimationPacks[packName]
-    if pack then
-        local function setAnim(folderName, animName, id)
-            if not id then return end
-            local folder = animate:FindFirstChild(folderName)
-            if folder then
-                local anim = folder:FindFirstChild(animName)
-                if anim and anim:IsA("Animation") then anim.AnimationId = "rbxassetid://" .. id end
-            end
+    captureOriginalAnimations(char)
+
+    local pack = AnimationPacks[packName] or AnimationPacks["Default"]
+    local function setAnim(folderName, animName, id)
+        if not id then return end
+        local folder = animate:FindFirstChild(folderName)
+        if folder then
+            local anim = folder:FindFirstChild(animName)
+            if anim and anim:IsA("Animation") then anim.AnimationId = "rbxassetid://" .. id end
         end
-        setAnim("idle", "Animation1", pack.Idle)
-        setAnim("idle", "Animation2", pack.Idle)
-        setAnim("walk", "WalkAnim", pack.Walk)
-        setAnim("run", "RunAnim", pack.Run)
-        setAnim("jump", "JumpAnim", pack.Jump)
-        setAnim("fall", "FallAnim", pack.Fall)
-        setAnim("swim", "Swim", pack.Swim)
-        setAnim("swimidle", "SwimIdle", pack.SwimIdle)
     end
+    setAnim("idle", "Animation1", pack.Idle)
+    setAnim("idle", "Animation2", pack.Idle)
+    setAnim("walk", "WalkAnim", pack.Walk)
+    setAnim("run", "RunAnim", pack.Run)
+    setAnim("jump", "JumpAnim", pack.Jump)
+    setAnim("fall", "FallAnim", pack.Fall)
+    setAnim("swim", "Swim", pack.Swim)
+    setAnim("swimidle", "SwimIdle", pack.SwimIdle)
+
     task.wait(0.1)
     animate.Disabled = false
 end
 
 -- ==========================================
--- APLICAR MIX PERSONALIZADO
--- [NEW] Cada slot toma la animación del pack elegido en customMix
+-- [FIX] MIX PERSONALIZADO
+-- "Default" en un slot = NO tocar = restaurar animación original del usuario
 -- ==========================================
 local function applyMix(mixTable)
     if not state.animEnabled then return end
@@ -121,17 +167,7 @@ local function applyMix(mixTable)
     end
     animate.Disabled = true
 
-    local function getPack(name)
-        return AnimationPacks[name] or AnimationPacks["Default"]
-    end
-
-    local idleP = getPack(mixTable.Idle)
-    local walkP = getPack(mixTable.Walk)
-    local runP  = getPack(mixTable.Run)
-    local jumpP = getPack(mixTable.Jump)
-    local fallP = getPack(mixTable.Fall)
-    local swimP = getPack(mixTable.Swim)
-    local swidP = getPack(mixTable.SwimIdle)
+    captureOriginalAnimations(char)
 
     local function setAnim(folderName, animName, id)
         if not id then return end
@@ -142,14 +178,97 @@ local function applyMix(mixTable)
         end
     end
 
-    setAnim("idle", "Animation1", idleP.Idle)
-    setAnim("idle", "Animation2", idleP.Idle)
-    setAnim("walk", "WalkAnim", walkP.Walk)
-    setAnim("run", "RunAnim", runP.Run)
-    setAnim("jump", "JumpAnim", jumpP.Jump)
-    setAnim("fall", "FallAnim", fallP.Fall)
-    setAnim("swim", "Swim", swimP.Swim)
-    setAnim("swimidle", "SwimIdle", swidP.SwimIdle)
+    -- IDLE
+    if mixTable.Idle == "Default" then
+        restoreSlot(char, "idle", "Animation1", "Idle1")
+        restoreSlot(char, "idle", "Animation2", "Idle2")
+    else
+        local p = AnimationPacks[mixTable.Idle] or AnimationPacks["Default"]
+        setAnim("idle", "Animation1", p.Idle)
+        setAnim("idle", "Animation2", p.Idle)
+    end
+
+    -- WALK
+    if mixTable.Walk == "Default" then
+        restoreSlot(char, "walk", "WalkAnim", "Walk")
+    else
+        local p = AnimationPacks[mixTable.Walk] or AnimationPacks["Default"]
+        setAnim("walk", "WalkAnim", p.Walk)
+    end
+
+    -- RUN
+    if mixTable.Run == "Default" then
+        restoreSlot(char, "run", "RunAnim", "Run")
+    else
+        local p = AnimationPacks[mixTable.Run] or AnimationPacks["Default"]
+        setAnim("run", "RunAnim", p.Run)
+    end
+
+    -- JUMP
+    if mixTable.Jump == "Default" then
+        restoreSlot(char, "jump", "JumpAnim", "Jump")
+    else
+        local p = AnimationPacks[mixTable.Jump] or AnimationPacks["Default"]
+        setAnim("jump", "JumpAnim", p.Jump)
+    end
+
+    -- FALL
+    if mixTable.Fall == "Default" then
+        restoreSlot(char, "fall", "FallAnim", "Fall")
+    else
+        local p = AnimationPacks[mixTable.Fall] or AnimationPacks["Default"]
+        setAnim("fall", "FallAnim", p.Fall)
+    end
+
+    -- SWIM
+    if mixTable.Swim == "Default" then
+        restoreSlot(char, "swim", "Swim", "Swim")
+    else
+        local p = AnimationPacks[mixTable.Swim] or AnimationPacks["Default"]
+        setAnim("swim", "Swim", p.Swim)
+    end
+
+    -- SWIM IDLE
+    if mixTable.SwimIdle == "Default" then
+        restoreSlot(char, "swimidle", "SwimIdle", "SwimIdle")
+    else
+        local p = AnimationPacks[mixTable.SwimIdle] or AnimationPacks["Default"]
+        setAnim("swimidle", "SwimIdle", p.SwimIdle)
+    end
+
+    task.wait(0.1)
+    animate.Disabled = false
+end
+
+-- ==========================================
+-- [FIX] RESTAURAR TODO A LAS ANIMACIONES DEL USUARIO
+-- ==========================================
+local function restoreAllOriginal()
+    local char = player.Character
+    if not char then return end
+    local animate = char:FindFirstChild("Animate")
+    if not animate then return end
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+
+    if humanoid then
+        local animator = humanoid:FindFirstChildOfClass("Animator")
+        if animator then
+            for _, track in ipairs(animator:GetPlayingAnimationTracks()) do track:Stop(0) end
+        end
+    end
+    animate.Disabled = true
+
+    if not originalAnimations then captureOriginalAnimations(char) end
+    if originalAnimations then
+        restoreSlot(char, "idle", "Animation1", "Idle1")
+        restoreSlot(char, "idle", "Animation2", "Idle2")
+        restoreSlot(char, "walk", "WalkAnim", "Walk")
+        restoreSlot(char, "run", "RunAnim", "Run")
+        restoreSlot(char, "jump", "JumpAnim", "Jump")
+        restoreSlot(char, "fall", "FallAnim", "Fall")
+        restoreSlot(char, "swim", "Swim", "Swim")
+        restoreSlot(char, "swimidle", "SwimIdle", "SwimIdle")
+    end
 
     task.wait(0.1)
     animate.Disabled = false
@@ -157,10 +276,12 @@ end
 
 local function onCharacterAdded(char)
     task.wait(1.5)
-    if state.animMode == "mix" then
-        applyMix(state.customMix)
-    else
-        applyAnimationPack(state.selectedAnimPack)
+    -- En respawn, el Animate se reconstruye con la animación equipada del usuario,
+    -- así que recapturamos por si cambió entre rondas.
+    originalAnimations = nil
+    captureOriginalAnimations(char)
+    if state.animEnabled then
+        if state.animMode == "mix" then applyMix(state.customMix) else applyAnimationPack(state.selectedAnimPack) end
     end
 end
 
@@ -414,10 +535,10 @@ local sidebar=create("Frame",{Size=UDim2.new(0,190,1,0),BackgroundColor3=Color3.
 create("Frame",{Size=UDim2.new(0,1,1,0),Position=UDim2.new(0,190,0,0),BackgroundColor3=C.edge,BorderSizePixel=0},window)
 label(sidebar,"▲",UDim2.new(1,0,0,48),UDim2.new(0,0,0,20),29,C.text,true).TextXAlignment=Enum.TextXAlignment.Center
 label(sidebar,"N E V A D A",UDim2.new(1,0,0,34),UDim2.new(0,0,0,63),21,C.text,true).TextXAlignment=Enum.TextXAlignment.Center
-label(sidebar,"V3",UDim2.new(1,0,0,20),UDim2.new(0,0,0,96),12,C.sub,false).TextXAlignment=Enum.TextXAlignment.Center
+label(sidebar,"V4",UDim2.new(1,0,0,20),UDim2.new(0,0,0,96),12,C.sub,false).TextXAlignment=Enum.TextXAlignment.Center
 local navHolder=create("Frame",{Size=UDim2.new(1,-18,0,400),Position=UDim2.new(0,9,0,140),BackgroundTransparency=1},sidebar)
 create("UIListLayout",{Padding=UDim.new(0,7),SortOrder=Enum.SortOrder.LayoutOrder},navHolder)
-label(sidebar,"NEVADA V3\nTu experiencia, sin límites.",UDim2.new(1,-24,0,48),UDim2.new(0,12,1,-62),11,C.sub,false)
+label(sidebar,"NEVADA V4\nTu experiencia, sin límites.",UDim2.new(1,-24,0,48),UDim2.new(0,12,1,-62),11,C.sub,false)
 
 local top=create("Frame",{Size=UDim2.new(1,-210,0,68),Position=UDim2.new(0,205,0,0),BackgroundTransparency=1},window)
 label(top,"▲",UDim2.fromOffset(48,55),UDim2.new(0,0,0,4),28,C.text,true)
@@ -486,7 +607,7 @@ end
 
 local showPage
 local home=newPage("Inicio")
-local welcome=card(home,108); label(welcome,"Bienvenido a Nevada",UDim2.new(1,-26,0,32),UDim2.new(0,14,0,13),20,C.text,true); label(welcome,"Tu hub todo en uno. Macros, sonidos y más.\nInterfaz Nevada V3",UDim2.new(1,-26,0,45),UDim2.new(0,14,0,51),12,C.sub,false)
+local welcome=card(home,108); label(welcome,"Bienvenido a Nevada",UDim2.new(1,-26,0,32),UDim2.new(0,14,0,13),20,C.text,true); label(welcome,"Tu hub todo en uno. Macros, sonidos y más.\nInterfaz Nevada V4",UDim2.new(1,-26,0,45),UDim2.new(0,14,0,51),12,C.sub,false)
 actionCard(home,"Sonidos","Catálogo de tu repositorio de GitHub","Abrir sonidos",function() showPage("Sonidos") end)
 actionCard(home,"Macro Arma","Disparo rápido automático","Ver macro",function() showPage("Macro") end)
 actionCard(home,"Macro Cuchillo","Lanzamiento rápido (L2)","Ver macro",function() showPage("Cuchillo") end)
@@ -505,18 +626,20 @@ slider(knifePage,"Delay al Equipar",0.01,0.50,state.knifeEquipDelay,function(v) 
 slider(knifePage,"Delay al Lanzar",0.01,0.50,state.knifeThrowDelay,function(v) state.knifeThrowDelay = v end)
 
 -- ==========================================
--- [NEW] PÁGINA ANIMACIONES CON MIXER
+-- PÁGINA ANIMACIONES CON MIXER (Default = no tocar)
 -- ==========================================
 local animsPage = newPage("Animaciones")
 
-local animMainToggle = switch(animsPage, "Activar Animaciones Custom", state.animEnabled, function(v)
+local animMainToggle
+animMainToggle = switch(animsPage, "Activar Animaciones Custom", state.animEnabled, function(v)
     state.animEnabled = v
     if v then
         if state.animMode == "mix" then applyMix(state.customMix) else applyAnimationPack(state.selectedAnimPack) end
+    else
+        restoreAllOriginal()
     end
 end)
 
--- Packs completos
 local packHeader = label(animsPage, "PACKS COMPLETOS", UDim2.new(1,-8,0,20), UDim2.new(0,4,0,0), 12, C.sub, true)
 packHeader.LayoutOrder = 100
 
@@ -526,9 +649,12 @@ packLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
     packListFrame.Size = UDim2.new(1, -8, 0, packLayout.AbsoluteContentSize.Y)
 end)
 
+-- [FIX] No mostrar "Default" como pack — usar el botón "Restaurar Default" en su lugar
 local packButtons = {}
 local sortedPacks = {}
-for name in pairs(AnimationPacks) do table.insert(sortedPacks, name) end
+for name in pairs(AnimationPacks) do
+    if name ~= "Default" then table.insert(sortedPacks, name) end
+end
 table.sort(sortedPacks)
 
 for i, packName in ipairs(sortedPacks) do
@@ -546,14 +672,20 @@ for i, packName in ipairs(sortedPacks) do
     packButtons[packName] = btn
 end
 
--- Mixer
 local mixHeader = label(animsPage, "PERSONALIZAR (MIX)", UDim2.new(1,-8,0,20), UDim2.new(0,4,0,0), 12, C.sub, true)
 mixHeader.LayoutOrder = 200
-local mixHint = label(animsPage, "Toca ◀ ▶ para elegir el pack de cada animación. Ejemplo: saltar=Ninja, correr=Zombie.", UDim2.new(1,-8,0,32), UDim2.new(0,4,0,0), 11, C.sub, false)
+local mixHint = label(animsPage, "Cada slot tiene 'Default' = no tocar (usa la animación equipada en tu avatar). Toca ◀ ▶ para elegir otra.", UDim2.new(1,-8,0,42), UDim2.new(0,4,0,0), 11, C.sub, false)
 mixHint.LayoutOrder = 201
 
 local slotOrder = {"Idle", "Walk", "Run", "Jump", "Fall", "Swim", "SwimIdle"}
 local slotDisplay = {Idle="Reposo", Walk="Caminar", Run="Correr", Jump="Saltar", Fall="Caer", Swim="Nadar", SwimIdle="Nadar (quieto)"}
+
+-- [FIX] Opciones del mixer incluyen "Default" como opción válida
+local mixerOptions = {"Default"}
+for name in pairs(AnimationPacks) do
+    if name ~= "Default" then table.insert(mixerOptions, name) end
+end
+table.sort(mixerOptions)
 
 for idx, slot in ipairs(slotOrder) do
     local f = card(animsPage, 48)
@@ -563,11 +695,11 @@ for idx, slot in ipairs(slotOrder) do
 
     local currentVal = state.customMix[slot] or "Default"
     local currentIdx = 1
-    for i, v in ipairs(sortedPacks) do
+    for i, v in ipairs(mixerOptions) do
         if v == currentVal then currentIdx = i; break end
     end
 
-    local valLabel = label(f, currentVal, UDim2.new(0.45, 0, 1, 0), UDim2.new(0.35, 0, 0, 0), 11, C.blue, true)
+    local valLabel = label(f, currentVal, UDim2.new(0.45, 0, 1, 0), UDim2.new(0.35, 0, 0, 0), 11, (currentVal == "Default") and C.sub or C.blue, true)
     valLabel.TextXAlignment = Enum.TextXAlignment.Center
 
     local prevBtn = button(f, "◀", UDim2.fromOffset(28, 28), UDim2.new(0.35, 4, 0.5, -14), nil)
@@ -575,15 +707,17 @@ for idx, slot in ipairs(slotOrder) do
 
     prevBtn.MouseButton1Click:Connect(function()
         currentIdx = currentIdx - 1
-        if currentIdx < 1 then currentIdx = #sortedPacks end
-        state.customMix[slot] = sortedPacks[currentIdx]
-        valLabel.Text = sortedPacks[currentIdx]
+        if currentIdx < 1 then currentIdx = #mixerOptions end
+        state.customMix[slot] = mixerOptions[currentIdx]
+        valLabel.Text = mixerOptions[currentIdx]
+        valLabel.TextColor3 = (mixerOptions[currentIdx] == "Default") and C.sub or C.blue
     end)
     nextBtn.MouseButton1Click:Connect(function()
         currentIdx = currentIdx + 1
-        if currentIdx > #sortedPacks then currentIdx = 1 end
-        state.customMix[slot] = sortedPacks[currentIdx]
-        valLabel.Text = sortedPacks[currentIdx]
+        if currentIdx > #mixerOptions then currentIdx = 1 end
+        state.customMix[slot] = mixerOptions[currentIdx]
+        valLabel.Text = mixerOptions[currentIdx]
+        valLabel.TextColor3 = (mixerOptions[currentIdx] == "Default") and C.sub or C.blue
     end)
 end
 
@@ -596,13 +730,14 @@ local applyMixCard = actionCard(animsPage, "Aplicar combinación", "Usa las anim
 end)
 applyMixCard.LayoutOrder = 300
 
-local restoreAnimCard = actionCard(animsPage, "Restaurar Default", "Vuelve a las animaciones originales de Roblox.", "Restaurar", function()
+-- [FIX] Restaurar: restaura TUS animaciones reales, no las de Roblox
+local restoreAnimCard = actionCard(animsPage, "Restaurar Default", "Vuelve a las animaciones de TU avatar (las que tenías equipadas).", "Restaurar", function()
     state.animMode = "pack"
     state.selectedAnimPack = "Default"
     state.animEnabled = false
     animMainToggle.Text = "DESACTIVADO"
     animMainToggle.BackgroundColor3 = C.card
-    applyAnimationPack("Default")
+    restoreAllOriginal()
 end)
 restoreAnimCard.LayoutOrder = 301
 
@@ -805,7 +940,7 @@ showPage=function(name)
   activeTab=name
   for n,p in pairs(pages) do p.Visible=(n==name) end
   pageTitle.Text=(name=="Inicio") and "Bienvenido a Nevada" or name
-  pageSubtitle.Text=(name=="Inicio") and "Tu hub todo en uno. Macros, sonidos y más." or "Nevada V3 — controles y ajustes"
+  pageSubtitle.Text=(name=="Inicio") and "Tu hub todo en uno. Macros, sonidos y más." or "Nevada V4 — controles y ajustes"
   for _,obj in ipairs(navHolder:GetChildren()) do if obj:IsA("TextButton") then obj.BackgroundColor3=(obj.Name==name) and Color3.fromRGB(29,39,57) or Color3.fromRGB(6,9,15) end end
 end
 for i,name in ipairs(navNames) do
@@ -864,12 +999,11 @@ end
 UserInputService.InputBegan:Connect(function(input, processed)
   if processed then return end
   if input.UserInputType==Enum.UserInputType.MouseButton1 or input.KeyCode==Enum.KeyCode.ButtonR2 then runMacro() end
-  -- [FIX] Enum.KeyCode.L2 no existe, es ButtonL2
   if input.KeyCode == Enum.KeyCode.ButtonL2 then runKnifeMacro() end
 end)
 
 -- ==========================================
--- [FIX] MACRO 360 - SIN COOLDOWN / ANTI-SPAM
+-- MACRO 360 - ANTI-SPAM
 -- ==========================================
 local m360 = {wasInLobby = true, gameTicks = 0, isEquipped = false}
 
