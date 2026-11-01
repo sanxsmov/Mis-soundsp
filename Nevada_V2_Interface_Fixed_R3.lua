@@ -1,4 +1,4 @@
--- NEVADA V34 | Skybox Auto + Team Check + Sonidos + Silent Aim + Animaciones Mixer
+-- NEVADA V6 | Skybox Auto + Team Check + Sonidos + Silent Aim + Animaciones Instant + Jump Sound
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
@@ -19,14 +19,10 @@ local SKYBOX_FOLDER = "skyboxes"
 local SKYBOX_RAW = "https://raw.githubusercontent.com/" .. SKYBOX_REPO .. "/main/" .. SKYBOX_FOLDER .. "/"
 local SKYBOX_API = "https://api.github.com/repos/" .. SKYBOX_REPO .. "/contents/" .. SKYBOX_FOLDER
 
--- ==========================================
--- [FIX] IDS DE ANIMACIÓN
--- Hombre Lobo: Jump=10921337907, Fall=10921333237 (estaban intercambiados)
--- ==========================================
 local AnimationPacks = {
     ["Default"]    = {Idle="507766666", Walk="507777826", Run="507767714", Jump="507765000", Fall="507767968", Swim="507784897", SwimIdle="507785072"},
-    ["Hombre Lobo"]= {Idle="10921330408", Walk="10921342074", Run="10921336997", Jump="10921337907", Fall="10921333237", Swim="10921340419", SwimIdle="10921341319"},
-    ["Ninja"]      = {Idle="616006778", Walk="656121766", Run="656118852", Jump="616008936", Fall="616005863", Swim="616143378", SwimIdle="616144772"},
+    ["Hombre Lobo"]= {Idle="10921330408", Walk="10921342074", Run="10921336997", Jump="10921351278", Fall="10921337907", Swim="10921340419", SwimIdle="10921341319"},
+    ["Ninja"]      = {Idle="616006778", Walk="656121766", Run="656118852", Jump="656117878", Fall="656115606", Swim="656119721", SwimIdle="656121397"},
     ["Zombie"]     = {Idle="10921344533", Walk="10921355261", Run="616163682", Jump="10921351278", Fall="10921350320", Swim="10921352344", SwimIdle="10921353442"},
     ["Robot"]      = {Idle="616088211", Walk="616095330", Run="616091570", Jump="616090535", Fall="616087089", Swim="616092998", SwimIdle="616094091"},
     ["Levitation"] = {Idle="616006778", Walk="616013216", Run="616010382", Jump="616008936", Fall="616005863", Swim="616011509", SwimIdle="616012453"},
@@ -59,17 +55,18 @@ local state = {
 local sounds, soundCache, activeTab, soundCategory = {}, {}, "Inicio", "Arma"
 
 -- ==========================================
--- [FIX] CAPTURA DE ANIMACIONES ORIGINALES
--- Guarda los IDs reales que tiene el usuario equipados (bundle de Roblox)
+-- [NUEVO] SISTEMA DE ANIMACIONES INSTANTÁNEAS
 -- ==========================================
 local originalAnimations = nil
+local animationGuards = setmetatable({}, {__mode = "k"})
+local animApplyQueued = setmetatable({}, {__mode = "k"})
 
 local function captureOriginalAnimations(char)
     char = char or player.Character
     if not char then return end
     local animate = char:FindFirstChild("Animate")
     if not animate then return end
-    if originalAnimations then return end  -- solo capturar una vez por sesión
+    if originalAnimations then return end
 
     local function getAnim(folderName, animName)
         local folder = animate:FindFirstChild(folderName)
@@ -92,201 +89,200 @@ end
 
 if player.Character then captureOriginalAnimations(player.Character) end
 
--- Restaurar un slot individual a la animación original del usuario
-local function restoreSlot(char, folderName, animName, origKey)
-    if not originalAnimations or not originalAnimations[origKey] then return end
-    local animate = char:FindFirstChild("Animate")
-    if not animate then return end
+local function clearAnimationGuards()
+    for anim, conn in pairs(animationGuards) do
+        if conn then pcall(function() conn:Disconnect() end) end
+    end
+    animationGuards = setmetatable({}, {__mode = "k"})
+end
+
+-- Instala un guard: si el juego intenta resetear el ID, lo restaura al instante
+local function guardAnimation(animate, folderName, animName, id)
+    if not id then return end
     local folder = animate:FindFirstChild(folderName)
-    local anim = folder and folder:FindFirstChild(animName)
-    if anim and anim:IsA("Animation") then
-        anim.AnimationId = originalAnimations[origKey]
+    if not folder then return end
+    local anim = folder:FindFirstChild(animName)
+    if not anim or not anim:IsA("Animation") then return end
+
+    local target = "rbxassetid://" .. tostring(id)
+    if anim.AnimationId ~= target then
+        anim.AnimationId = target
+    end
+
+    if animationGuards[anim] then
+        pcall(function() animationGuards[anim]:Disconnect() end)
+    end
+    animationGuards[anim] = anim:GetPropertyChangedSignal("AnimationId"):Connect(function()
+        if state.animEnabled and anim.Parent and anim.AnimationId ~= target then
+            anim.AnimationId = target
+        end
+    end)
+end
+
+-- Aplica las animaciones DIRECTO. Sin disable/enable, sin esperas.
+local function fastApply(char)
+    if not state.animEnabled or not char or not char.Parent then return end
+    local animate = char:FindFirstChild("Animate")
+    if not animate then return end
+
+    captureOriginalAnimations(char)
+    clearAnimationGuards()
+
+    if state.animMode == "mix" then
+        local mix = state.customMix
+        if mix.Idle == "Default" then
+            if originalAnimations then
+                local id1 = originalAnimations.Idle1 and originalAnimations.Idle1:match("%d+")
+                local id2 = originalAnimations.Idle2 and originalAnimations.Idle2:match("%d+")
+                if id1 then guardAnimation(animate, "idle", "Animation1", id1) end
+                if id2 then guardAnimation(animate, "idle", "Animation2", id2) end
+            end
+        else
+            local p = AnimationPacks[mix.Idle] or AnimationPacks["Default"]
+            guardAnimation(animate, "idle", "Animation1", p.Idle)
+            guardAnimation(animate, "idle", "Animation2", p.Idle)
+        end
+        if mix.Walk == "Default" then
+            if originalAnimations and originalAnimations.Walk then
+                guardAnimation(animate, "walk", "WalkAnim", originalAnimations.Walk:match("%d+"))
+            end
+        else
+            local p = AnimationPacks[mix.Walk] or AnimationPacks["Default"]
+            guardAnimation(animate, "walk", "WalkAnim", p.Walk)
+        end
+        if mix.Run == "Default" then
+            if originalAnimations and originalAnimations.Run then
+                guardAnimation(animate, "run", "RunAnim", originalAnimations.Run:match("%d+"))
+            end
+        else
+            local p = AnimationPacks[mix.Run] or AnimationPacks["Default"]
+            guardAnimation(animate, "run", "RunAnim", p.Run)
+        end
+        if mix.Jump == "Default" then
+            if originalAnimations and originalAnimations.Jump then
+                guardAnimation(animate, "jump", "JumpAnim", originalAnimations.Jump:match("%d+"))
+            end
+        else
+            local p = AnimationPacks[mix.Jump] or AnimationPacks["Default"]
+            guardAnimation(animate, "jump", "JumpAnim", p.Jump)
+        end
+        if mix.Fall == "Default" then
+            if originalAnimations and originalAnimations.Fall then
+                guardAnimation(animate, "fall", "FallAnim", originalAnimations.Fall:match("%d+"))
+            end
+        else
+            local p = AnimationPacks[mix.Fall] or AnimationPacks["Default"]
+            guardAnimation(animate, "fall", "FallAnim", p.Fall)
+        end
+        if mix.Swim == "Default" then
+            if originalAnimations and originalAnimations.Swim then
+                guardAnimation(animate, "swim", "Swim", originalAnimations.Swim:match("%d+"))
+            end
+        else
+            local p = AnimationPacks[mix.Swim] or AnimationPacks["Default"]
+            guardAnimation(animate, "swim", "Swim", p.Swim)
+        end
+        if mix.SwimIdle == "Default" then
+            if originalAnimations and originalAnimations.SwimIdle then
+                guardAnimation(animate, "swimidle", "SwimIdle", originalAnimations.SwimIdle:match("%d+"))
+            end
+        else
+            local p = AnimationPacks[mix.SwimIdle] or AnimationPacks["Default"]
+            guardAnimation(animate, "swimidle", "SwimIdle", p.SwimIdle)
+        end
+    else
+        local pack = AnimationPacks[state.selectedAnimPack] or AnimationPacks["Default"]
+        guardAnimation(animate, "idle", "Animation1", pack.Idle)
+        guardAnimation(animate, "idle", "Animation2", pack.Idle)
+        guardAnimation(animate, "walk", "WalkAnim", pack.Walk)
+        guardAnimation(animate, "run", "RunAnim", pack.Run)
+        guardAnimation(animate, "jump", "JumpAnim", pack.Jump)
+        guardAnimation(animate, "fall", "FallAnim", pack.Fall)
+        guardAnimation(animate, "swim", "Swim", pack.Swim)
+        guardAnimation(animate, "swimidle", "SwimIdle", pack.SwimIdle)
     end
 end
 
--- ==========================================
--- APLICAR PACK COMPLETO
--- ==========================================
+-- Aplica en el mismo frame que se pueda. Sin task.wait(1.5)
+local function scheduleInstantApply(char)
+    if not char or not char.Parent or not state.animEnabled then return end
+    if animApplyQueued[char] then return end
+    animApplyQueued[char] = true
+    task.defer(function()
+        animApplyQueued[char] = nil
+        if char and char.Parent and state.animEnabled then
+            fastApply(char)
+        end
+    end)
+end
+
+local function onCharacterAdded(char)
+    originalAnimations = nil
+    if not state.animEnabled then return end
+
+    -- Intento inmediato (Animate podría no existir aún)
+    scheduleInstantApply(char)
+
+    -- Atrapar cuando Animate aparezca
+    char.ChildAdded:Connect(function(child)
+        if child.Name == "Animate" and state.animEnabled and char.Parent then
+            scheduleInstantApply(char)
+        end
+    end)
+
+    -- Atrapar cuando Animation1 aparezca (garantiza que Animate está poblado)
+    char.DescendantAdded:Connect(function(desc)
+        if state.animEnabled and char.Parent 
+           and desc:IsA("Animation") and desc.Name == "Animation1" then
+            scheduleInstantApply(char)
+        end
+    end)
+end
+
+if player.Character then onCharacterAdded(player.Character) end
+player.CharacterAdded:Connect(onCharacterAdded)
+
+-- Compatibilidad con los nombres que ya usaba el script
 local function applyAnimationPack(packName)
-    if not state.animEnabled then return end
-    local char = player.Character
-    if not char then return end
-    local animate = char:FindFirstChild("Animate")
-    if not animate then return end
-    local humanoid = char:FindFirstChildOfClass("Humanoid")
-
-    if humanoid then
-        local animator = humanoid:FindFirstChildOfClass("Animator")
-        if animator then
-            for _, track in ipairs(animator:GetPlayingAnimationTracks()) do track:Stop(0) end
-        end
-    end
-    animate.Disabled = true
-
-    captureOriginalAnimations(char)
-
-    local pack = AnimationPacks[packName] or AnimationPacks["Default"]
-    local function setAnim(folderName, animName, id)
-        if not id then return end
-        local folder = animate:FindFirstChild(folderName)
-        if folder then
-            local anim = folder:FindFirstChild(animName)
-            if anim and anim:IsA("Animation") then anim.AnimationId = "rbxassetid://" .. id end
-        end
-    end
-    setAnim("idle", "Animation1", pack.Idle)
-    setAnim("idle", "Animation2", pack.Idle)
-    setAnim("walk", "WalkAnim", pack.Walk)
-    setAnim("run", "RunAnim", pack.Run)
-    setAnim("jump", "JumpAnim", pack.Jump)
-    setAnim("fall", "FallAnim", pack.Fall)
-    setAnim("swim", "Swim", pack.Swim)
-    setAnim("swimidle", "SwimIdle", pack.SwimIdle)
-
-    task.wait(0.1)
-    animate.Disabled = false
+    state.animMode = "pack"
+    state.selectedAnimPack = packName
+    fastApply(player.Character)
 end
 
--- ==========================================
--- [FIX] MIX PERSONALIZADO
--- "Default" en un slot = NO tocar = restaurar animación original del usuario
--- ==========================================
 local function applyMix(mixTable)
-    if not state.animEnabled then return end
-    local char = player.Character
-    if not char then return end
-    local animate = char:FindFirstChild("Animate")
-    if not animate then return end
-    local humanoid = char:FindFirstChildOfClass("Humanoid")
-
-    if humanoid then
-        local animator = humanoid:FindFirstChildOfClass("Animator")
-        if animator then
-            for _, track in ipairs(animator:GetPlayingAnimationTracks()) do track:Stop(0) end
-        end
-    end
-    animate.Disabled = true
-
-    captureOriginalAnimations(char)
-
-    local function setAnim(folderName, animName, id)
-        if not id then return end
-        local folder = animate:FindFirstChild(folderName)
-        if folder then
-            local anim = folder:FindFirstChild(animName)
-            if anim and anim:IsA("Animation") then anim.AnimationId = "rbxassetid://" .. id end
-        end
-    end
-
-    -- IDLE
-    if mixTable.Idle == "Default" then
-        restoreSlot(char, "idle", "Animation1", "Idle1")
-        restoreSlot(char, "idle", "Animation2", "Idle2")
-    else
-        local p = AnimationPacks[mixTable.Idle] or AnimationPacks["Default"]
-        setAnim("idle", "Animation1", p.Idle)
-        setAnim("idle", "Animation2", p.Idle)
-    end
-
-    -- WALK
-    if mixTable.Walk == "Default" then
-        restoreSlot(char, "walk", "WalkAnim", "Walk")
-    else
-        local p = AnimationPacks[mixTable.Walk] or AnimationPacks["Default"]
-        setAnim("walk", "WalkAnim", p.Walk)
-    end
-
-    -- RUN
-    if mixTable.Run == "Default" then
-        restoreSlot(char, "run", "RunAnim", "Run")
-    else
-        local p = AnimationPacks[mixTable.Run] or AnimationPacks["Default"]
-        setAnim("run", "RunAnim", p.Run)
-    end
-
-    -- JUMP
-    if mixTable.Jump == "Default" then
-        restoreSlot(char, "jump", "JumpAnim", "Jump")
-    else
-        local p = AnimationPacks[mixTable.Jump] or AnimationPacks["Default"]
-        setAnim("jump", "JumpAnim", p.Jump)
-    end
-
-    -- FALL
-    if mixTable.Fall == "Default" then
-        restoreSlot(char, "fall", "FallAnim", "Fall")
-    else
-        local p = AnimationPacks[mixTable.Fall] or AnimationPacks["Default"]
-        setAnim("fall", "FallAnim", p.Fall)
-    end
-
-    -- SWIM
-    if mixTable.Swim == "Default" then
-        restoreSlot(char, "swim", "Swim", "Swim")
-    else
-        local p = AnimationPacks[mixTable.Swim] or AnimationPacks["Default"]
-        setAnim("swim", "Swim", p.Swim)
-    end
-
-    -- SWIM IDLE
-    if mixTable.SwimIdle == "Default" then
-        restoreSlot(char, "swimidle", "SwimIdle", "SwimIdle")
-    else
-        local p = AnimationPacks[mixTable.SwimIdle] or AnimationPacks["Default"]
-        setAnim("swimidle", "SwimIdle", p.SwimIdle)
-    end
-
-    task.wait(0.1)
-    animate.Disabled = false
+    state.animMode = "mix"
+    state.customMix = mixTable
+    fastApply(player.Character)
 end
 
--- ==========================================
--- [FIX] RESTAURAR TODO A LAS ANIMACIONES DEL USUARIO
--- ==========================================
 local function restoreAllOriginal()
     local char = player.Character
     if not char then return end
     local animate = char:FindFirstChild("Animate")
     if not animate then return end
-    local humanoid = char:FindFirstChildOfClass("Humanoid")
 
-    if humanoid then
-        local animator = humanoid:FindFirstChildOfClass("Animator")
-        if animator then
-            for _, track in ipairs(animator:GetPlayingAnimationTracks()) do track:Stop(0) end
-        end
-    end
-    animate.Disabled = true
-
-    if not originalAnimations then captureOriginalAnimations(char) end
-    if originalAnimations then
-        restoreSlot(char, "idle", "Animation1", "Idle1")
-        restoreSlot(char, "idle", "Animation2", "Idle2")
-        restoreSlot(char, "walk", "WalkAnim", "Walk")
-        restoreSlot(char, "run", "RunAnim", "Run")
-        restoreSlot(char, "jump", "JumpAnim", "Jump")
-        restoreSlot(char, "fall", "FallAnim", "Fall")
-        restoreSlot(char, "swim", "Swim", "Swim")
-        restoreSlot(char, "swimidle", "SwimIdle", "SwimIdle")
-    end
-
-    task.wait(0.1)
-    animate.Disabled = false
-end
-
-local function onCharacterAdded(char)
-    task.wait(1.5)
-    -- En respawn, el Animate se reconstruye con la animación equipada del usuario,
-    -- así que recapturamos por si cambió entre rondas.
-    originalAnimations = nil
+    clearAnimationGuards()
     captureOriginalAnimations(char)
-    if state.animEnabled then
-        if state.animMode == "mix" then applyMix(state.customMix) else applyAnimationPack(state.selectedAnimPack) end
+
+    if originalAnimations then
+        local function setOrig(folderName, animName, origKey)
+            local folder = animate:FindFirstChild(folderName)
+            if not folder then return end
+            local anim = folder:FindFirstChild(animName)
+            if anim and anim:IsA("Animation") and originalAnimations[origKey] then
+                anim.AnimationId = originalAnimations[origKey]
+            end
+        end
+        setOrig("idle", "Animation1", "Idle1")
+        setOrig("idle", "Animation2", "Idle2")
+        setOrig("walk", "WalkAnim", "Walk")
+        setOrig("run", "RunAnim", "Run")
+        setOrig("jump", "JumpAnim", "Jump")
+        setOrig("fall", "FallAnim", "Fall")
+        setOrig("swim", "Swim", "Swim")
+        setOrig("swimidle", "SwimIdle", "SwimIdle")
     end
 end
-
-if player.Character then onCharacterAdded(player.Character) end
-player.CharacterAdded:Connect(onCharacterAdded)
 
 -- ==========================================
 -- SKYBOX
@@ -323,9 +319,6 @@ local function applySkyFromGitHub(skyName)
     return false
 end
 
--- ==========================================
--- TEAM CHECK
--- ==========================================
 local function getPlayerTeam(p)
     if not p then return nil end
     if p.Team and p.Team.Name ~= "" then return p.Team.Name end
@@ -380,9 +373,6 @@ local function esPistola(tool)
     return tool:FindFirstChild("showBeam") ~= nil or tool.Name:lower():find("gun") or tool.Name:lower():find("pistol") or tool.Name:lower():find("revolver")
 end
 
--- ==========================================
--- SILENT AIM HOOK
--- ==========================================
 getgenv().NevadaTargetPart = nil
 local oldNamecall
 if hookmetamethod and getnamecallmethod and checkcaller then
@@ -407,9 +397,6 @@ if hookmetamethod and getnamecallmethod and checkcaller then
     end)
 end
 
--- ==========================================
--- SONIDOS
--- ==========================================
 local function playSound(url)
   if type(url) ~= "string" or url == "" then return end
   local asset = soundCache[url]
@@ -446,9 +433,15 @@ local function watchNativeSound(obj)
   local function check()
     if not obj.Parent then return end
     local id = tostring(obj.SoundId or ""):match("(%d+)")
+    local n = obj.Name:lower()
     local category = nil
-    if id == ORIGINAL_SHOT or (obj.Name:lower():find("gun") and obj:FindFirstAncestorWhichIsA("Tool")) then category = "Arma"
-    elseif id == ORIGINAL_KILL or obj.Name:lower():find("kill") then category = "Matar" end
+    if n:find("jump") or n:find("saltar") or n:find("land") or n:find("fall") then
+        category = "Saltar"
+    elseif id == ORIGINAL_SHOT or (n:find("gun") and obj:FindFirstAncestorWhichIsA("Tool")) then
+        category = "Arma"
+    elseif id == ORIGINAL_KILL or n:find("kill") then
+        category = "Matar"
+    end
     if not category then return end
     local custom=state.selected[category]
     if not state.enabled[category] or state.muted[category] or not custom or custom.URL=="" then return end
@@ -466,6 +459,29 @@ local function scanSoundTree(root)
 end
 scanSoundTree(workspace)
 scanSoundTree(SoundService)
+
+local lastJumpState = setmetatable({}, {__mode = "k"})
+local lastJumpSoundAt = 0
+RunService.Heartbeat:Connect(function()
+    local char = player.Character
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+    local currentState = hum:GetState()
+    local isJumping = (currentState == Enum.HumanoidStateType.Jumping)
+    local wasJumping = lastJumpState[char] or false
+    if isJumping and not wasJumping then
+        local custom = state.selected["Saltar"]
+        if state.enabled["Saltar"] and not state.muted["Saltar"] and custom and custom.URL ~= "" then
+            local now = os.clock()
+            if now - lastJumpSoundAt > 0.15 then
+                lastJumpSoundAt = now
+                playSound(custom.URL)
+            end
+        end
+    end
+    lastJumpState[char] = isJumping
+end)
 
 local function fetchFolder(folder)
   if not requestFn then return false end
@@ -490,9 +506,6 @@ local function refreshCatalog()
   return loaded
 end
 
--- ==========================================
--- INTERFAZ GRÁFICA
--- ==========================================
 if playerGui:FindFirstChild("NevadaV2") then playerGui.NevadaV2:Destroy() end
 local gui = Instance.new("ScreenGui")
 gui.Name, gui.ResetOnSpawn, gui.IgnoreGuiInset = "NevadaV2", false, true
@@ -535,10 +548,10 @@ local sidebar=create("Frame",{Size=UDim2.new(0,190,1,0),BackgroundColor3=Color3.
 create("Frame",{Size=UDim2.new(0,1,1,0),Position=UDim2.new(0,190,0,0),BackgroundColor3=C.edge,BorderSizePixel=0},window)
 label(sidebar,"▲",UDim2.new(1,0,0,48),UDim2.new(0,0,0,20),29,C.text,true).TextXAlignment=Enum.TextXAlignment.Center
 label(sidebar,"N E V A D A",UDim2.new(1,0,0,34),UDim2.new(0,0,0,63),21,C.text,true).TextXAlignment=Enum.TextXAlignment.Center
-label(sidebar,"V4",UDim2.new(1,0,0,20),UDim2.new(0,0,0,96),12,C.sub,false).TextXAlignment=Enum.TextXAlignment.Center
+label(sidebar,"V6",UDim2.new(1,0,0,20),UDim2.new(0,0,0,96),12,C.sub,false).TextXAlignment=Enum.TextXAlignment.Center
 local navHolder=create("Frame",{Size=UDim2.new(1,-18,0,400),Position=UDim2.new(0,9,0,140),BackgroundTransparency=1},sidebar)
 create("UIListLayout",{Padding=UDim.new(0,7),SortOrder=Enum.SortOrder.LayoutOrder},navHolder)
-label(sidebar,"NEVADA V4\nTu experiencia, sin límites.",UDim2.new(1,-24,0,48),UDim2.new(0,12,1,-62),11,C.sub,false)
+label(sidebar,"NEVADA V6\nTu experiencia, sin límites.",UDim2.new(1,-24,0,48),UDim2.new(0,12,1,-62),11,C.sub,false)
 
 local top=create("Frame",{Size=UDim2.new(1,-210,0,68),Position=UDim2.new(0,205,0,0),BackgroundTransparency=1},window)
 label(top,"▲",UDim2.fromOffset(48,55),UDim2.new(0,0,0,4),28,C.text,true)
@@ -607,7 +620,7 @@ end
 
 local showPage
 local home=newPage("Inicio")
-local welcome=card(home,108); label(welcome,"Bienvenido a Nevada",UDim2.new(1,-26,0,32),UDim2.new(0,14,0,13),20,C.text,true); label(welcome,"Tu hub todo en uno. Macros, sonidos y más.\nInterfaz Nevada V4",UDim2.new(1,-26,0,45),UDim2.new(0,14,0,51),12,C.sub,false)
+local welcome=card(home,108); label(welcome,"Bienvenido a Nevada",UDim2.new(1,-26,0,32),UDim2.new(0,14,0,13),20,C.text,true); label(welcome,"Tu hub todo en uno. Macros, sonidos y más.\nInterfaz Nevada V6",UDim2.new(1,-26,0,45),UDim2.new(0,14,0,51),12,C.sub,false)
 actionCard(home,"Sonidos","Catálogo de tu repositorio de GitHub","Abrir sonidos",function() showPage("Sonidos") end)
 actionCard(home,"Macro Arma","Disparo rápido automático","Ver macro",function() showPage("Macro") end)
 actionCard(home,"Macro Cuchillo","Lanzamiento rápido (L2)","Ver macro",function() showPage("Cuchillo") end)
@@ -625,16 +638,13 @@ switch(knifePage,"Activar Macro Cuchillo (L2)",false,function(v) state.knifeMacr
 slider(knifePage,"Delay al Equipar",0.01,0.50,state.knifeEquipDelay,function(v) state.knifeEquipDelay = v end)
 slider(knifePage,"Delay al Lanzar",0.01,0.50,state.knifeThrowDelay,function(v) state.knifeThrowDelay = v end)
 
--- ==========================================
--- PÁGINA ANIMACIONES CON MIXER (Default = no tocar)
--- ==========================================
 local animsPage = newPage("Animaciones")
 
 local animMainToggle
 animMainToggle = switch(animsPage, "Activar Animaciones Custom", state.animEnabled, function(v)
     state.animEnabled = v
     if v then
-        if state.animMode == "mix" then applyMix(state.customMix) else applyAnimationPack(state.selectedAnimPack) end
+        if state.animMode == "mix" then fastApply(player.Character) else fastApply(player.Character) end
     else
         restoreAllOriginal()
     end
@@ -649,7 +659,6 @@ packLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
     packListFrame.Size = UDim2.new(1, -8, 0, packLayout.AbsoluteContentSize.Y)
 end)
 
--- [FIX] No mostrar "Default" como pack — usar el botón "Restaurar Default" en su lugar
 local packButtons = {}
 local sortedPacks = {}
 for name in pairs(AnimationPacks) do
@@ -664,7 +673,7 @@ for i, packName in ipairs(sortedPacks) do
         state.animEnabled = true
         animMainToggle.Text = "ACTIVADO"
         animMainToggle.BackgroundColor3 = C.blue
-        applyAnimationPack(packName)
+        fastApply(player.Character)
         for _, b in pairs(packButtons) do b.BackgroundColor3 = C.card end
         btn.BackgroundColor3 = C.blue
     end)
@@ -674,18 +683,21 @@ end
 
 local mixHeader = label(animsPage, "PERSONALIZAR (MIX)", UDim2.new(1,-8,0,20), UDim2.new(0,4,0,0), 12, C.sub, true)
 mixHeader.LayoutOrder = 200
-local mixHint = label(animsPage, "Cada slot tiene 'Default' = no tocar (usa la animación equipada en tu avatar). Toca ◀ ▶ para elegir otra.", UDim2.new(1,-8,0,42), UDim2.new(0,4,0,0), 11, C.sub, false)
+local mixHint = label(animsPage, "Cada slot tiene 'Default' = no tocar. Toca ◀ ▶ para elegir.", UDim2.new(1,-8,0,42), UDim2.new(0,4,0,0), 11, C.sub, false)
 mixHint.LayoutOrder = 201
 
 local slotOrder = {"Idle", "Walk", "Run", "Jump", "Fall", "Swim", "SwimIdle"}
 local slotDisplay = {Idle="Reposo", Walk="Caminar", Run="Correr", Jump="Saltar", Fall="Caer", Swim="Nadar", SwimIdle="Nadar (quieto)"}
 
--- [FIX] Opciones del mixer incluyen "Default" como opción válida
 local mixerOptions = {"Default"}
 for name in pairs(AnimationPacks) do
     if name ~= "Default" then table.insert(mixerOptions, name) end
 end
 table.sort(mixerOptions)
+for i, v in ipairs(mixerOptions) do
+    if v == "Default" then table.remove(mixerOptions, i); break end
+end
+table.insert(mixerOptions, 1, "Default")
 
 for idx, slot in ipairs(slotOrder) do
     local f = card(animsPage, 48)
@@ -726,12 +738,11 @@ local applyMixCard = actionCard(animsPage, "Aplicar combinación", "Usa las anim
     state.animEnabled = true
     animMainToggle.Text = "ACTIVADO"
     animMainToggle.BackgroundColor3 = C.blue
-    applyMix(state.customMix)
+    fastApply(player.Character)
 end)
 applyMixCard.LayoutOrder = 300
 
--- [FIX] Restaurar: restaura TUS animaciones reales, no las de Roblox
-local restoreAnimCard = actionCard(animsPage, "Restaurar Default", "Vuelve a las animaciones de TU avatar (las que tenías equipadas).", "Restaurar", function()
+local restoreAnimCard = actionCard(animsPage, "Restaurar Default", "Vuelve a las animaciones de TU avatar.", "Restaurar", function()
     state.animMode = "pack"
     state.selectedAnimPack = "Default"
     state.animEnabled = false
@@ -741,9 +752,6 @@ local restoreAnimCard = actionCard(animsPage, "Restaurar Default", "Vuelve a las
 end)
 restoreAnimCard.LayoutOrder = 301
 
--- ==========================================
--- MACRO 360
--- ==========================================
 local macro360Page = newPage("Macro360")
 local toggle360MenuBtn = nil
 local floatingBtn = nil
@@ -789,9 +797,6 @@ end)
 UserInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then draggingBtn = false end end)
 floatingBtn.MouseButton1Click:Connect(function() setMacro360State(not state.macro360Enabled) end)
 
--- ==========================================
--- SKYBOX
--- ==========================================
 local skyboxPage = newPage("Skybox")
 local skyInfo = card(skyboxPage, 60)
 label(skyInfo, "Elige un cielo. El script buscará las carpetas de tu GitHub automáticamente.", UDim2.new(1,-24,1,-12), UDim2.new(0,12,0,6), 12, C.sub, false)
@@ -874,9 +879,6 @@ local restoreSkyCard = actionCard(skyboxPage, "Restaurar Cielo Original", "Quita
 end)
 restoreSkyCard.LayoutOrder = 501
 
--- ==========================================
--- SONIDOS
--- ==========================================
 local soundsPage=newPage("Sonidos")
 local categoryBar=card(soundsPage,44)
 local categoryButtons={}
@@ -940,7 +942,7 @@ showPage=function(name)
   activeTab=name
   for n,p in pairs(pages) do p.Visible=(n==name) end
   pageTitle.Text=(name=="Inicio") and "Bienvenido a Nevada" or name
-  pageSubtitle.Text=(name=="Inicio") and "Tu hub todo en uno. Macros, sonidos y más." or "Nevada V4 — controles y ajustes"
+  pageSubtitle.Text=(name=="Inicio") and "Tu hub todo en uno. Macros, sonidos y más." or "Nevada V6 — controles y ajustes"
   for _,obj in ipairs(navHolder:GetChildren()) do if obj:IsA("TextButton") then obj.BackgroundColor3=(obj.Name==name) and Color3.fromRGB(29,39,57) or Color3.fromRGB(6,9,15) end end
 end
 for i,name in ipairs(navNames) do
@@ -949,9 +951,6 @@ for i,name in ipairs(navNames) do
 end
 showPage("Inicio")
 
--- ==========================================
--- MACROS
--- ==========================================
 local macroBusy=false
 local function runMacro()
   if not state.macro or macroBusy then return end
@@ -1002,9 +1001,6 @@ UserInputService.InputBegan:Connect(function(input, processed)
   if input.KeyCode == Enum.KeyCode.ButtonL2 then runKnifeMacro() end
 end)
 
--- ==========================================
--- MACRO 360 - ANTI-SPAM
--- ==========================================
 local m360 = {wasInLobby = true, gameTicks = 0, isEquipped = false}
 
 local function isInLobbyRobust()
@@ -1093,7 +1089,7 @@ task.spawn(function()
         for _, p in ipairs(Players:GetPlayers()) do
             if isValid360Target(p) then
                 local enemyChar = p.Character
-                local enemyHrp = enemyChar.HumanoidRootPart
+                local enemyHrp = enemyChar and enemyChar:FindFirstChild("HumanoidRootPart")
                 if enemyHrp then
                     local dist = (enemyHrp.Position - myPos).Magnitude
                     if dist <= state.macro360Fov then
