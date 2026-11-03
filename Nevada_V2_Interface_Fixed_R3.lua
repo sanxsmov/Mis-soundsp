@@ -1,4 +1,4 @@
--- NEVADA V6 | Skybox Auto + Team Check + Sonidos + Silent Aim + Animaciones Instant + Jump Sound
+-- NEVADA V7 | Skybox + Team Check + Sonidos + Silent Aim + Animaciones Mixer + Configs
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
@@ -19,19 +19,36 @@ local SKYBOX_FOLDER = "skyboxes"
 local SKYBOX_RAW = "https://raw.githubusercontent.com/" .. SKYBOX_REPO .. "/main/" .. SKYBOX_FOLDER .. "/"
 local SKYBOX_API = "https://api.github.com/repos/" .. SKYBOX_REPO .. "/contents/" .. SKYBOX_FOLDER
 
+-- ==========================================
+-- ANIMATION PACKS
+-- Hombre Lobo: IDs reales del bundle Werewolf (1083195517...)
+-- Packs nuevos: Astronaut, Bubbly, Knight, Mage, Pirate, Patrol, Confident, Popstar, Cowboy, Sneaky, Princess
+-- ==========================================
 local AnimationPacks = {
-    ["Default"]    = {Idle="507766666", Walk="507777826", Run="507767714", Jump="507765000", Fall="507767968", Swim="507784897", SwimIdle="507785072"},
-    ["Hombre Lobo"]= {Idle="10921330408", Walk="10921342074", Run="10921336997", Jump="10921351278", Fall="10921337907", Swim="10921340419", SwimIdle="10921341319"},
-    ["Ninja"]      = {Idle="616006778", Walk="656121766", Run="656118852", Jump="656117878", Fall="656115606", Swim="656119721", SwimIdle="656121397"},
-    ["Zombie"]     = {Idle="10921344533", Walk="10921355261", Run="616163682", Jump="10921351278", Fall="10921350320", Swim="10921352344", SwimIdle="10921353442"},
-    ["Robot"]      = {Idle="616088211", Walk="616095330", Run="616091570", Jump="616090535", Fall="616087089", Swim="616092998", SwimIdle="616094091"},
-    ["Levitation"] = {Idle="616006778", Walk="616013216", Run="616010382", Jump="616008936", Fall="616005863", Swim="616011509", SwimIdle="616012453"},
-    ["Toy"]        = {Idle="10921301576", Walk="10921312010", Run="10921306285", Jump="10921308158", Fall="10921307241", Swim="10921309319", SwimIdle="10921310341"},
-    ["Superhero"]  = {Idle="10921288909", Walk="10921298616", Run="10921291831", Jump="10921294559", Fall="10921293373", Swim="10921295495", SwimIdle="10921297391"},
-    ["Cartoony"]   = {Idle="10921071918", Walk="10921082452", Run="10921076136", Jump="10921078135", Fall="10921077030", Swim="10921079380", SwimIdle="10921081059"},
-    ["Vampire"]    = {Idle="10921315373", Walk="10921326949", Run="10921320299", Jump="10921322186", Fall="10921321317", Swim="10921324408", SwimIdle="10921325443"},
-    ["Elder"]      = {Idle="10921101664", Walk="10921111375", Run="10921104374", Jump="10921107367", Fall="10921105765", Swim="10921108971", SwimIdle="10921110146"},
-    ["Stylish"]    = {Idle="10921272275", Walk="10921283326", Run="10921276116", Jump="10921279832", Fall="10921278648", Swim="10921281000", SwimIdle="10921281964"},
+    ["Default"]     = {Idle="507766666", Walk="507777826", Run="507767714", Jump="507765000", Fall="507767968", Swim="507784897", SwimIdle="507785072"},
+    ["Hombre Lobo"] = {Idle="1083195517", Walk="1083178339", Run="1083216690", Jump="1083218792", Fall="1083189019", Swim="1083178339", SwimIdle="1083214717"},
+    ["Ninja"]       = {Idle="616006778", Walk="656121766", Run="656118852", Jump="656117878", Fall="656115606", Swim="656119721", SwimIdle="656121397"},
+    ["Zombie"]      = {Idle="616158929", Walk="616168032", Run="616163682", Jump="616161997", Fall="616157476", Swim="616168032", SwimIdle="616158929"},
+    ["Robot"]       = {Idle="616088211", Walk="616095330", Run="616091570", Jump="616090535", Fall="616087089", Swim="616092998", SwimIdle="616094091"},
+    ["Levitation"]  = {Idle="616006778", Walk="616013216", Run="616010382", Jump="616008936", Fall="616005863", Swim="616011509", SwimIdle="616012453"},
+    ["Toy"]         = {Idle="10921301576", Walk="10921312010", Run="10921306285", Jump="10921308158", Fall="10921307241", Swim="10921309319", SwimIdle="10921310341"},
+    ["Superhero"]   = {Idle="10921288909", Walk="10921298616", Run="10921291831", Jump="10921294559", Fall="10921293373", Swim="10921295495", SwimIdle="10921297391"},
+    ["Cartoony"]    = {Idle="742637544", Walk="742640026", Run="742638842", Jump="742637942", Fall="742637151", Swim="742640026", SwimIdle="742638445"},
+    ["Vampire"]     = {Idle="1083445855", Walk="1083473930", Run="1083462077", Jump="1083455352", Fall="1083443587", Swim="1083473930", SwimIdle="1083450166"},
+    ["Elder"]       = {Idle="845397899", Walk="845403856", Run="845386501", Jump="845398858", Fall="845396048", Swim="845403856", SwimIdle="845400520"},
+    ["Stylish"]     = {Idle="616136790", Walk="616146177", Run="616140816", Jump="616139451", Fall="616134815", Swim="616143378", SwimIdle="616138447"},
+    -- [NUEVOS] del RoxHub
+    ["Astronaut"]   = {Idle="891621366", Walk="891667138", Run="891636393", Jump="891627522", Fall="891617961", Swim="891667138", SwimIdle="891633237"},
+    ["Bubbly"]      = {Idle="910004836", Walk="910034870", Run="910025107", Jump="910016857", Fall="910001910", Swim="910028158", SwimIdle="910009958"},
+    ["Knight"]      = {Idle="657595757", Walk="657552124", Run="657564596", Jump="658409194", Fall="657600338", Swim="657552124", SwimIdle="657568135"},
+    ["Mage"]        = {Idle="707742142", Walk="707897309", Run="707861613", Jump="707853694", Fall="707829716", Swim="707897309", SwimIdle="707855907"},
+    ["Pirate"]      = {Idle="750781874", Walk="750785693", Run="750783738", Jump="750782230", Fall="750780242", Swim="750785693", SwimIdle="750782770"},
+    ["Patrol"]      = {Idle="1149612882", Walk="1151231493", Run="1150967949", Jump="1148811837", Fall="1148863382", Swim="1151231493", SwimIdle="1150842221"},
+    ["Confident"]   = {Idle="1069977950", Walk="1070017263", Run="1070001516", Jump="1069984524", Fall="1069973677", Swim="1070017263", SwimIdle="1069987858"},
+    ["Popstar"]     = {Idle="1212900985", Walk="1212980338", Run="1212980348", Jump="1212954642", Fall="1212900995", Swim="1212980338", SwimIdle="1150842221"},
+    ["Cowboy"]      = {Idle="1014390418", Walk="1014421541", Run="1014401683", Jump="1014394726", Fall="1014384571", Swim="1014421541", SwimIdle="1014398616"},
+    ["Sneaky"]      = {Idle="1132473842", Walk="1132510133", Run="1132494274", Jump="1132489853", Fall="1132469004", Swim="1132510133", SwimIdle="1132477671"},
+    ["Princess"]    = {Idle="941003647", Walk="941028902", Run="941015281", Jump="941008832", Fall="941000007", Swim="941028902", SwimIdle="941013098"},
 }
 
 local state = {
@@ -55,7 +72,7 @@ local state = {
 local sounds, soundCache, activeTab, soundCategory = {}, {}, "Inicio", "Arma"
 
 -- ==========================================
--- [NUEVO] SISTEMA DE ANIMACIONES INSTANTÁNEAS
+-- SISTEMA DE ANIMACIONES
 -- ==========================================
 local originalAnimations = nil
 local animationGuards = setmetatable({}, {__mode = "k"})
@@ -67,23 +84,17 @@ local function captureOriginalAnimations(char)
     local animate = char:FindFirstChild("Animate")
     if not animate then return end
     if originalAnimations then return end
-
     local function getAnim(folderName, animName)
         local folder = animate:FindFirstChild(folderName)
         local anim = folder and folder:FindFirstChild(animName)
         if anim and anim:IsA("Animation") then return anim.AnimationId end
         return nil
     end
-
     originalAnimations = {
-        Idle1 = getAnim("idle", "Animation1"),
-        Idle2 = getAnim("idle", "Animation2"),
-        Walk = getAnim("walk", "WalkAnim"),
-        Run = getAnim("run", "RunAnim"),
-        Jump = getAnim("jump", "JumpAnim"),
-        Fall = getAnim("fall", "FallAnim"),
-        Swim = getAnim("swim", "Swim"),
-        SwimIdle = getAnim("swimidle", "SwimIdle"),
+        Idle1 = getAnim("idle", "Animation1"), Idle2 = getAnim("idle", "Animation2"),
+        Walk = getAnim("walk", "WalkAnim"), Run = getAnim("run", "RunAnim"),
+        Jump = getAnim("jump", "JumpAnim"), Fall = getAnim("fall", "FallAnim"),
+        Swim = getAnim("swim", "Swim"), SwimIdle = getAnim("swimidle", "SwimIdle"),
     }
 end
 
@@ -96,22 +107,15 @@ local function clearAnimationGuards()
     animationGuards = setmetatable({}, {__mode = "k"})
 end
 
--- Instala un guard: si el juego intenta resetear el ID, lo restaura al instante
 local function guardAnimation(animate, folderName, animName, id)
     if not id then return end
     local folder = animate:FindFirstChild(folderName)
     if not folder then return end
     local anim = folder:FindFirstChild(animName)
     if not anim or not anim:IsA("Animation") then return end
-
     local target = "rbxassetid://" .. tostring(id)
-    if anim.AnimationId ~= target then
-        anim.AnimationId = target
-    end
-
-    if animationGuards[anim] then
-        pcall(function() animationGuards[anim]:Disconnect() end)
-    end
+    if anim.AnimationId ~= target then anim.AnimationId = target end
+    if animationGuards[anim] then pcall(function() animationGuards[anim]:Disconnect() end) end
     animationGuards[anim] = anim:GetPropertyChangedSignal("AnimationId"):Connect(function()
         if state.animEnabled and anim.Parent and anim.AnimationId ~= target then
             anim.AnimationId = target
@@ -119,12 +123,29 @@ local function guardAnimation(animate, folderName, animName, id)
     end)
 end
 
--- Aplica las animaciones DIRECTO. Sin disable/enable, sin esperas.
+-- [SZK PATTERN] Recarga forzada de Animate para que se apliquen al instante
+local function forceAnimateReload(char)
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    local animate = char and char:FindFirstChild("Animate")
+    if not hum or not animate then return end
+    local animator = hum:FindFirstChildOfClass("Animator")
+    if animator then
+        for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+            pcall(function() track:Stop(0) end)
+        end
+    end
+    animate.Enabled = false
+    task.wait(0.03)
+    animate.Enabled = true
+    if hum.Health > 0 then
+        pcall(function() hum:ChangeState(Enum.HumanoidStateType.Landed) end)
+    end
+end
+
 local function fastApply(char)
     if not state.animEnabled or not char or not char.Parent then return end
     local animate = char:FindFirstChild("Animate")
     if not animate then return end
-
     captureOriginalAnimations(char)
     clearAnimationGuards()
 
@@ -143,53 +164,23 @@ local function fastApply(char)
             guardAnimation(animate, "idle", "Animation2", p.Idle)
         end
         if mix.Walk == "Default" then
-            if originalAnimations and originalAnimations.Walk then
-                guardAnimation(animate, "walk", "WalkAnim", originalAnimations.Walk:match("%d+"))
-            end
-        else
-            local p = AnimationPacks[mix.Walk] or AnimationPacks["Default"]
-            guardAnimation(animate, "walk", "WalkAnim", p.Walk)
-        end
+            if originalAnimations and originalAnimations.Walk then guardAnimation(animate, "walk", "WalkAnim", originalAnimations.Walk:match("%d+")) end
+        else local p = AnimationPacks[mix.Walk] or AnimationPacks["Default"]; guardAnimation(animate, "walk", "WalkAnim", p.Walk) end
         if mix.Run == "Default" then
-            if originalAnimations and originalAnimations.Run then
-                guardAnimation(animate, "run", "RunAnim", originalAnimations.Run:match("%d+"))
-            end
-        else
-            local p = AnimationPacks[mix.Run] or AnimationPacks["Default"]
-            guardAnimation(animate, "run", "RunAnim", p.Run)
-        end
+            if originalAnimations and originalAnimations.Run then guardAnimation(animate, "run", "RunAnim", originalAnimations.Run:match("%d+")) end
+        else local p = AnimationPacks[mix.Run] or AnimationPacks["Default"]; guardAnimation(animate, "run", "RunAnim", p.Run) end
         if mix.Jump == "Default" then
-            if originalAnimations and originalAnimations.Jump then
-                guardAnimation(animate, "jump", "JumpAnim", originalAnimations.Jump:match("%d+"))
-            end
-        else
-            local p = AnimationPacks[mix.Jump] or AnimationPacks["Default"]
-            guardAnimation(animate, "jump", "JumpAnim", p.Jump)
-        end
+            if originalAnimations and originalAnimations.Jump then guardAnimation(animate, "jump", "JumpAnim", originalAnimations.Jump:match("%d+")) end
+        else local p = AnimationPacks[mix.Jump] or AnimationPacks["Default"]; guardAnimation(animate, "jump", "JumpAnim", p.Jump) end
         if mix.Fall == "Default" then
-            if originalAnimations and originalAnimations.Fall then
-                guardAnimation(animate, "fall", "FallAnim", originalAnimations.Fall:match("%d+"))
-            end
-        else
-            local p = AnimationPacks[mix.Fall] or AnimationPacks["Default"]
-            guardAnimation(animate, "fall", "FallAnim", p.Fall)
-        end
+            if originalAnimations and originalAnimations.Fall then guardAnimation(animate, "fall", "FallAnim", originalAnimations.Fall:match("%d+")) end
+        else local p = AnimationPacks[mix.Fall] or AnimationPacks["Default"]; guardAnimation(animate, "fall", "FallAnim", p.Fall) end
         if mix.Swim == "Default" then
-            if originalAnimations and originalAnimations.Swim then
-                guardAnimation(animate, "swim", "Swim", originalAnimations.Swim:match("%d+"))
-            end
-        else
-            local p = AnimationPacks[mix.Swim] or AnimationPacks["Default"]
-            guardAnimation(animate, "swim", "Swim", p.Swim)
-        end
+            if originalAnimations and originalAnimations.Swim then guardAnimation(animate, "swim", "Swim", originalAnimations.Swim:match("%d+")) end
+        else local p = AnimationPacks[mix.Swim] or AnimationPacks["Default"]; guardAnimation(animate, "swim", "Swim", p.Swim) end
         if mix.SwimIdle == "Default" then
-            if originalAnimations and originalAnimations.SwimIdle then
-                guardAnimation(animate, "swimidle", "SwimIdle", originalAnimations.SwimIdle:match("%d+"))
-            end
-        else
-            local p = AnimationPacks[mix.SwimIdle] or AnimationPacks["Default"]
-            guardAnimation(animate, "swimidle", "SwimIdle", p.SwimIdle)
-        end
+            if originalAnimations and originalAnimations.SwimIdle then guardAnimation(animate, "swimidle", "SwimIdle", originalAnimations.SwimIdle:match("%d+")) end
+        else local p = AnimationPacks[mix.SwimIdle] or AnimationPacks["Default"]; guardAnimation(animate, "swimidle", "SwimIdle", p.SwimIdle) end
     else
         local pack = AnimationPacks[state.selectedAnimPack] or AnimationPacks["Default"]
         guardAnimation(animate, "idle", "Animation1", pack.Idle)
@@ -201,58 +192,19 @@ local function fastApply(char)
         guardAnimation(animate, "swim", "Swim", pack.Swim)
         guardAnimation(animate, "swimidle", "SwimIdle", pack.SwimIdle)
     end
+
+    -- [SZK PATTERN] Recarga forzada
+    task.spawn(function() forceAnimateReload(char) end)
 end
 
--- Aplica en el mismo frame que se pueda. Sin task.wait(1.5)
 local function scheduleInstantApply(char)
     if not char or not char.Parent or not state.animEnabled then return end
     if animApplyQueued[char] then return end
     animApplyQueued[char] = true
     task.defer(function()
         animApplyQueued[char] = nil
-        if char and char.Parent and state.animEnabled then
-            fastApply(char)
-        end
+        if char and char.Parent and state.animEnabled then fastApply(char) end
     end)
-end
-
-local function onCharacterAdded(char)
-    originalAnimations = nil
-    if not state.animEnabled then return end
-
-    -- Intento inmediato (Animate podría no existir aún)
-    scheduleInstantApply(char)
-
-    -- Atrapar cuando Animate aparezca
-    char.ChildAdded:Connect(function(child)
-        if child.Name == "Animate" and state.animEnabled and char.Parent then
-            scheduleInstantApply(char)
-        end
-    end)
-
-    -- Atrapar cuando Animation1 aparezca (garantiza que Animate está poblado)
-    char.DescendantAdded:Connect(function(desc)
-        if state.animEnabled and char.Parent 
-           and desc:IsA("Animation") and desc.Name == "Animation1" then
-            scheduleInstantApply(char)
-        end
-    end)
-end
-
-if player.Character then onCharacterAdded(player.Character) end
-player.CharacterAdded:Connect(onCharacterAdded)
-
--- Compatibilidad con los nombres que ya usaba el script
-local function applyAnimationPack(packName)
-    state.animMode = "pack"
-    state.selectedAnimPack = packName
-    fastApply(player.Character)
-end
-
-local function applyMix(mixTable)
-    state.animMode = "mix"
-    state.customMix = mixTable
-    fastApply(player.Character)
 end
 
 local function restoreAllOriginal()
@@ -260,10 +212,8 @@ local function restoreAllOriginal()
     if not char then return end
     local animate = char:FindFirstChild("Animate")
     if not animate then return end
-
     clearAnimationGuards()
     captureOriginalAnimations(char)
-
     if originalAnimations then
         local function setOrig(folderName, animName, origKey)
             local folder = animate:FindFirstChild(folderName)
@@ -273,16 +223,30 @@ local function restoreAllOriginal()
                 anim.AnimationId = originalAnimations[origKey]
             end
         end
-        setOrig("idle", "Animation1", "Idle1")
-        setOrig("idle", "Animation2", "Idle2")
-        setOrig("walk", "WalkAnim", "Walk")
-        setOrig("run", "RunAnim", "Run")
-        setOrig("jump", "JumpAnim", "Jump")
-        setOrig("fall", "FallAnim", "Fall")
-        setOrig("swim", "Swim", "Swim")
-        setOrig("swimidle", "SwimIdle", "SwimIdle")
+        setOrig("idle", "Animation1", "Idle1"); setOrig("idle", "Animation2", "Idle2")
+        setOrig("walk", "WalkAnim", "Walk"); setOrig("run", "RunAnim", "Run")
+        setOrig("jump", "JumpAnim", "Jump"); setOrig("fall", "FallAnim", "Fall")
+        setOrig("swim", "Swim", "Swim"); setOrig("swimidle", "SwimIdle", "SwimIdle")
     end
+    task.spawn(function() forceAnimateReload(char) end)
 end
+
+local function onCharacterAdded(char)
+    originalAnimations = nil
+    if not state.animEnabled then return end
+    scheduleInstantApply(char)
+    char.ChildAdded:Connect(function(child)
+        if child.Name == "Animate" and state.animEnabled and char.Parent then scheduleInstantApply(char) end
+    end)
+    char.DescendantAdded:Connect(function(desc)
+        if state.animEnabled and char.Parent and desc:IsA("Animation") and desc.Name == "Animation1" then
+            scheduleInstantApply(char)
+        end
+    end)
+end
+
+if player.Character then onCharacterAdded(player.Character) end
+player.CharacterAdded:Connect(onCharacterAdded)
 
 -- ==========================================
 -- SKYBOX
@@ -319,6 +283,9 @@ local function applySkyFromGitHub(skyName)
     return false
 end
 
+-- ==========================================
+-- TEAM CHECK
+-- ==========================================
 local function getPlayerTeam(p)
     if not p then return nil end
     if p.Team and p.Team.Name ~= "" then return p.Team.Name end
@@ -353,26 +320,14 @@ local function isEnemy(targetPlayer)
     return false
 end
 
-local function estaEnLobby()
-    local character = player.Character
-    if not character then return true end
-    if character:FindFirstChildOfClass("ForceField") then return true end
-    if player.Team then
-        local name = player.Team.Name:lower()
-        if name:find("lobby") or name:find("spectat") or name:find("menu") then return true end
-    end
-    local gui = player:FindFirstChild("PlayerGui")
-    local main = gui and gui:FindFirstChild("Main")
-    local frame = main and main:FindFirstChild("MainGameFrame")
-    if not frame or not frame:FindFirstChild("IngameScore") then return true end
-    return false
-end
-
 local function esPistola(tool)
     if not tool or not tool:IsA("Tool") then return false end
     return tool:FindFirstChild("showBeam") ~= nil or tool.Name:lower():find("gun") or tool.Name:lower():find("pistol") or tool.Name:lower():find("revolver")
 end
 
+-- ==========================================
+-- SILENT AIM HOOK
+-- ==========================================
 getgenv().NevadaTargetPart = nil
 local oldNamecall
 if hookmetamethod and getnamecallmethod and checkcaller then
@@ -397,6 +352,9 @@ if hookmetamethod and getnamecallmethod and checkcaller then
     end)
 end
 
+-- ==========================================
+-- SONIDOS
+-- ==========================================
 local function playSound(url)
   if type(url) ~= "string" or url == "" then return end
   local asset = soundCache[url]
@@ -435,13 +393,9 @@ local function watchNativeSound(obj)
     local id = tostring(obj.SoundId or ""):match("(%d+)")
     local n = obj.Name:lower()
     local category = nil
-    if n:find("jump") or n:find("saltar") or n:find("land") or n:find("fall") then
-        category = "Saltar"
-    elseif id == ORIGINAL_SHOT or (n:find("gun") and obj:FindFirstAncestorWhichIsA("Tool")) then
-        category = "Arma"
-    elseif id == ORIGINAL_KILL or n:find("kill") then
-        category = "Matar"
-    end
+    if n:find("jump") or n:find("saltar") or n:find("land") or n:find("fall") then category = "Saltar"
+    elseif id == ORIGINAL_SHOT or (n:find("gun") and obj:FindFirstAncestorWhichIsA("Tool")) then category = "Arma"
+    elseif id == ORIGINAL_KILL or n:find("kill") then category = "Matar" end
     if not category then return end
     local custom=state.selected[category]
     if not state.enabled[category] or state.muted[category] or not custom or custom.URL=="" then return end
@@ -506,6 +460,9 @@ local function refreshCatalog()
   return loaded
 end
 
+-- ==========================================
+-- UI
+-- ==========================================
 if playerGui:FindFirstChild("NevadaV2") then playerGui.NevadaV2:Destroy() end
 local gui = Instance.new("ScreenGui")
 gui.Name, gui.ResetOnSpawn, gui.IgnoreGuiInset = "NevadaV2", false, true
@@ -530,8 +487,7 @@ local function button(parent, text, size, pos, callback)
   return b
 end
 
-local window
-local openButton
+local window, openButton
 openButton = button(gui,"NEVADA",UDim2.fromOffset(94,34),UDim2.new(0,14,0.18,0),function() if window then window.Visible=true; openButton.Visible=false end end)
 window = create("Frame", {Size=UDim2.new(0.94,0,0.84,0), Position=UDim2.new(0.03,0,0.08,0), BackgroundColor3=C.bg, BorderSizePixel=0, ClipsDescendants=true},gui)
 corner(window,16); stroke(window,C.edge,1.3)
@@ -548,10 +504,10 @@ local sidebar=create("Frame",{Size=UDim2.new(0,190,1,0),BackgroundColor3=Color3.
 create("Frame",{Size=UDim2.new(0,1,1,0),Position=UDim2.new(0,190,0,0),BackgroundColor3=C.edge,BorderSizePixel=0},window)
 label(sidebar,"▲",UDim2.new(1,0,0,48),UDim2.new(0,0,0,20),29,C.text,true).TextXAlignment=Enum.TextXAlignment.Center
 label(sidebar,"N E V A D A",UDim2.new(1,0,0,34),UDim2.new(0,0,0,63),21,C.text,true).TextXAlignment=Enum.TextXAlignment.Center
-label(sidebar,"V6",UDim2.new(1,0,0,20),UDim2.new(0,0,0,96),12,C.sub,false).TextXAlignment=Enum.TextXAlignment.Center
-local navHolder=create("Frame",{Size=UDim2.new(1,-18,0,400),Position=UDim2.new(0,9,0,140),BackgroundTransparency=1},sidebar)
+label(sidebar,"V7",UDim2.new(1,0,0,20),UDim2.new(0,0,0,96),12,C.sub,false).TextXAlignment=Enum.TextXAlignment.Center
+local navHolder=create("Frame",{Size=UDim2.new(1,-18,0,450),Position=UDim2.new(0,9,0,140),BackgroundTransparency=1},sidebar)
 create("UIListLayout",{Padding=UDim.new(0,7),SortOrder=Enum.SortOrder.LayoutOrder},navHolder)
-label(sidebar,"NEVADA V6\nTu experiencia, sin límites.",UDim2.new(1,-24,0,48),UDim2.new(0,12,1,-62),11,C.sub,false)
+label(sidebar,"NEVADA V7\nTu experiencia, sin límites.",UDim2.new(1,-24,0,48),UDim2.new(0,12,1,-62),11,C.sub,false)
 
 local top=create("Frame",{Size=UDim2.new(1,-210,0,68),Position=UDim2.new(0,205,0,0),BackgroundTransparency=1},window)
 label(top,"▲",UDim2.fromOffset(48,55),UDim2.new(0,0,0,4),28,C.text,true)
@@ -590,7 +546,6 @@ local function card(parent,height)
   local f=create("Frame",{Size=UDim2.new(1,-8,0,height),BackgroundColor3=C.card,BorderSizePixel=0,LayoutOrder=cardCounter},parent)
   corner(f,11); stroke(f); return f
 end
-
 local function switch(parent,text,initial,callback)
   local row=card(parent,48)
   label(row,text,UDim2.new(1,-100,1,0),UDim2.new(0,14,0,0),14,C.text,true)
@@ -601,12 +556,10 @@ local function switch(parent,text,initial,callback)
   b.BackgroundColor3=initial and C.blue or C.card
   return b
 end
-
 local function actionCard(parent,title,desc,btnText,fn)
   local f=card(parent,70); label(f,title,UDim2.new(0.66,0,0,27),UDim2.new(0,14,0,7),14,C.text,true); label(f,desc,UDim2.new(0.66,0,0,25),UDim2.new(0,14,0,35),11,C.sub,false)
   button(f,btnText,UDim2.fromOffset(125,34),UDim2.new(1,-139,0.5,-17),fn); return f
 end
-
 local function slider(parent,title,minV,maxV,initial,callback)
   local f=card(parent,72); local value=initial
   local txt=label(f,title..": "..tostring(value),UDim2.new(1,-24,0,25),UDim2.new(0,13,0,6),13,C.text,true)
@@ -620,13 +573,14 @@ end
 
 local showPage
 local home=newPage("Inicio")
-local welcome=card(home,108); label(welcome,"Bienvenido a Nevada",UDim2.new(1,-26,0,32),UDim2.new(0,14,0,13),20,C.text,true); label(welcome,"Tu hub todo en uno. Macros, sonidos y más.\nInterfaz Nevada V6",UDim2.new(1,-26,0,45),UDim2.new(0,14,0,51),12,C.sub,false)
+local welcome=card(home,108); label(welcome,"Bienvenido a Nevada",UDim2.new(1,-26,0,32),UDim2.new(0,14,0,13),20,C.text,true); label(welcome,"Tu hub todo en uno. Macros, sonidos y más.\nInterfaz Nevada V7",UDim2.new(1,-26,0,45),UDim2.new(0,14,0,51),12,C.sub,false)
 actionCard(home,"Sonidos","Catálogo de tu repositorio de GitHub","Abrir sonidos",function() showPage("Sonidos") end)
 actionCard(home,"Macro Arma","Disparo rápido automático","Ver macro",function() showPage("Macro") end)
 actionCard(home,"Macro Cuchillo","Lanzamiento rápido (L2)","Ver macro",function() showPage("Cuchillo") end)
 actionCard(home,"Macro 360","Disparo invisible a todo el cuerpo","Ver Macro 360",function() showPage("Macro360") end)
 actionCard(home,"Skybox","Cambia el cielo del mapa","Ver cielos",function() showPage("Skybox") end)
 actionCard(home,"Animaciones","Cambia tus animaciones o personalízalas","Ver animaciones",function() showPage("Animaciones") end)
+actionCard(home,"Configs","Guarda y carga tus configuraciones","Ver configs",function() showPage("Configs") end)
 
 local macroPage=newPage("Macro")
 switch(macroPage,"Activar macro de arma",false,function(v) state.macro=v end)
@@ -638,21 +592,16 @@ switch(knifePage,"Activar Macro Cuchillo (L2)",false,function(v) state.knifeMacr
 slider(knifePage,"Delay al Equipar",0.01,0.50,state.knifeEquipDelay,function(v) state.knifeEquipDelay = v end)
 slider(knifePage,"Delay al Lanzar",0.01,0.50,state.knifeThrowDelay,function(v) state.knifeThrowDelay = v end)
 
+-- PÁGINA ANIMACIONES
 local animsPage = newPage("Animaciones")
-
 local animMainToggle
 animMainToggle = switch(animsPage, "Activar Animaciones Custom", state.animEnabled, function(v)
     state.animEnabled = v
-    if v then
-        if state.animMode == "mix" then fastApply(player.Character) else fastApply(player.Character) end
-    else
-        restoreAllOriginal()
-    end
+    if v then fastApply(player.Character) else restoreAllOriginal() end
 end)
 
 local packHeader = label(animsPage, "PACKS COMPLETOS", UDim2.new(1,-8,0,20), UDim2.new(0,4,0,0), 12, C.sub, true)
 packHeader.LayoutOrder = 100
-
 local packListFrame = create("Frame", {Size = UDim2.new(1, -8, 0, 0), BackgroundTransparency = 1, LayoutOrder = 101}, animsPage)
 local packLayout = create("UIListLayout", {Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder}, packListFrame)
 packLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
@@ -688,45 +637,32 @@ mixHint.LayoutOrder = 201
 
 local slotOrder = {"Idle", "Walk", "Run", "Jump", "Fall", "Swim", "SwimIdle"}
 local slotDisplay = {Idle="Reposo", Walk="Caminar", Run="Correr", Jump="Saltar", Fall="Caer", Swim="Nadar", SwimIdle="Nadar (quieto)"}
-
 local mixerOptions = {"Default"}
 for name in pairs(AnimationPacks) do
     if name ~= "Default" then table.insert(mixerOptions, name) end
 end
 table.sort(mixerOptions)
-for i, v in ipairs(mixerOptions) do
-    if v == "Default" then table.remove(mixerOptions, i); break end
-end
+for i, v in ipairs(mixerOptions) do if v == "Default" then table.remove(mixerOptions, i); break end end
 table.insert(mixerOptions, 1, "Default")
 
 for idx, slot in ipairs(slotOrder) do
-    local f = card(animsPage, 48)
-    f.LayoutOrder = 210 + idx
-
+    local f = card(animsPage, 48); f.LayoutOrder = 210 + idx
     label(f, slotDisplay[slot], UDim2.new(0.35, 0, 1, 0), UDim2.new(0, 14, 0, 0), 13, C.text, true)
-
     local currentVal = state.customMix[slot] or "Default"
     local currentIdx = 1
-    for i, v in ipairs(mixerOptions) do
-        if v == currentVal then currentIdx = i; break end
-    end
-
+    for i, v in ipairs(mixerOptions) do if v == currentVal then currentIdx = i; break end end
     local valLabel = label(f, currentVal, UDim2.new(0.45, 0, 1, 0), UDim2.new(0.35, 0, 0, 0), 11, (currentVal == "Default") and C.sub or C.blue, true)
     valLabel.TextXAlignment = Enum.TextXAlignment.Center
-
     local prevBtn = button(f, "◀", UDim2.fromOffset(28, 28), UDim2.new(0.35, 4, 0.5, -14), nil)
     local nextBtn = button(f, "▶", UDim2.fromOffset(28, 28), UDim2.new(1, -32, 0.5, -14), nil)
-
     prevBtn.MouseButton1Click:Connect(function()
-        currentIdx = currentIdx - 1
-        if currentIdx < 1 then currentIdx = #mixerOptions end
+        currentIdx = currentIdx - 1; if currentIdx < 1 then currentIdx = #mixerOptions end
         state.customMix[slot] = mixerOptions[currentIdx]
         valLabel.Text = mixerOptions[currentIdx]
         valLabel.TextColor3 = (mixerOptions[currentIdx] == "Default") and C.sub or C.blue
     end)
     nextBtn.MouseButton1Click:Connect(function()
-        currentIdx = currentIdx + 1
-        if currentIdx > #mixerOptions then currentIdx = 1 end
+        currentIdx = currentIdx + 1; if currentIdx > #mixerOptions then currentIdx = 1 end
         state.customMix[slot] = mixerOptions[currentIdx]
         valLabel.Text = mixerOptions[currentIdx]
         valLabel.TextColor3 = (mixerOptions[currentIdx] == "Default") and C.sub or C.blue
@@ -734,24 +670,20 @@ for idx, slot in ipairs(slotOrder) do
 end
 
 local applyMixCard = actionCard(animsPage, "Aplicar combinación", "Usa las animaciones seleccionadas arriba.", "Aplicar", function()
-    state.animMode = "mix"
-    state.animEnabled = true
-    animMainToggle.Text = "ACTIVADO"
-    animMainToggle.BackgroundColor3 = C.blue
+    state.animMode = "mix"; state.animEnabled = true
+    animMainToggle.Text = "ACTIVADO"; animMainToggle.BackgroundColor3 = C.blue
     fastApply(player.Character)
 end)
 applyMixCard.LayoutOrder = 300
 
 local restoreAnimCard = actionCard(animsPage, "Restaurar Default", "Vuelve a las animaciones de TU avatar.", "Restaurar", function()
-    state.animMode = "pack"
-    state.selectedAnimPack = "Default"
-    state.animEnabled = false
-    animMainToggle.Text = "DESACTIVADO"
-    animMainToggle.BackgroundColor3 = C.card
+    state.animMode = "pack"; state.selectedAnimPack = "Default"; state.animEnabled = false
+    animMainToggle.Text = "DESACTIVADO"; animMainToggle.BackgroundColor3 = C.card
     restoreAllOriginal()
 end)
 restoreAnimCard.LayoutOrder = 301
 
+-- PÁGINA MACRO 360
 local macro360Page = newPage("Macro360")
 local toggle360MenuBtn = nil
 local floatingBtn = nil
@@ -763,17 +695,14 @@ local function setMacro360State(nuevoEstado)
     end
     if floatingBtn then
         if nuevoEstado then
-            floatingBtn.Text = "MACRO 360: ON"
-            floatingBtn.BackgroundColor3 = C.green
+            floatingBtn.Text = "MACRO 360: ON"; floatingBtn.BackgroundColor3 = C.green
             for _,v in pairs(floatingBtn:GetChildren()) do if v:IsA("UIStroke") then v.Color = C.green end end
         else
-            floatingBtn.Text = "MACRO 360: OFF"
-            floatingBtn.BackgroundColor3 = C.red
+            floatingBtn.Text = "MACRO 360: OFF"; floatingBtn.BackgroundColor3 = C.red
             for _,v in pairs(floatingBtn:GetChildren()) do if v:IsA("UIStroke") then v.Color = C.red end end
         end
     end
 end
-
 toggle360MenuBtn = switch(macro360Page, "Activar Auto Shoot / Macro 360", false, function(v) setMacro360State(v) end)
 slider(macro360Page, "Tamaño del FOV", 10, 500, state.macro360Fov, function(v) state.macro360Fov = v end)
 slider(macro360Page, "Probabilidad de acierto (%)", 1, 100, state.macro360HitChance, function(v) state.macro360HitChance = v end)
@@ -782,7 +711,6 @@ slider(macro360Page, "Delay entre Disparos (s)", 0.01, 1.0, state.macro360Cooldo
 
 floatingBtn = create("TextButton", {Size = UDim2.new(0, 120, 0, 45), Position = UDim2.new(0, 20, 0.5, 0), BackgroundColor3 = C.red, Text = "MACRO 360: OFF", TextColor3 = C.text, Font = Enum.Font.GothamBold, TextSize = 12, AutoButtonColor = false, ZIndex = 100}, gui)
 corner(floatingBtn, 8); stroke(floatingBtn, C.red, 1, 0.5)
-
 local draggingBtn = false
 local dragStartBtn, startPosBtn
 floatingBtn.InputBegan:Connect(function(input)
@@ -797,6 +725,7 @@ end)
 UserInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then draggingBtn = false end end)
 floatingBtn.MouseButton1Click:Connect(function() setMacro360State(not state.macro360Enabled) end)
 
+-- PÁGINA SKYBOX
 local skyboxPage = newPage("Skybox")
 local skyInfo = card(skyboxPage, 60)
 label(skyInfo, "Elige un cielo. El script buscará las carpetas de tu GitHub automáticamente.", UDim2.new(1,-24,1,-12), UDim2.new(0,12,0,6), 12, C.sub, false)
@@ -810,7 +739,6 @@ if originalSky then
         SkyboxRt = originalSky.SkyboxRt, SkyboxUp = originalSky.SkyboxUp
     }
 end
-
 local function applySky(bk, dn, ft, lf, rt, up)
     pcall(function()
         local sky = originalSky
@@ -823,26 +751,20 @@ local function applySky(bk, dn, ft, lf, rt, up)
         if up then sky.SkyboxUp = up end
     end)
 end
-
 switch(skyboxPage, "Auto-Cargar último cielo al entrar", false, function(v)
     state.autoLoadSky = v
     if v and state.selectedSky ~= "" then applySkyFromGitHub(state.selectedSky) end
 end)
-
 local skyList = create("ScrollingFrame", {
     Size = UDim2.new(1, -8, 0, 200),
-    BackgroundColor3 = C.card,
-    BorderSizePixel = 0,
-    ScrollBarThickness = 4,
-    ScrollBarImageColor3 = C.blue,
-    CanvasSize = UDim2.new(),
-    AutomaticCanvasSize = Enum.AutomaticSize.Y,
-    LayoutOrder = 500
+    BackgroundColor3 = C.card, BorderSizePixel = 0,
+    ScrollBarThickness = 4, ScrollBarImageColor3 = C.blue,
+    CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y,
+    LayoutOrder = 500,
 }, skyboxPage)
 corner(skyList, 10); stroke(skyList, C.edge)
 create("UIPadding", {PaddingTop=UDim.new(0,5), PaddingBottom=UDim.new(0,5), PaddingLeft=UDim.new(0,5), PaddingRight=UDim.new(0,5)}, skyList)
 create("UIListLayout", {Padding=UDim.new(0,5), SortOrder=Enum.SortOrder.LayoutOrder}, skyList)
-
 local function loadSkyList()
     for _, child in ipairs(skyList:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
     if not requestFn then return end
@@ -857,7 +779,7 @@ local function loadSkyList()
                 Size = UDim2.new(1, 0, 0, 35),
                 BackgroundColor3 = C.panel, Text = "☁ " .. skyName,
                 TextColor3 = C.text, Font = Enum.Font.GothamMedium, TextSize = 13,
-                LayoutOrder = i
+                LayoutOrder = i,
             }, skyList)
             corner(btn, 6); stroke(btn, C.edge)
             btn.MouseButton1Click:Connect(function()
@@ -870,7 +792,6 @@ local function loadSkyList()
     end
 end
 task.spawn(loadSkyList)
-
 local restoreSkyCard = actionCard(skyboxPage, "Restaurar Cielo Original", "Quita el cielo personalizado.", "Restaurar", function()
     if originalSkyProperties then
         applySky(originalSkyProperties.SkyboxBk, originalSkyProperties.SkyboxDn, originalSkyProperties.SkyboxFt, originalSkyProperties.SkyboxLf, originalSkyProperties.SkyboxRt, originalSkyProperties.SkyboxUp)
@@ -879,6 +800,7 @@ local restoreSkyCard = actionCard(skyboxPage, "Restaurar Cielo Original", "Quita
 end)
 restoreSkyCard.LayoutOrder = 501
 
+-- PÁGINA SONIDOS
 local soundsPage=newPage("Sonidos")
 local categoryBar=card(soundsPage,44)
 local categoryButtons={}
@@ -920,7 +842,6 @@ switch(soundsPage,"Activar este sonido",true,function(v) state.enabled[soundCate
 switch(soundsPage,"Silenciar este sonido",false,function(v) state.muted[soundCategory]=v end)
 local githubStatus=label(soundsPage,"Catálogo: buscando archivos MP3 en GitHub…",UDim2.new(1,-8,0,28),UDim2.new(0,4,0,0),12,C.sub,false)
 githubStatus.LayoutOrder = 999
-
 task.spawn(function()
     local loaded = refreshCatalog()
     if loaded then githubStatus.Text = "GitHub conectado · "..#sounds.." sonidos" else githubStatus.Text = "No se pudo conectar a GitHub" end
@@ -936,21 +857,288 @@ actionCard(configPage,"Actualizar catálogo","Vuelve a consultar GitHub","Actual
     end)
 end)
 
-local navNames={"Inicio","Macro","Cuchillo","Animaciones","Macro360","Sonidos","Skybox","Configuración"}
-local navIcons={Inicio="⌂",Macro="◎",Cuchillo="🔪",Animaciones="🏃",Macro360="🎯",Sonidos="♫",Skybox="☁",["Configuración"]="⚙"}
+-- ==========================================
+-- PÁGINA CONFIGS (sistema del SZK adaptado)
+-- ==========================================
+local CONFIG_FOLDER = "NevadaV7_Configs"
+if isfolder and not isfolder(CONFIG_FOLDER) then makefolder(CONFIG_FOLDER) end
+
+local function serializeV7()
+    return {
+        Version = "V7",
+        Sonidos = {
+            Selected = {
+                Arma = { Name = state.selected.Arma.Name, URL = state.selected.Arma.URL },
+                Saltar = { Name = state.selected.Saltar.Name, URL = state.selected.Saltar.URL },
+                Matar = { Name = state.selected.Matar.Name, URL = state.selected.Matar.URL },
+            },
+            Enabled = { Arma = state.enabled.Arma, Saltar = state.enabled.Saltar, Matar = state.enabled.Matar },
+            Muted = { Arma = state.muted.Arma, Saltar = state.muted.Saltar, Matar = state.muted.Matar },
+            Folder = state.folder,
+        },
+        Skybox = { Selected = state.selectedSky, AutoLoad = state.autoLoadSky },
+        Animaciones = {
+            Enabled = state.animEnabled, Mode = state.animMode, SelectedPack = state.selectedAnimPack,
+            CustomMix = {
+                Idle = state.customMix.Idle, Walk = state.customMix.Walk, Run = state.customMix.Run,
+                Jump = state.customMix.Jump, Fall = state.customMix.Fall,
+                Swim = state.customMix.Swim, SwimIdle = state.customMix.SwimIdle,
+            },
+        },
+        Macros = {
+            Weapon = state.macro, WeaponEquipDelay = state.equipDelay, WeaponShootDelay = state.shootDelay,
+            Knife = state.knifeMacroEnabled, KnifeEquipDelay = state.knifeEquipDelay, KnifeThrowDelay = state.knifeThrowDelay,
+            Macro360 = state.macro360Enabled, Macro360Fov = state.macro360Fov,
+            Macro360HitChance = state.macro360HitChance, Macro360Reaction = state.macro360Reaction,
+            Macro360Cooldown = state.macro360Cooldown,
+        },
+    }
+end
+
+local function applyV7Config(data)
+    if type(data) ~= "table" then return false, "Config inválida" end
+    if data.Sonidos then
+        if data.Sonidos.Selected then
+            for cat in pairs(state.selected) do
+                if data.Sonidos.Selected[cat] then
+                    state.selected[cat].Name = data.Sonidos.Selected[cat].Name or "Ninguno"
+                    state.selected[cat].URL = data.Sonidos.Selected[cat].URL or ""
+                end
+            end
+        end
+        if data.Sonidos.Enabled then
+            for cat in pairs(state.enabled) do
+                if data.Sonidos.Enabled[cat] ~= nil then state.enabled[cat] = data.Sonidos.Enabled[cat] end
+            end
+        end
+        if data.Sonidos.Muted then
+            for cat in pairs(state.muted) do
+                if data.Sonidos.Muted[cat] ~= nil then state.muted[cat] = data.Sonidos.Muted[cat] end
+            end
+        end
+        if data.Sonidos.Folder then state.folder = data.Sonidos.Folder end
+    end
+    if data.Skybox then
+        state.selectedSky = data.Skybox.Selected or ""
+        state.autoLoadSky = data.Skybox.AutoLoad == true
+        if state.autoLoadSky and state.selectedSky ~= "" then
+            task.spawn(function() pcall(applySkyFromGitHub, state.selectedSky) end)
+        end
+    end
+    if data.Animaciones then
+        state.animMode = data.Animaciones.Mode or "pack"
+        state.selectedAnimPack = data.Animaciones.SelectedPack or "Default"
+        if data.Animaciones.CustomMix then
+            for slot, packName in pairs(data.Animaciones.CustomMix) do
+                if state.customMix[slot] ~= nil then state.customMix[slot] = packName end
+            end
+        end
+        state.animEnabled = data.Animaciones.Enabled == true
+        if state.animEnabled then
+            task.spawn(function() fastApply(player.Character) end)
+        else
+            restoreAllOriginal()
+        end
+    end
+    if data.Macros then
+        if data.Macros.Weapon ~= nil then state.macro = data.Macros.Weapon end
+        if data.Macros.WeaponEquipDelay then state.equipDelay = data.Macros.WeaponEquipDelay end
+        if data.Macros.WeaponShootDelay then state.shootDelay = data.Macros.WeaponShootDelay end
+        if data.Macros.Knife ~= nil then state.knifeMacroEnabled = data.Macros.Knife end
+        if data.Macros.KnifeEquipDelay then state.knifeEquipDelay = data.Macros.KnifeEquipDelay end
+        if data.Macros.KnifeThrowDelay then state.knifeThrowDelay = data.Macros.KnifeThrowDelay end
+        if data.Macros.Macro360 ~= nil then state.macro360Enabled = data.Macros.Macro360 end
+        if data.Macros.Macro360Fov then state.macro360Fov = data.Macros.Macro360Fov end
+        if data.Macros.Macro360HitChance then state.macro360HitChance = data.Macros.Macro360HitChance end
+        if data.Macros.Macro360Reaction then state.macro360Reaction = data.Macros.Macro360Reaction end
+        if data.Macros.Macro360Cooldown then state.macro360Cooldown = data.Macros.Macro360Cooldown end
+    end
+    return true
+end
+
+local function listV7Configs()
+    local list = {}
+    if listfiles and isfolder and isfolder(CONFIG_FOLDER) then
+        for _, f in ipairs(listfiles(CONFIG_FOLDER)) do
+            if f:match("%.json$") then
+                local n = f:match("([^/\\]+)%.json$")
+                if n then table.insert(list, n) end
+            end
+        end
+    end
+    if #list == 0 then list = {"Ninguna"} end
+    return list
+end
+
+local configsPage = newPage("Configs")
+local configNameInput = "config1"
+local selectedConfigName = "Ninguna"
+
+local nameCard = card(configsPage, 60)
+label(nameCard, "Nombre de la config", UDim2.new(1,-100,0,20), UDim2.new(0,14,0,6), 13, C.text, true)
+label(nameCard, "Ej: aimbot_pro, farm_rapido", UDim2.new(1,-100,0,16), UDim2.new(0,14,0,28), 10, C.sub, false)
+local nameInputBox = create("TextBox", {
+    Size = UDim2.new(0, 90, 0, 28), Position = UDim2.new(1, -104, 0.5, -14),
+    BackgroundColor3 = C.panel, Text = "config1", PlaceholderText = "nombre",
+    PlaceholderColor3 = C.sub, TextColor3 = C.text,
+    Font = Enum.Font.Gotham, TextSize = 11, ClearTextOnFocus = false,
+}, nameCard)
+corner(nameInputBox, 6); stroke(nameInputBox, C.edge)
+nameInputBox:GetPropertyChangedSignal("Text"):Connect(function() configNameInput = nameInputBox.Text end)
+
+local configDropdownHolder = card(configsPage, 60)
+label(configDropdownHolder, "Configs guardadas", UDim2.new(1,-100,0,20), UDim2.new(0,14,0,6), 13, C.text, true)
+label(configDropdownHolder, "Selecciona una para cargar/borrar", UDim2.new(1,-100,0,16), UDim2.new(0,14,0,28), 10, C.sub, false)
+local configSelectBtn = button(configDropdownHolder, "Ninguna ▾", UDim2.new(0, 90, 0, 28), UDim2.new(1, -104, 0.5, -14), nil)
+configSelectBtn.TextSize = 11
+
+local configListFrame = create("Frame", {
+    Size = UDim2.new(0, 130, 0, 0), Position = UDim2.new(1, -104, 0, 44),
+    BackgroundColor3 = Color3.fromRGB(18, 20, 30), BorderSizePixel = 0,
+    Visible = false, ZIndex = 50,
+}, configDropdownHolder)
+corner(configListFrame, 6); stroke(configListFrame, C.blue)
+local configListScroll = create("ScrollingFrame", {
+    Size = UDim2.fromScale(1,1), BackgroundTransparency = 1,
+    BorderSizePixel = 0, ScrollBarThickness = 3, CanvasSize = UDim2.new(),
+}, configListFrame)
+create("UIPadding", {PaddingTop=UDim.new(0,4), PaddingBottom=UDim.new(0,4)}, configListScroll)
+
+local function refreshConfigList()
+    for _, child in ipairs(configListScroll:GetChildren()) do
+        if child:IsA("TextButton") then child:Destroy() end
+    end
+    local configs = listV7Configs()
+    configSelectBtn.Text = selectedConfigName .. " ▾"
+    for i, name in ipairs(configs) do
+        local btn = create("TextButton", {
+            Size = UDim2.new(1, -4, 0, 22), BackgroundTransparency = 1,
+            Text = name, TextColor3 = C.sub, Font = Enum.Font.Gotham,
+            TextSize = 10, TextXAlignment = Enum.TextXAlignment.Left,
+            LayoutOrder = i, ZIndex = 51,
+        }, configListScroll)
+        create("UIPadding", {PaddingLeft=UDim.new(0,6)}, btn)
+        btn.MouseEnter:Connect(function() btn.TextColor3 = C.text; btn.BackgroundTransparency = 0.85 end)
+        btn.MouseLeave:Connect(function() btn.TextColor3 = C.sub; btn.BackgroundTransparency = 1 end)
+        btn.MouseButton1Click:Connect(function()
+            selectedConfigName = name
+            configSelectBtn.Text = name .. " ▾"
+            configListFrame.Visible = false
+        end)
+    end
+    local totalH = math.min(#configs * 24 + 8, 180)
+    configListFrame.Size = UDim2.new(0, 130, 0, totalH)
+    configListScroll.CanvasSize = UDim2.new(0, 0, 0, #configs * 24 + 8)
+end
+configSelectBtn.MouseButton1Click:Connect(function()
+    configListFrame.Visible = not configListFrame.Visible
+    if configListFrame.Visible then refreshConfigList() end
+end)
+
+local function configAction(title, desc, btnText, callback)
+    local f = card(configsPage, 60)
+    label(f, title, UDim2.new(0.6,0,0,22), UDim2.new(0,14,0,6), 13, C.text, true)
+    label(f, desc, UDim2.new(0.6,0,0,18), UDim2.new(0,14,0,28), 10, C.sub, false)
+    button(f, btnText, UDim2.fromOffset(110, 30), UDim2.new(1,-124,0.5,-15), callback)
+    return f
+end
+
+local function msg(text) 
+    local gui = player:FindFirstChild("PlayerGui")
+    local mainGui = gui and gui:FindFirstChild("NevadaV2")
+    if mainGui then
+        -- Usamos un label temporal encima del botón principal
+        print("[Nevada V7] " .. text)
+    end
+end
+
+configAction("Guardar", "Guarda el estado actual", "💾 Guardar", function()
+    if configNameInput == "" or configNameInput == nil then msg("Escribe un nombre"); return end
+    local safeName = configNameInput:gsub("[^%w%-_ ]", ""):gsub("%s+", "_")
+    if safeName == "" then msg("Nombre inválido"); return end
+    local path = CONFIG_FOLDER .. "/" .. safeName .. ".json"
+    local ok, encoded = pcall(function() return HttpService:JSONEncode(serializeV7()) end)
+    if not ok then msg("Error al serializar"); return end
+    local writeOk = pcall(writefile, path, encoded)
+    if writeOk then
+        msg("✅ Guardado: " .. safeName)
+        selectedConfigName = safeName
+        refreshConfigList()
+    else
+        msg("❌ Tu executor no permite writefile")
+    end
+end)
+
+configAction("Cargar", "Aplica una config guardada", "📂 Cargar", function()
+    if selectedConfigName == "Ninguna" or selectedConfigName == "" then msg("Selecciona una config"); return end
+    local path = CONFIG_FOLDER .. "/" .. selectedConfigName .. ".json"
+    if not (isfile and isfile(path)) then msg("Config no existe"); return end
+    local ok, data = pcall(function() return HttpService:JSONDecode(readfile(path)) end)
+    if not ok or type(data) ~= "table" then msg("Archivo inválido"); return end
+    local applyOk, err = applyV7Config(data)
+    if applyOk then msg("✅ Cargado: " .. selectedConfigName) else msg("❌ " .. tostring(err)) end
+end)
+
+configAction("Borrar", "Elimina la config seleccionada", "🗑️ Borrar", function()
+    if selectedConfigName == "Ninguna" then return end
+    local path = CONFIG_FOLDER .. "/" .. selectedConfigName .. ".json"
+    if isfile and isfile(path) and delfile then
+        pcall(delfile, path)
+        msg("🗑️ Borrada: " .. selectedConfigName)
+        selectedConfigName = "Ninguna"
+        configSelectBtn.Text = "Ninguna ▾"
+        refreshConfigList()
+    end
+end)
+
+configAction("Refrescar", "Actualiza la lista de configs", "🔄 Refrescar", function()
+    refreshConfigList()
+    configListFrame.Visible = true
+    msg("Lista actualizada")
+end)
+
+configAction("Abrir carpeta", "Abre la carpeta de configs", "📁 Abrir", function()
+    pcall(function() if openfolder then openfolder(CONFIG_FOLDER) end end)
+    msg("Carpeta: " .. CONFIG_FOLDER)
+end)
+
+configAction("Borrar todas", "⚠️ Elimina TODAS las configs", "🔥 Todas", function()
+    if isfolder and isfolder(CONFIG_FOLDER) and listfiles and delfile then
+        local count = 0
+        for _, f in ipairs(listfiles(CONFIG_FOLDER)) do
+            if f:match("%.json$") then pcall(delfile, f); count = count + 1 end
+        end
+        msg("🔥 " .. count .. " configs borradas")
+        selectedConfigName = "Ninguna"
+        configSelectBtn.Text = "Ninguna ▾"
+        refreshConfigList()
+    end
+end)
+
+task.spawn(function() task.wait(0.5); refreshConfigList() end)
+
+-- ==========================================
+-- NAVEGACIÓN
+-- ==========================================
+local navNames={"Inicio","Macro","Cuchillo","Animaciones","Macro360","Sonidos","Skybox","Configuración","Configs"}
+local navIcons={Inicio="⌂",Macro="◎",Cuchillo="🔪",Animaciones="🏃",Macro360="🎯",Sonidos="♫",Skybox="☁",["Configuración"]="⚙",Configs="💾"}
 showPage=function(name)
   activeTab=name
   for n,p in pairs(pages) do p.Visible=(n==name) end
   pageTitle.Text=(name=="Inicio") and "Bienvenido a Nevada" or name
-  pageSubtitle.Text=(name=="Inicio") and "Tu hub todo en uno. Macros, sonidos y más." or "Nevada V6 — controles y ajustes"
+  pageSubtitle.Text=(name=="Inicio") and "Tu hub todo en uno." or "Nevada V7 — controles y ajustes"
   for _,obj in ipairs(navHolder:GetChildren()) do if obj:IsA("TextButton") then obj.BackgroundColor3=(obj.Name==name) and Color3.fromRGB(29,39,57) or Color3.fromRGB(6,9,15) end end
 end
 for i,name in ipairs(navNames) do
   local b=button(navHolder,navIcons[name].."   "..name,UDim2.new(1,0,0,43),UDim2.new(),function() showPage(name) end)
-  b.Name=name; b.LayoutOrder=i; b.TextXAlignment=Enum.TextXAlignment.Left; b.TextSize=14; b.BackgroundColor3=(name=="Inicio") and Color3.fromRGB(29,39,57) or Color3.fromRGB(6,9,15); b.Position=UDim2.new()
+  b.Name=name; b.LayoutOrder=i; b.TextXAlignment=Enum.TextXAlignment.Left; b.TextSize=14
+  b.BackgroundColor3=(name=="Inicio") and Color3.fromRGB(29,39,57) or Color3.fromRGB(6,9,15); b.Position=UDim2.new()
 end
 showPage("Inicio")
 
+-- ==========================================
+-- MACROS
+-- ==========================================
 local macroBusy=false
 local function runMacro()
   if not state.macro or macroBusy then return end
@@ -1001,8 +1189,10 @@ UserInputService.InputBegan:Connect(function(input, processed)
   if input.KeyCode == Enum.KeyCode.ButtonL2 then runKnifeMacro() end
 end)
 
+-- ==========================================
+-- MACRO 360 (ANTI-SPAM)
+-- ==========================================
 local m360 = {wasInLobby = true, gameTicks = 0, isEquipped = false}
-
 local function isInLobbyRobust()
     local char = player.Character
     if not char then return true end
@@ -1144,3 +1334,5 @@ task.spawn(function()
         end
     end
 end)
+
+print("[Nevada V7] ✅ Cargado correctamente")
