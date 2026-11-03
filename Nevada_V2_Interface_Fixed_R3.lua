@@ -1,4 +1,4 @@
--- NEVADA V8 | Skybox + Team Check + Sonidos + Silent Aim + Animaciones + Configs + AutoSave
+-- NEVADA V9 | Skybox + Team Check + Sonidos + Silent Aim + Animaciones Perfectas + Configs
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
@@ -69,7 +69,7 @@ local state = {
 local sounds, soundCache, activeTab, soundCategory = {}, {}, "Inicio", "Arma"
 
 -- ==========================================
--- SISTEMA DE ANIMACIONES
+-- SISTEMA DE ANIMACIONES (AHORA SÍ, SIN GLITCH)
 -- ==========================================
 local originalAnimations = nil
 local animationGuards = setmetatable({}, {__mode = "k"})
@@ -111,7 +111,10 @@ local function guardAnimation(animate, folderName, animName, id)
     local anim = folder:FindFirstChild(animName)
     if not anim or not anim:IsA("Animation") then return end
     local target = "rbxassetid://" .. tostring(id)
+    -- [FIX] Solo cambiamos el ID. No apagamos Animate, no forzamos estados.
+    -- Esto hace que los demás jugadores vean la animación fluida.
     if anim.AnimationId ~= target then anim.AnimationId = target end
+    
     if animationGuards[anim] then pcall(function() animationGuards[anim]:Disconnect() end) end
     animationGuards[anim] = anim:GetPropertyChangedSignal("AnimationId"):Connect(function()
         if state.animEnabled and anim.Parent and anim.AnimationId ~= target then
@@ -120,26 +123,7 @@ local function guardAnimation(animate, folderName, animName, id)
     end)
 end
 
-local function forceAnimateReload(char)
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    local animate = char and char:FindFirstChild("Animate")
-    if not hum or not animate then return end
-    
-    local animator = hum:FindFirstChildOfClass("Animator")
-    if animator then
-        for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
-            pcall(function() track:Stop(0) end)
-        end
-    end
-    
-    -- [FIX] Ya NO apagamos Animate.Enabled. Al apagarlo, los demás jugadores nos veían en T-Pose.
-    -- Solo forzamos un cambio de estado para que el juego cargue las animaciones nuevas.
-    if hum.Health > 0 then
-        pcall(function() hum:ChangeState(Enum.HumanoidStateType.Landed) end)
-    end
-end
-
-local function fastApply(char, forceReload)
+local function fastApply(char)
     if not state.animEnabled or not char or not char.Parent then return end
     local animate = char:FindFirstChild("Animate")
     if not animate then return end
@@ -189,10 +173,6 @@ local function fastApply(char, forceReload)
         guardAnimation(animate, "swim", "Swim", pack.Swim)
         guardAnimation(animate, "swimidle", "SwimIdle", pack.SwimIdle)
     end
-
-    if forceReload then
-        task.spawn(function() forceAnimateReload(char) end)
-    end
 end
 
 local function scheduleInstantApply(char)
@@ -202,14 +182,14 @@ local function scheduleInstantApply(char)
 
     if char:FindFirstChild("Animate") then
         animApplyQueued[char] = nil
-        fastApply(char, false)
+        fastApply(char)
         return
     end
 
     task.defer(function()
         animApplyQueued[char] = nil
         if char and char.Parent and state.animEnabled then
-            fastApply(char, false)
+            fastApply(char)
         end
     end)
 end
@@ -235,7 +215,6 @@ local function restoreAllOriginal()
         setOrig("jump", "JumpAnim", "Jump"); setOrig("fall", "FallAnim", "Fall")
         setOrig("swim", "Swim", "Swim"); setOrig("swimidle", "SwimIdle", "SwimIdle")
     end
-    task.spawn(function() forceAnimateReload(char) end)
 end
 
 local function onCharacterAdded(char)
@@ -243,18 +222,18 @@ local function onCharacterAdded(char)
     if not state.animEnabled then return end
 
     if char:FindFirstChild("Animate") then
-        fastApply(char, false)
+        fastApply(char)
     end
 
     char.ChildAdded:Connect(function(child)
         if child.Name == "Animate" and state.animEnabled and char.Parent then
-            fastApply(char, false)
+            fastApply(char)
         end
     end)
 
     char.DescendantAdded:Connect(function(desc)
         if state.animEnabled and char.Parent and desc:IsA("Animation") and desc.Name == "Animation1" then
-            fastApply(char, false)
+            fastApply(char)
         end
     end)
 end
@@ -518,10 +497,10 @@ local sidebar=create("Frame",{Size=UDim2.new(0,190,1,0),BackgroundColor3=Color3.
 create("Frame",{Size=UDim2.new(0,1,1,0),Position=UDim2.new(0,190,0,0),BackgroundColor3=C.edge,BorderSizePixel=0},window)
 label(sidebar,"▲",UDim2.new(1,0,0,48),UDim2.new(0,0,0,20),29,C.text,true).TextXAlignment=Enum.TextXAlignment.Center
 label(sidebar,"N E V A D A",UDim2.new(1,0,0,34),UDim2.new(0,0,0,63),21,C.text,true).TextXAlignment=Enum.TextXAlignment.Center
-label(sidebar,"V8",UDim2.new(1,0,0,20),UDim2.new(0,0,0,96),12,C.sub,false).TextXAlignment=Enum.TextXAlignment.Center
+label(sidebar,"V9",UDim2.new(1,0,0,20),UDim2.new(0,0,0,96),12,C.sub,false).TextXAlignment=Enum.TextXAlignment.Center
 local navHolder=create("Frame",{Size=UDim2.new(1,-18,0,450),Position=UDim2.new(0,9,0,140),BackgroundTransparency=1},sidebar)
 create("UIListLayout",{Padding=UDim.new(0,7),SortOrder=Enum.SortOrder.LayoutOrder},navHolder)
-label(sidebar,"NEVADA V8\nTu experiencia, sin límites.",UDim2.new(1,-24,0,48),UDim2.new(0,12,1,-62),11,C.sub,false)
+label(sidebar,"NEVADA V9\nTu experiencia, sin límites.",UDim2.new(1,-24,0,48),UDim2.new(0,12,1,-62),11,C.sub,false)
 
 local top=create("Frame",{Size=UDim2.new(1,-210,0,68),Position=UDim2.new(0,205,0,0),BackgroundTransparency=1},window)
 label(top,"▲",UDim2.fromOffset(48,55),UDim2.new(0,0,0,4),28,C.text,true)
@@ -587,7 +566,7 @@ end
 
 local showPage
 local home=newPage("Inicio")
-local welcome=card(home,108); label(welcome,"Bienvenido a Nevada",UDim2.new(1,-26,0,32),UDim2.new(0,14,0,13),20,C.text,true); label(welcome,"Tu hub todo en uno. Macros, sonidos y más.\nInterfaz Nevada V8",UDim2.new(1,-26,0,45),UDim2.new(0,14,0,51),12,C.sub,false)
+local welcome=card(home,108); label(welcome,"Bienvenido a Nevada",UDim2.new(1,-26,0,32),UDim2.new(0,14,0,13),20,C.text,true); label(welcome,"Tu hub todo en uno. Macros, sonidos y más.\nInterfaz Nevada V9",UDim2.new(1,-26,0,45),UDim2.new(0,14,0,51),12,C.sub,false)
 actionCard(home,"Sonidos","Catálogo de tu repositorio de GitHub","Abrir sonidos",function() showPage("Sonidos") end)
 actionCard(home,"Macro Arma","Disparo rápido automático","Ver macro",function() showPage("Macro") end)
 actionCard(home,"Macro Cuchillo","Lanzamiento rápido (L2)","Ver macro",function() showPage("Cuchillo") end)
@@ -610,7 +589,7 @@ local animsPage = newPage("Animaciones")
 local animMainToggle
 animMainToggle = switch(animsPage, "Activar Animaciones Custom", state.animEnabled, function(v)
     state.animEnabled = v
-    if v then fastApply(player.Character, true) else restoreAllOriginal() end
+    if v then fastApply(player.Character) else restoreAllOriginal() end
 end)
 
 local packHeader = label(animsPage, "PACKS COMPLETOS", UDim2.new(1,-8,0,20), UDim2.new(0,4,0,0), 12, C.sub, true)
@@ -635,7 +614,7 @@ for i, packName in ipairs(sortedPacks) do
         state.animEnabled = true
         animMainToggle.Text = "ACTIVADO"
         animMainToggle.BackgroundColor3 = C.blue
-        fastApply(player.Character, true)
+        fastApply(player.Character)
         for _, b in pairs(packButtons) do b.BackgroundColor3 = C.card end
         btn.BackgroundColor3 = C.blue
     end)
@@ -685,7 +664,7 @@ end
 local applyMixCard = actionCard(animsPage, "Aplicar combinación", "Usa las animaciones seleccionadas arriba.", "Aplicar", function()
     state.animMode = "mix"; state.animEnabled = true
     animMainToggle.Text = "ACTIVADO"; animMainToggle.BackgroundColor3 = C.blue
-    fastApply(player.Character, true)
+    fastApply(player.Character)
 end)
 applyMixCard.LayoutOrder = 300
 
@@ -878,7 +857,7 @@ if isfolder and not isfolder(CONFIG_FOLDER) then makefolder(CONFIG_FOLDER) end
 
 local function serializeV8()
     return {
-        Version = "V8",
+        Version = "V9",
         Sonidos = {
             Selected = {
                 Arma = { Name = state.selected.Arma.Name, URL = state.selected.Arma.URL },
@@ -948,7 +927,7 @@ local function applyV8Config(data)
         end
         state.animEnabled = data.Animaciones.Enabled == true
         if state.animEnabled then
-            task.spawn(function() fastApply(player.Character, false) end)
+            task.spawn(function() fastApply(player.Character) end)
         else
             restoreAllOriginal()
         end
@@ -1153,7 +1132,7 @@ task.spawn(function()
         if ok and type(data) == "table" then
             local applyOk = pcall(applyV8Config, data)
             if applyOk then
-                print("[Nevada V8] ✅ Auto-config cargada")
+                print("[Nevada V9] ✅ Auto-config cargada")
                 pcall(refreshConfigList)
             end
         end
@@ -1178,7 +1157,7 @@ label(clearAutoCard, "Elimina _autosave.json", UDim2.new(1,-130,0,16), UDim2.new
 button(clearAutoCard, "🗑️ Borrar", UDim2.fromOffset(92, 28), UDim2.new(1,-104,0.5,-14), function()
     if delfile and isfile and isfile(AUTOSAVE_PATH) then
         pcall(delfile, AUTOSAVE_PATH)
-        print("[Nevada V8] 🗑️ Autosave eliminado")
+        print("[Nevada V9] 🗑️ Autosave eliminado")
     end
 end)
 
@@ -1193,7 +1172,7 @@ showPage=function(name)
   activeTab=name
   for n,p in pairs(pages) do p.Visible=(n==name) end
   pageTitle.Text=(name=="Inicio") and "Bienvenido a Nevada" or name
-  pageSubtitle.Text=(name=="Inicio") and "Tu hub todo en uno." or "Nevada V8 — controles y ajustes"
+  pageSubtitle.Text=(name=="Inicio") and "Tu hub todo en uno." or "Nevada V9 — controles y ajustes"
   for _,obj in ipairs(navHolder:GetChildren()) do if obj:IsA("TextButton") then obj.BackgroundColor3=(obj.Name==name) and Color3.fromRGB(29,39,57) or Color3.fromRGB(6,9,15) end end
 end
 for i,name in ipairs(navNames) do
@@ -1204,50 +1183,54 @@ end
 showPage("Inicio")
 
 -- ==========================================
--- MACROS
+-- MACRO (TOMADA DEL ARCHIVO R3)
 -- ==========================================
-local macroBusy = false
+local macroBusy=false
+local lastMacro=0
 local function runMacro()
-    if not state.macro or macroBusy then return end
-    local char = player.Character
-    if not char then return end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum or hum.Health <= 0 then return end
+  if not state.macro or macroBusy then return end
+  local char=player.Character; if not char then return end
+  local hum=char:FindFirstChildOfClass("Humanoid"); if not hum or hum.Health<=0 then return end
+  local backpack=player:FindFirstChildOfClass("Backpack")
+  if not backpack then return end
 
-    local backpack = player:FindFirstChildOfClass("Backpack")
-    local tool = char:FindFirstChildOfClass("Tool")
-
-    -- Si no tiene pistola equipada, la busca
-    if tool and not esPistola(tool) then tool = nil end
-    if not tool and backpack then
-        for _, item in ipairs(backpack:GetChildren()) do
-            if item:IsA("Tool") and esPistola(item) then tool = item; break end
-        end
+  local tool=char:FindFirstChildOfClass("Tool")
+  local wasEquipped=(tool~=nil)
+  if not tool then
+    for _,item in ipairs(backpack:GetChildren()) do
+      if item:IsA("Tool") and (item.Name:lower():find("pistol") or item.Name:lower():find("gun") or item.Name:lower():find("sheriff") or item.Name:lower():find("revolver")) then
+        tool=item; break
+      end
     end
-    if not tool then return end
+  end
+  if not tool then return end
 
-    macroBusy = true
-    task.spawn(function()
-        pcall(function()
-            -- 1. Equipar
-            if tool.Parent == backpack then
-                hum:EquipTool(tool)
-                task.wait(state.equipDelay + 0.05) -- Le damos un poco más de tiempo para que el servidor lo registre
-            end
-
-            -- 2. Disparar hacia donde apunta la cámara
-            if tool.Parent == char then
-                tool:Activate()
-                task.wait(state.shootDelay)
-                pcall(function() tool:Deactivate() end)
-                task.wait(0.15) -- [FIX ANTI-GLITCH] Pausa vital para que no se bugee el arma
-            end
-
-            -- 3. Guardar
-            pcall(function() hum:UnequipTools() end)
-        end)
-        macroBusy = false
+  local now=os.clock()
+  local requiredGap=math.max(0.01, tonumber(state.shootDelay) or 0.10)
+  if now-lastMacro<requiredGap then return end
+  macroBusy=true
+  lastMacro=now
+  task.spawn(function()
+    local shouldHolster=false
+    local ok,err=pcall(function()
+      if not state.macro or player.Character~=char then return end
+      if tool.Parent==backpack then
+        hum:EquipTool(tool)
+        shouldHolster=true
+      end
+      task.wait(math.max(0.01, tonumber(state.equipDelay) or 0.05))
+      if state.macro and player.Character==char and hum.Health>0 and tool.Parent==char then
+        shouldHolster=true
+        tool:Activate()
+        task.wait(math.max(0.01, tonumber(state.shootDelay) or 0.10))
+        pcall(function() tool:Deactivate() end)
+      end
     end)
+    if shouldHolster and player.Character==char and hum.Parent==char then
+      pcall(function() hum:UnequipTools() end)
+    end
+    macroBusy=false
+  end)
 end
 
 local knifeBusy = false
@@ -1274,47 +1257,26 @@ local function runKnifeMacro()
   end)
 end
 
--- [V8 FIX] Macro input táctil + PC + control
-local lastMacroAt = 0
-local MACRO_DEBOUNCE = 0.15
-local function tryRunMacro()
-    local now = tick()
-    if now - lastMacroAt < MACRO_DEBOUNCE then return end
-    lastMacroAt = now
-    runMacro()
-end
-local function isTouchOnHubUI(pos)
-    local ok, objs = pcall(function() return UserInputService:GetGuiObjectsAtPosition(pos.X, pos.Y) end)
-    if not ok or not objs then return false end
-    for _, obj in ipairs(objs) do
-        if obj:IsDescendantOf(gui) then return true end
-    end
-    return false
-end
-
-UserInputService.InputBegan:Connect(function(input, processed)
-    -- Cuchillo en Control (L2)
-    if input.KeyCode == Enum.KeyCode.ButtonL2 then
-        runKnifeMacro()
-        return
-    end
-
-    -- Macro normal (Táctil)
-    if input.UserInputType == Enum.UserInputType.Touch then
-        if isTouchOnHubUI(input.Position) then return end -- No dispara si tocas el menú
-        tryRunMacro()
-        return
-    end
-
-    -- Macro normal (PC Mouse o Control R2)
-    if processed then return end
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.KeyCode == Enum.KeyCode.ButtonR2 then
-        tryRunMacro()
-    end
+UserInputService.InputBegan:Connect(function(input,processed)
+  if processed then return end
+  if input.UserInputType==Enum.UserInputType.MouseButton1 or input.KeyCode==Enum.KeyCode.ButtonR2 then runMacro() end
+  if input.KeyCode == Enum.KeyCode.ButtonL2 then runKnifeMacro() end
+end)
+local touchStart,touchTime=nil,nil
+UserInputService.TouchStarted:Connect(function(input,processed)
+  if processed then return end
+  touchStart=input.Position; touchTime=os.clock()
+end)
+UserInputService.TouchEnded:Connect(function(input,processed)
+  if processed or not touchStart or not touchTime then touchStart=nil; touchTime=nil; return end
+  local delta=(input.Position-touchStart).Magnitude
+  local elapsed=os.clock()-touchTime
+  touchStart=nil; touchTime=nil
+  if delta<18 and elapsed>=0.025 and elapsed<0.6 then runMacro() end
 end)
 
 -- ==========================================
--- MACRO 360 (INTACTA - ANTI-SPAM)
+-- MACRO 360
 -- ==========================================
 local m360 = {wasInLobby = true, gameTicks = 0, isEquipped = false}
 local function isInLobbyRobust()
@@ -1459,4 +1421,4 @@ task.spawn(function()
     end
 end)
 
-print("[Nevada V8] ✅ Cargado · Macro normal, Macro 360 intacta, Auto-save activo")
+print("[Nevada V9] ✅ Cargado · Macro R3 integrada · Animaciones fluídas")
