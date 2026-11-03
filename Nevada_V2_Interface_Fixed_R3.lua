@@ -69,7 +69,7 @@ local state = {
 local sounds, soundCache, activeTab, soundCategory = {}, {}, "Inicio", "Arma"
 
 -- ==========================================
--- SISTEMA DE ANIMACIONES (V8 con fix T-pose)
+-- SISTEMA DE ANIMACIONES
 -- ==========================================
 local originalAnimations = nil
 local animationGuards = setmetatable({}, {__mode = "k"})
@@ -124,21 +124,21 @@ local function forceAnimateReload(char)
     local hum = char and char:FindFirstChildOfClass("Humanoid")
     local animate = char and char:FindFirstChild("Animate")
     if not hum or not animate then return end
+    
     local animator = hum:FindFirstChildOfClass("Animator")
     if animator then
         for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
             pcall(function() track:Stop(0) end)
         end
     end
-    animate.Enabled = false
-    task.wait(0.03)
-    animate.Enabled = true
+    
+    -- [FIX] Ya NO apagamos Animate.Enabled. Al apagarlo, los demás jugadores nos veían en T-Pose.
+    -- Solo forzamos un cambio de estado para que el juego cargue las animaciones nuevas.
     if hum.Health > 0 then
         pcall(function() hum:ChangeState(Enum.HumanoidStateType.Landed) end)
     end
 end
 
--- [V8 FIX] fastApply con forceReload opcional para evitar T-pose en respawn
 local function fastApply(char, forceReload)
     if not state.animEnabled or not char or not char.Parent then return end
     local animate = char:FindFirstChild("Animate")
@@ -606,7 +606,6 @@ switch(knifePage,"Activar Macro Cuchillo (L2)",false,function(v) state.knifeMacr
 slider(knifePage,"Delay al Equipar",0.01,0.50,state.knifeEquipDelay,function(v) state.knifeEquipDelay = v end)
 slider(knifePage,"Delay al Lanzar",0.01,0.50,state.knifeThrowDelay,function(v) state.knifeThrowDelay = v end)
 
--- PÁGINA ANIMACIONES
 local animsPage = newPage("Animaciones")
 local animMainToggle
 animMainToggle = switch(animsPage, "Activar Animaciones Custom", state.animEnabled, function(v)
@@ -1207,25 +1206,48 @@ showPage("Inicio")
 -- ==========================================
 -- MACROS
 -- ==========================================
-local macroBusy=false
+local macroBusy = false
 local function runMacro()
-  if not state.macro or macroBusy then return end
-  local char=player.Character; if not char then return end
-  local hum=char:FindFirstChildOfClass("Humanoid"); if not hum or hum.Health<=0 then return end
-  local backpack=player:FindFirstChildOfClass("Backpack"); if not backpack then return end
-  local tool=char:FindFirstChildOfClass("Tool")
-  if tool and not esPistola(tool) then tool = nil end
-  if not tool then for _,item in ipairs(backpack:GetChildren()) do if item:IsA("Tool") and esPistola(item) then tool=item; break end end end
-  if not tool then return end
-  macroBusy=true
-  task.spawn(function()
-    pcall(function()
-      if tool.Parent==backpack then hum:EquipTool(tool); task.wait(state.equipDelay) end
-      if tool.Parent==char then tool:Activate(); task.wait(state.shootDelay); pcall(function() tool:Deactivate() end) end
-      pcall(function() hum:UnequipTools() end)
+    if not state.macro or macroBusy then return end
+    local char = player.Character
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum or hum.Health <= 0 then return end
+
+    local backpack = player:FindFirstChildOfClass("Backpack")
+    local tool = char:FindFirstChildOfClass("Tool")
+
+    -- Si no tiene pistola equipada, la busca
+    if tool and not esPistola(tool) then tool = nil end
+    if not tool and backpack then
+        for _, item in ipairs(backpack:GetChildren()) do
+            if item:IsA("Tool") and esPistola(item) then tool = item; break end
+        end
+    end
+    if not tool then return end
+
+    macroBusy = true
+    task.spawn(function()
+        pcall(function()
+            -- 1. Equipar
+            if tool.Parent == backpack then
+                hum:EquipTool(tool)
+                task.wait(state.equipDelay + 0.05) -- Le damos un poco más de tiempo para que el servidor lo registre
+            end
+
+            -- 2. Disparar hacia donde apunta la cámara
+            if tool.Parent == char then
+                tool:Activate()
+                task.wait(state.shootDelay)
+                pcall(function() tool:Deactivate() end)
+                task.wait(0.15) -- [FIX ANTI-GLITCH] Pausa vital para que no se bugee el arma
+            end
+
+            -- 3. Guardar
+            pcall(function() hum:UnequipTools() end)
+        end)
+        macroBusy = false
     end)
-    macroBusy=false
-  end)
 end
 
 local knifeBusy = false
@@ -1242,9 +1264,10 @@ local function runKnifeMacro()
   knifeBusy = true
   task.spawn(function()
     pcall(function()
-        if knife.Parent ~= character then humanoid:EquipTool(knife); task.wait(0.1) end
+        if knife.Parent ~= character then humanoid:EquipTool(knife); task.wait(0.15) end
         pcall(function() knife:Activate() end)
         task.wait(state.knifeThrowDelay)
+        task.wait(0.15)
         pcall(function() if humanoid and humanoid.Parent then humanoid:UnequipTools() end end)
     end)
     knifeBusy = false
@@ -1253,7 +1276,7 @@ end
 
 -- [V8 FIX] Macro input táctil + PC + control
 local lastMacroAt = 0
-local MACRO_DEBOUNCE = 0.12
+local MACRO_DEBOUNCE = 0.15
 local function tryRunMacro()
     local now = tick()
     if now - lastMacroAt < MACRO_DEBOUNCE then return end
@@ -1261,9 +1284,7 @@ local function tryRunMacro()
     runMacro()
 end
 local function isTouchOnHubUI(pos)
-    local ok, objs = pcall(function()
-        return UserInputService:GetGuiObjectsAtPosition(pos.X, pos.Y)
-    end)
+    local ok, objs = pcall(function() return UserInputService:GetGuiObjectsAtPosition(pos.X, pos.Y) end)
     if not ok or not objs then return false end
     for _, obj in ipairs(objs) do
         if obj:IsDescendantOf(gui) then return true end
@@ -1272,24 +1293,28 @@ local function isTouchOnHubUI(pos)
 end
 
 UserInputService.InputBegan:Connect(function(input, processed)
+    -- Cuchillo en Control (L2)
     if input.KeyCode == Enum.KeyCode.ButtonL2 then
         runKnifeMacro()
         return
     end
+
+    -- Macro normal (Táctil)
     if input.UserInputType == Enum.UserInputType.Touch then
-        if isTouchOnHubUI(input.Position) then return end
+        if isTouchOnHubUI(input.Position) then return end -- No dispara si tocas el menú
         tryRunMacro()
         return
     end
+
+    -- Macro normal (PC Mouse o Control R2)
     if processed then return end
-    if input.UserInputType == Enum.UserInputType.MouseButton1
-        or input.KeyCode == Enum.KeyCode.ButtonR2 then
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.KeyCode == Enum.KeyCode.ButtonR2 then
         tryRunMacro()
     end
 end)
 
 -- ==========================================
--- MACRO 360 (ANTI-SPAM)
+-- MACRO 360 (INTACTA - ANTI-SPAM)
 -- ==========================================
 local m360 = {wasInLobby = true, gameTicks = 0, isEquipped = false}
 local function isInLobbyRobust()
@@ -1434,4 +1459,4 @@ task.spawn(function()
     end
 end)
 
-print("[Nevada V8] ✅ Cargado · Auto-save activo (cada " .. AUTOSAVE_INTERVAL .. "s)")
+print("[Nevada V8] ✅ Cargado · Macro normal, Macro 360 intacta, Auto-save activo")
