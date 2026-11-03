@@ -1,4 +1,4 @@
--- NEVADA V7 | Skybox + Team Check + Sonidos + Silent Aim + Animaciones Mixer + Configs
+-- NEVADA V8 | Skybox + Team Check + Sonidos + Silent Aim + Animaciones + Configs + AutoSave
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
@@ -21,8 +21,6 @@ local SKYBOX_API = "https://api.github.com/repos/" .. SKYBOX_REPO .. "/contents/
 
 -- ==========================================
 -- ANIMATION PACKS
--- Hombre Lobo: IDs reales del bundle Werewolf (1083195517...)
--- Packs nuevos: Astronaut, Bubbly, Knight, Mage, Pirate, Patrol, Confident, Popstar, Cowboy, Sneaky, Princess
 -- ==========================================
 local AnimationPacks = {
     ["Default"]     = {Idle="507766666", Walk="507777826", Run="507767714", Jump="507765000", Fall="507767968", Swim="507784897", SwimIdle="507785072"},
@@ -37,7 +35,6 @@ local AnimationPacks = {
     ["Vampire"]     = {Idle="1083445855", Walk="1083473930", Run="1083462077", Jump="1083455352", Fall="1083443587", Swim="1083473930", SwimIdle="1083450166"},
     ["Elder"]       = {Idle="845397899", Walk="845403856", Run="845386501", Jump="845398858", Fall="845396048", Swim="845403856", SwimIdle="845400520"},
     ["Stylish"]     = {Idle="616136790", Walk="616146177", Run="616140816", Jump="616139451", Fall="616134815", Swim="616143378", SwimIdle="616138447"},
-    -- [NUEVOS] del RoxHub
     ["Astronaut"]   = {Idle="891621366", Walk="891667138", Run="891636393", Jump="891627522", Fall="891617961", Swim="891667138", SwimIdle="891633237"},
     ["Bubbly"]      = {Idle="910004836", Walk="910034870", Run="910025107", Jump="910016857", Fall="910001910", Swim="910028158", SwimIdle="910009958"},
     ["Knight"]      = {Idle="657595757", Walk="657552124", Run="657564596", Jump="658409194", Fall="657600338", Swim="657552124", SwimIdle="657568135"},
@@ -72,7 +69,7 @@ local state = {
 local sounds, soundCache, activeTab, soundCategory = {}, {}, "Inicio", "Arma"
 
 -- ==========================================
--- SISTEMA DE ANIMACIONES
+-- SISTEMA DE ANIMACIONES (V8 con fix T-pose)
 -- ==========================================
 local originalAnimations = nil
 local animationGuards = setmetatable({}, {__mode = "k"})
@@ -123,7 +120,6 @@ local function guardAnimation(animate, folderName, animName, id)
     end)
 end
 
--- [SZK PATTERN] Recarga forzada de Animate para que se apliquen al instante
 local function forceAnimateReload(char)
     local hum = char and char:FindFirstChildOfClass("Humanoid")
     local animate = char and char:FindFirstChild("Animate")
@@ -142,7 +138,8 @@ local function forceAnimateReload(char)
     end
 end
 
-local function fastApply(char)
+-- [V8 FIX] fastApply con forceReload opcional para evitar T-pose en respawn
+local function fastApply(char, forceReload)
     if not state.animEnabled or not char or not char.Parent then return end
     local animate = char:FindFirstChild("Animate")
     if not animate then return end
@@ -193,17 +190,27 @@ local function fastApply(char)
         guardAnimation(animate, "swimidle", "SwimIdle", pack.SwimIdle)
     end
 
-    -- [SZK PATTERN] Recarga forzada
-    task.spawn(function() forceAnimateReload(char) end)
+    if forceReload then
+        task.spawn(function() forceAnimateReload(char) end)
+    end
 end
 
 local function scheduleInstantApply(char)
     if not char or not char.Parent or not state.animEnabled then return end
     if animApplyQueued[char] then return end
     animApplyQueued[char] = true
+
+    if char:FindFirstChild("Animate") then
+        animApplyQueued[char] = nil
+        fastApply(char, false)
+        return
+    end
+
     task.defer(function()
         animApplyQueued[char] = nil
-        if char and char.Parent and state.animEnabled then fastApply(char) end
+        if char and char.Parent and state.animEnabled then
+            fastApply(char, false)
+        end
     end)
 end
 
@@ -234,13 +241,20 @@ end
 local function onCharacterAdded(char)
     originalAnimations = nil
     if not state.animEnabled then return end
-    scheduleInstantApply(char)
+
+    if char:FindFirstChild("Animate") then
+        fastApply(char, false)
+    end
+
     char.ChildAdded:Connect(function(child)
-        if child.Name == "Animate" and state.animEnabled and char.Parent then scheduleInstantApply(char) end
+        if child.Name == "Animate" and state.animEnabled and char.Parent then
+            fastApply(char, false)
+        end
     end)
+
     char.DescendantAdded:Connect(function(desc)
         if state.animEnabled and char.Parent and desc:IsA("Animation") and desc.Name == "Animation1" then
-            scheduleInstantApply(char)
+            fastApply(char, false)
         end
     end)
 end
@@ -504,10 +518,10 @@ local sidebar=create("Frame",{Size=UDim2.new(0,190,1,0),BackgroundColor3=Color3.
 create("Frame",{Size=UDim2.new(0,1,1,0),Position=UDim2.new(0,190,0,0),BackgroundColor3=C.edge,BorderSizePixel=0},window)
 label(sidebar,"▲",UDim2.new(1,0,0,48),UDim2.new(0,0,0,20),29,C.text,true).TextXAlignment=Enum.TextXAlignment.Center
 label(sidebar,"N E V A D A",UDim2.new(1,0,0,34),UDim2.new(0,0,0,63),21,C.text,true).TextXAlignment=Enum.TextXAlignment.Center
-label(sidebar,"V7",UDim2.new(1,0,0,20),UDim2.new(0,0,0,96),12,C.sub,false).TextXAlignment=Enum.TextXAlignment.Center
+label(sidebar,"V8",UDim2.new(1,0,0,20),UDim2.new(0,0,0,96),12,C.sub,false).TextXAlignment=Enum.TextXAlignment.Center
 local navHolder=create("Frame",{Size=UDim2.new(1,-18,0,450),Position=UDim2.new(0,9,0,140),BackgroundTransparency=1},sidebar)
 create("UIListLayout",{Padding=UDim.new(0,7),SortOrder=Enum.SortOrder.LayoutOrder},navHolder)
-label(sidebar,"NEVADA V7\nTu experiencia, sin límites.",UDim2.new(1,-24,0,48),UDim2.new(0,12,1,-62),11,C.sub,false)
+label(sidebar,"NEVADA V8\nTu experiencia, sin límites.",UDim2.new(1,-24,0,48),UDim2.new(0,12,1,-62),11,C.sub,false)
 
 local top=create("Frame",{Size=UDim2.new(1,-210,0,68),Position=UDim2.new(0,205,0,0),BackgroundTransparency=1},window)
 label(top,"▲",UDim2.fromOffset(48,55),UDim2.new(0,0,0,4),28,C.text,true)
@@ -573,7 +587,7 @@ end
 
 local showPage
 local home=newPage("Inicio")
-local welcome=card(home,108); label(welcome,"Bienvenido a Nevada",UDim2.new(1,-26,0,32),UDim2.new(0,14,0,13),20,C.text,true); label(welcome,"Tu hub todo en uno. Macros, sonidos y más.\nInterfaz Nevada V7",UDim2.new(1,-26,0,45),UDim2.new(0,14,0,51),12,C.sub,false)
+local welcome=card(home,108); label(welcome,"Bienvenido a Nevada",UDim2.new(1,-26,0,32),UDim2.new(0,14,0,13),20,C.text,true); label(welcome,"Tu hub todo en uno. Macros, sonidos y más.\nInterfaz Nevada V8",UDim2.new(1,-26,0,45),UDim2.new(0,14,0,51),12,C.sub,false)
 actionCard(home,"Sonidos","Catálogo de tu repositorio de GitHub","Abrir sonidos",function() showPage("Sonidos") end)
 actionCard(home,"Macro Arma","Disparo rápido automático","Ver macro",function() showPage("Macro") end)
 actionCard(home,"Macro Cuchillo","Lanzamiento rápido (L2)","Ver macro",function() showPage("Cuchillo") end)
@@ -597,7 +611,7 @@ local animsPage = newPage("Animaciones")
 local animMainToggle
 animMainToggle = switch(animsPage, "Activar Animaciones Custom", state.animEnabled, function(v)
     state.animEnabled = v
-    if v then fastApply(player.Character) else restoreAllOriginal() end
+    if v then fastApply(player.Character, true) else restoreAllOriginal() end
 end)
 
 local packHeader = label(animsPage, "PACKS COMPLETOS", UDim2.new(1,-8,0,20), UDim2.new(0,4,0,0), 12, C.sub, true)
@@ -622,7 +636,7 @@ for i, packName in ipairs(sortedPacks) do
         state.animEnabled = true
         animMainToggle.Text = "ACTIVADO"
         animMainToggle.BackgroundColor3 = C.blue
-        fastApply(player.Character)
+        fastApply(player.Character, true)
         for _, b in pairs(packButtons) do b.BackgroundColor3 = C.card end
         btn.BackgroundColor3 = C.blue
     end)
@@ -672,7 +686,7 @@ end
 local applyMixCard = actionCard(animsPage, "Aplicar combinación", "Usa las animaciones seleccionadas arriba.", "Aplicar", function()
     state.animMode = "mix"; state.animEnabled = true
     animMainToggle.Text = "ACTIVADO"; animMainToggle.BackgroundColor3 = C.blue
-    fastApply(player.Character)
+    fastApply(player.Character, true)
 end)
 applyMixCard.LayoutOrder = 300
 
@@ -858,14 +872,14 @@ actionCard(configPage,"Actualizar catálogo","Vuelve a consultar GitHub","Actual
 end)
 
 -- ==========================================
--- PÁGINA CONFIGS (sistema del SZK adaptado)
+-- SISTEMA DE CONFIGS
 -- ==========================================
-local CONFIG_FOLDER = "NevadaV7_Configs"
+local CONFIG_FOLDER = "NevadaV8_Configs"
 if isfolder and not isfolder(CONFIG_FOLDER) then makefolder(CONFIG_FOLDER) end
 
-local function serializeV7()
+local function serializeV8()
     return {
-        Version = "V7",
+        Version = "V8",
         Sonidos = {
             Selected = {
                 Arma = { Name = state.selected.Arma.Name, URL = state.selected.Arma.URL },
@@ -895,7 +909,7 @@ local function serializeV7()
     }
 end
 
-local function applyV7Config(data)
+local function applyV8Config(data)
     if type(data) ~= "table" then return false, "Config inválida" end
     if data.Sonidos then
         if data.Sonidos.Selected then
@@ -935,7 +949,7 @@ local function applyV7Config(data)
         end
         state.animEnabled = data.Animaciones.Enabled == true
         if state.animEnabled then
-            task.spawn(function() fastApply(player.Character) end)
+            task.spawn(function() fastApply(player.Character, false) end)
         else
             restoreAllOriginal()
         end
@@ -956,13 +970,13 @@ local function applyV7Config(data)
     return true
 end
 
-local function listV7Configs()
+local function listV8Configs()
     local list = {}
     if listfiles and isfolder and isfolder(CONFIG_FOLDER) then
         for _, f in ipairs(listfiles(CONFIG_FOLDER)) do
             if f:match("%.json$") then
                 local n = f:match("([^/\\]+)%.json$")
-                if n then table.insert(list, n) end
+                if n and n ~= "_autosave" then table.insert(list, n) end
             end
         end
     end
@@ -1004,11 +1018,12 @@ local configListScroll = create("ScrollingFrame", {
 }, configListFrame)
 create("UIPadding", {PaddingTop=UDim.new(0,4), PaddingBottom=UDim.new(0,4)}, configListScroll)
 
-local function refreshConfigList()
+local refreshConfigList
+refreshConfigList = function()
     for _, child in ipairs(configListScroll:GetChildren()) do
         if child:IsA("TextButton") then child:Destroy() end
     end
-    local configs = listV7Configs()
+    local configs = listV8Configs()
     configSelectBtn.Text = selectedConfigName .. " ▾"
     for i, name in ipairs(configs) do
         local btn = create("TextButton", {
@@ -1043,40 +1058,31 @@ local function configAction(title, desc, btnText, callback)
     return f
 end
 
-local function msg(text) 
-    local gui = player:FindFirstChild("PlayerGui")
-    local mainGui = gui and gui:FindFirstChild("NevadaV2")
-    if mainGui then
-        -- Usamos un label temporal encima del botón principal
-        print("[Nevada V7] " .. text)
-    end
-end
-
 configAction("Guardar", "Guarda el estado actual", "💾 Guardar", function()
-    if configNameInput == "" or configNameInput == nil then msg("Escribe un nombre"); return end
+    if configNameInput == "" or configNameInput == nil then print("[Config] Escribe un nombre"); return end
     local safeName = configNameInput:gsub("[^%w%-_ ]", ""):gsub("%s+", "_")
-    if safeName == "" then msg("Nombre inválido"); return end
+    if safeName == "" then print("[Config] Nombre inválido"); return end
     local path = CONFIG_FOLDER .. "/" .. safeName .. ".json"
-    local ok, encoded = pcall(function() return HttpService:JSONEncode(serializeV7()) end)
-    if not ok then msg("Error al serializar"); return end
+    local ok, encoded = pcall(function() return HttpService:JSONEncode(serializeV8()) end)
+    if not ok then print("[Config] Error al serializar"); return end
     local writeOk = pcall(writefile, path, encoded)
     if writeOk then
-        msg("✅ Guardado: " .. safeName)
+        print("[Config] ✅ Guardado: " .. safeName)
         selectedConfigName = safeName
         refreshConfigList()
     else
-        msg("❌ Tu executor no permite writefile")
+        print("[Config] ❌ Tu executor no permite writefile")
     end
 end)
 
 configAction("Cargar", "Aplica una config guardada", "📂 Cargar", function()
-    if selectedConfigName == "Ninguna" or selectedConfigName == "" then msg("Selecciona una config"); return end
+    if selectedConfigName == "Ninguna" or selectedConfigName == "" then print("[Config] Selecciona una config"); return end
     local path = CONFIG_FOLDER .. "/" .. selectedConfigName .. ".json"
-    if not (isfile and isfile(path)) then msg("Config no existe"); return end
+    if not (isfile and isfile(path)) then print("[Config] No existe"); return end
     local ok, data = pcall(function() return HttpService:JSONDecode(readfile(path)) end)
-    if not ok or type(data) ~= "table" then msg("Archivo inválido"); return end
-    local applyOk, err = applyV7Config(data)
-    if applyOk then msg("✅ Cargado: " .. selectedConfigName) else msg("❌ " .. tostring(err)) end
+    if not ok or type(data) ~= "table" then print("[Config] Archivo inválido"); return end
+    local applyOk, err = applyV8Config(data)
+    if applyOk then print("[Config] ✅ Cargado: " .. selectedConfigName) else print("[Config] ❌ " .. tostring(err)) end
 end)
 
 configAction("Borrar", "Elimina la config seleccionada", "🗑️ Borrar", function()
@@ -1084,7 +1090,7 @@ configAction("Borrar", "Elimina la config seleccionada", "🗑️ Borrar", funct
     local path = CONFIG_FOLDER .. "/" .. selectedConfigName .. ".json"
     if isfile and isfile(path) and delfile then
         pcall(delfile, path)
-        msg("🗑️ Borrada: " .. selectedConfigName)
+        print("[Config] 🗑️ Borrada: " .. selectedConfigName)
         selectedConfigName = "Ninguna"
         configSelectBtn.Text = "Ninguna ▾"
         refreshConfigList()
@@ -1094,12 +1100,10 @@ end)
 configAction("Refrescar", "Actualiza la lista de configs", "🔄 Refrescar", function()
     refreshConfigList()
     configListFrame.Visible = true
-    msg("Lista actualizada")
 end)
 
 configAction("Abrir carpeta", "Abre la carpeta de configs", "📁 Abrir", function()
     pcall(function() if openfolder then openfolder(CONFIG_FOLDER) end end)
-    msg("Carpeta: " .. CONFIG_FOLDER)
 end)
 
 configAction("Borrar todas", "⚠️ Elimina TODAS las configs", "🔥 Todas", function()
@@ -1108,10 +1112,74 @@ configAction("Borrar todas", "⚠️ Elimina TODAS las configs", "🔥 Todas", f
         for _, f in ipairs(listfiles(CONFIG_FOLDER)) do
             if f:match("%.json$") then pcall(delfile, f); count = count + 1 end
         end
-        msg("🔥 " .. count .. " configs borradas")
+        print("[Config] 🔥 " .. count .. " configs borradas")
         selectedConfigName = "Ninguna"
         configSelectBtn.Text = "Ninguna ▾"
         refreshConfigList()
+    end
+end)
+
+-- ==========================================
+-- AUTO-SAVE / AUTO-LOAD
+-- ==========================================
+local AUTOSAVE_PATH = CONFIG_FOLDER .. "/_autosave.json"
+local AUTOSAVE_INTERVAL = 15
+local AUTO_LOAD_ENABLED = true
+
+local function doAutoSave()
+    if not (writefile and CONFIG_FOLDER) then return end
+    local ok, encoded = pcall(function() return HttpService:JSONEncode(serializeV8()) end)
+    if ok then pcall(writefile, AUTOSAVE_PATH, encoded) end
+end
+
+task.spawn(function()
+    while gui.Parent do
+        task.wait(AUTOSAVE_INTERVAL)
+        if gui.Parent then pcall(doAutoSave) end
+    end
+end)
+
+gui.AncestryChanged:Connect(function()
+    if not gui.Parent then pcall(doAutoSave) end
+end)
+
+player.CharacterRemoving:Connect(function() pcall(doAutoSave) end)
+
+task.spawn(function()
+    if not AUTO_LOAD_ENABLED then return end
+    if not (isfile and readfile) then return end
+    task.wait(1.5)
+    if isfile(AUTOSAVE_PATH) then
+        local ok, data = pcall(function() return HttpService:JSONDecode(readfile(AUTOSAVE_PATH)) end)
+        if ok and type(data) == "table" then
+            local applyOk = pcall(applyV8Config, data)
+            if applyOk then
+                print("[Nevada V8] ✅ Auto-config cargada")
+                pcall(refreshConfigList)
+            end
+        end
+    end
+end)
+
+local autoSection = card(configsPage, 60)
+label(autoSection, "Auto-guardado", UDim2.new(1,-100,0,20), UDim2.new(0,14,0,6), 13, C.text, true)
+label(autoSection, "Guarda cada " .. AUTOSAVE_INTERVAL .. "s · Carga al iniciar", UDim2.new(1,-100,0,16), UDim2.new(0,14,0,28), 10, C.sub, false)
+local autoToggleState = true
+local autoToggleBtn = button(autoSection, "ACTIVADO", UDim2.fromOffset(92, 28), UDim2.new(1,-104,0.5,-14), function()
+    autoToggleState = not autoToggleState
+    autoToggleBtn.Text = autoToggleState and "ACTIVADO" or "DESACTIVADO"
+    autoToggleBtn.BackgroundColor3 = autoToggleState and C.blue or C.card
+    AUTO_LOAD_ENABLED = autoToggleState
+end)
+autoToggleBtn.BackgroundColor3 = C.blue
+
+local clearAutoCard = card(configsPage, 60)
+label(clearAutoCard, "Borrar auto-config", UDim2.new(1,-130,0,20), UDim2.new(0,14,0,6), 13, C.text, true)
+label(clearAutoCard, "Elimina _autosave.json", UDim2.new(1,-130,0,16), UDim2.new(0,14,0,28), 10, C.sub, false)
+button(clearAutoCard, "🗑️ Borrar", UDim2.fromOffset(92, 28), UDim2.new(1,-104,0.5,-14), function()
+    if delfile and isfile and isfile(AUTOSAVE_PATH) then
+        pcall(delfile, AUTOSAVE_PATH)
+        print("[Nevada V8] 🗑️ Autosave eliminado")
     end
 end)
 
@@ -1126,7 +1194,7 @@ showPage=function(name)
   activeTab=name
   for n,p in pairs(pages) do p.Visible=(n==name) end
   pageTitle.Text=(name=="Inicio") and "Bienvenido a Nevada" or name
-  pageSubtitle.Text=(name=="Inicio") and "Tu hub todo en uno." or "Nevada V7 — controles y ajustes"
+  pageSubtitle.Text=(name=="Inicio") and "Tu hub todo en uno." or "Nevada V8 — controles y ajustes"
   for _,obj in ipairs(navHolder:GetChildren()) do if obj:IsA("TextButton") then obj.BackgroundColor3=(obj.Name==name) and Color3.fromRGB(29,39,57) or Color3.fromRGB(6,9,15) end end
 end
 for i,name in ipairs(navNames) do
@@ -1183,10 +1251,41 @@ local function runKnifeMacro()
   end)
 end
 
+-- [V8 FIX] Macro input táctil + PC + control
+local lastMacroAt = 0
+local MACRO_DEBOUNCE = 0.12
+local function tryRunMacro()
+    local now = tick()
+    if now - lastMacroAt < MACRO_DEBOUNCE then return end
+    lastMacroAt = now
+    runMacro()
+end
+local function isTouchOnHubUI(pos)
+    local ok, objs = pcall(function()
+        return UserInputService:GetGuiObjectsAtPosition(pos.X, pos.Y)
+    end)
+    if not ok or not objs then return false end
+    for _, obj in ipairs(objs) do
+        if obj:IsDescendantOf(gui) then return true end
+    end
+    return false
+end
+
 UserInputService.InputBegan:Connect(function(input, processed)
-  if processed then return end
-  if input.UserInputType==Enum.UserInputType.MouseButton1 or input.KeyCode==Enum.KeyCode.ButtonR2 then runMacro() end
-  if input.KeyCode == Enum.KeyCode.ButtonL2 then runKnifeMacro() end
+    if input.KeyCode == Enum.KeyCode.ButtonL2 then
+        runKnifeMacro()
+        return
+    end
+    if input.UserInputType == Enum.UserInputType.Touch then
+        if isTouchOnHubUI(input.Position) then return end
+        tryRunMacro()
+        return
+    end
+    if processed then return end
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.KeyCode == Enum.KeyCode.ButtonR2 then
+        tryRunMacro()
+    end
 end)
 
 -- ==========================================
@@ -1335,4 +1434,4 @@ task.spawn(function()
     end
 end)
 
-print("[Nevada V7] ✅ Cargado correctamente")
+print("[Nevada V8] ✅ Cargado · Auto-save activo (cada " .. AUTOSAVE_INTERVAL .. "s)")
