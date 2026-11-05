@@ -51,13 +51,19 @@ local BG_LIST = {
 local function CargarFondo(url)
     if not url or url == "" then return nil end
     if writefile and isfile and getcustomasset then
-        local fileName = "NevadaBG_" .. tostring(math.random(1, 10000)) .. ".jpg"
-        local ok, body = pcall(function() return game:HttpGet(url) end)
-        if ok and body and #body > 0 then
-            pcall(writefile, fileName, body)
-            local success, asset = pcall(getcustomasset, fileName)
-            if success then return asset end
+        -- ✅ Guarda con el nombre real del archivo para no re-descargar y evitar el HTTP 402
+        local fileName = "NevadaBG_" .. tostring(url:match("([^/]+)$") or "default.jpg")
+        
+        if not isfile(fileName) then
+            local ok, body = pcall(function() return game:HttpGet(url) end)
+            if ok and body and #body > 0 then
+                pcall(writefile, fileName, body)
+            else
+                return nil
+            end
         end
+        local success, asset = pcall(getcustomasset, fileName)
+        if success then return asset end
     end
     return nil
 end
@@ -325,6 +331,9 @@ local function esPistola(tool)
     return tool:FindFirstChild("showBeam") ~= nil or tool.Name:lower():find("gun") or tool.Name:lower():find("pistol") or tool.Name:lower():find("revolver")
 end
 
+-- ==========================================
+-- HOOK INTACTO (SIN MODIFICACIONES)
+-- ==========================================
 getgenv().NevadaTargetPart = nil
 local oldNamecall
 if hookmetamethod and getnamecallmethod and checkcaller then
@@ -472,12 +481,12 @@ local function listV33Configs()
 end
 
 -- ==========================================
--- INTERFAZ WINDUI CON EL BOTÓN NATIVO FORZADO
+-- INTERFAZ WINDUI (CON EL FIX DEL TEMA)
 -- ==========================================
 local Window = WindUI:CreateWindow({
     Title = "Nevada | DUELS",
     Author = "by Ti",
-    Theme = "Graphite",
+    Theme = "Dark", -- ✅ FIX: "Graphite" causaba el error PanelBackground
     Size = UDim2.fromOffset(620, 350),
     MinSize = Vector2.new(330, 270),
     Resizable = true,
@@ -486,10 +495,9 @@ local Window = WindUI:CreateWindow({
     ElementsRadius = 12,
     Background = FondoAsset,
     BackgroundImageTransparency = 0.25,
-    -- AQUÍ ESTÁ LA MAGIA: Le pasamos las propiedades modernas de WindUI
     OpenButton = {
         Enabled = true,
-        Title = "Abri NVD",
+        Title = "Abrir NVD",
         Icon = "rbxassetid://85755059842228",
         OnlyMobile = false,
         Draggable = true,
@@ -499,45 +507,121 @@ local Window = WindUI:CreateWindow({
     }
 })
 
--- Función para cambiar el fondo
-local WindUI_BgCache = nil
-local function findWindUIBackground()
-    if WindUI_BgCache and WindUI_BgCache.Parent then return WindUI_BgCache end
-    WindUI_BgCache = nil
-    local best, bestSize = nil, 0
-    local roots = {}
-    pcall(function() if gethui then table.insert(roots, gethui()) end end)
-    pcall(function() table.insert(roots, game:GetService("CoreGui")) end)
-    pcall(function() local pg = player:FindFirstChild("PlayerGui"); if pg then table.insert(roots, pg) end end)
+-- ==========================================
+-- BOTÓN FLOTANTE MACRO 360 (ESTILO XEROHUB)
+-- ==========================================
+local floatingBtn360 = Instance.new("TextButton")
+floatingBtn360.Name = "Nevada360Btn"
+floatingBtn360.Size = UDim2.fromOffset(156, 48)
+floatingBtn360.Position = UDim2.new(0.8, -150, 0.5, 0)
+floatingBtn360.BackgroundColor3 = Color3.fromRGB(14, 14, 14)
+floatingBtn360.BackgroundTransparency = 0.06
+floatingBtn360.Text = "Macro 360: OFF"
+floatingBtn360.TextTransparency = 1
+floatingBtn360.AutoButtonColor = false
+floatingBtn360.Visible = false
+floatingBtn360.ZIndex = 50
+floatingBtn360.Parent = game:GetService("CoreGui")
 
-    local function scan(inst, depth)
-        if depth > 10 then return end
-        if inst:IsA("ImageLabel") and inst.Name == "Background" then best = inst; return end
-        if inst:IsA("ImageLabel") then
-            local sz = inst.AbsoluteSize.X * inst.AbsoluteSize.Y
-            if sz > bestSize then bestSize = sz; best = inst end
-        end
-        for _, c in ipairs(inst:GetChildren()) do scan(c, depth + 1) end
-    end
-    for _, root in ipairs(roots) do if root then for _, c in ipairs(root:GetChildren()) do scan(c, 0) end end end
-    WindUI_BgCache = best
-    return best
+Instance.new("UICorner", floatingBtn360).CornerRadius = UDim.new(0, 12)
+local stroke360 = Instance.new("UIStroke", floatingBtn360)
+stroke360.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+stroke360.Thickness = 1
+stroke360.Color = Color3.fromRGB(60, 60, 60)
+stroke360.Transparency = 0.2
+
+local title360 = Instance.new("TextLabel", floatingBtn360)
+title360.Name = "ControlTitle"
+title360.BackgroundTransparency = 1
+title360.Position = UDim2.fromOffset(14, 6)
+title360.Size = UDim2.new(1, -42, 0, 20)
+title360.Font = Enum.Font.GothamMedium
+title360.TextSize = 12
+title360.TextColor3 = Color3.fromRGB(240, 240, 240)
+title360.TextXAlignment = Enum.TextXAlignment.Left
+title360.Text = "Macro 360"
+title360.ZIndex = 51
+
+local stateLabel360 = Instance.new("TextLabel", floatingBtn360)
+stateLabel360.Name = "ControlState"
+stateLabel360.BackgroundTransparency = 1
+stateLabel360.Position = UDim2.fromOffset(14, 26)
+stateLabel360.Size = UDim2.new(1, -42, 0, 14)
+stateLabel360.Font = Enum.Font.GothamMedium
+stateLabel360.TextSize = 8
+stateLabel360.TextColor3 = Color3.fromRGB(135, 135, 135)
+stateLabel360.TextXAlignment = Enum.TextXAlignment.Left
+stateLabel360.Text = "INACTIVO"
+stateLabel360.ZIndex = 51
+
+local dot360 = Instance.new("Frame", floatingBtn360)
+dot360.Name = "StateDot"
+dot360.AnchorPoint = Vector2.new(1, 0.5)
+dot360.Position = UDim2.new(1, -14, 0.5, 0)
+dot360.Size = UDim2.fromOffset(6, 6)
+dot360.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+dot360.BorderSizePixel = 0
+dot360.ZIndex = 51
+Instance.new("UICorner", dot360).CornerRadius = UDim.new(1, 0)
+
+local hovered360 = false
+local function updateVisual360()
+    local enabled = state.macro360Enabled
+    stateLabel360.Text = enabled and "ACTIVO" or "INACTIVO"
+    dot360.BackgroundColor3 = enabled and Color3.fromRGB(242, 242, 242) or Color3.fromRGB(80, 80, 80)
+    floatingBtn360.BackgroundColor3 = hovered360 and Color3.fromRGB(25, 25, 25) or Color3.fromRGB(14, 14, 14)
+    stroke360.Color = enabled and Color3.fromRGB(175, 175, 175) or Color3.fromRGB(60, 60, 60)
 end
 
-local function setWindowBackground(assetId)
-    if not assetId then return end
-    pcall(function() if Window.SetBackground then Window:SetBackground(assetId) end end)
-    pcall(function() if Window.SetBackgroundImage then Window:SetBackgroundImage(assetId) end end)
-    pcall(function() if Window.Background then Window.Background = assetId end end)
-    local bg = findWindUIBackground()
-    if bg then
-        pcall(function()
-            bg.Image = assetId
-            if bg.ImageTransparency > 0.6 then bg.ImageTransparency = 0.25 end
+local dragging360, dragInput360, dragStart360, startPos360
+floatingBtn360.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging360 = true; dragStart360 = input.Position; startPos360 = floatingBtn360.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then dragging360 = false end
         end)
     end
-end
+end)
+floatingBtn360.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput360 = input
+    end
+end)
+game:GetService("UserInputService").InputChanged:Connect(function(input)
+    if dragging360 and input == dragInput360 then
+        local delta = input.Position - dragStart360
+        floatingBtn360.Position = UDim2.new(startPos360.X.Scale, startPos360.X.Offset + delta.X, startPos360.Y.Scale, startPos360.Y.Offset + delta.Y)
+    end
+end)
 
+local dragStartPos360 = nil; local validClick360 = false
+floatingBtn360.InputBegan:Connect(function(input) 
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then 
+        dragStartPos360 = input.Position; validClick360 = true 
+    end 
+end)
+floatingBtn360.InputChanged:Connect(function(input) 
+    if dragStartPos360 and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then 
+        if (input.Position - dragStartPos360).Magnitude > 5 then validClick360 = false end 
+    end 
+end)
+
+floatingBtn360.MouseButton1Click:Connect(function() 
+    if not validClick360 then return end 
+    state.macro360Enabled = not state.macro360Enabled
+    updateVisual360()
+    -- Sincronizar con el Toggle del menú si existe
+    if _G.NevadaTogMacro360 then
+        pcall(function() _G.NevadaTogMacro360:Set(state.macro360Enabled) end)
+    end
+end)
+floatingBtn360.MouseEnter:Connect(function() hovered360 = true; updateVisual360() end)
+floatingBtn360.MouseLeave:Connect(function() hovered360 = false; updateVisual360() end)
+updateVisual360()
+
+-- ==========================================
+-- TABS
+-- ==========================================
 local MainSection = Window:Section({ Title = "PRINCIPAL", Opened = true })
 local PersonalSection = Window:Section({ Title = "PERSONAL", Opened = true })
 
@@ -552,6 +636,9 @@ local Tabs = {
     Configs = PersonalSection:Tab({Title = "Configs", Icon = "settings"}),
 }
 
+-- ==========================================
+-- CONFIGS (FONDOS CON EL FIX NATIVO)
+-- ==========================================
 Tabs.Configs:Section({ Title = "Catálogo de Fondos" })
 local bgNames = {}
 for _, bg in ipairs(BG_LIST) do table.insert(bgNames, bg.name) end
@@ -561,7 +648,11 @@ Tabs.Configs:Dropdown({
         for _, bg in ipairs(BG_LIST) do
             if bg.name == selectedName then
                 local newAsset = CargarFondo(bg.url)
-                if newAsset then setWindowBackground(newAsset) end
+                if newAsset then
+                    -- ✅ FIX NATIVO PARA CAMBIO INSTANTÁNEO
+                    Window:SetBackgroundImage(newAsset)
+                    Window:SetBackgroundImageTransparency(0.25)
+                end
                 break
             end
         end
@@ -579,13 +670,24 @@ Tabs.Cuchillo:Slider({ Title = "Delay al Equipar", Step = 0.01, Value = {Min = 0
 Tabs.Cuchillo:Slider({ Title = "Delay al Lanzar", Step = 0.01, Value = {Min = 0.01, Max = 0.50, Default = state.knifeThrowDelay}, Callback = function(v) state.knifeThrowDelay = v end })
 
 -- MACRO 360
-Tabs.Macro360:Toggle({ Title = "Activar Auto Shoot / Macro 360", Value = state.macro360Enabled, Callback = function(v) 
+_G.NevadaTogMacro360 = Tabs.Macro360:Toggle({ Title = "Activar Auto Shoot / Macro 360", Value = state.macro360Enabled, Callback = function(v) 
     state.macro360Enabled = v
+    if updateVisual360 then updateVisual360() end -- Sincroniza el botón flotante
 end })
 Tabs.Macro360:Slider({ Title = "Tamaño del FOV", Step = 10, Value = {Min = 10, Max = 500, Default = state.macro360Fov}, Callback = function(v) state.macro360Fov = v end })
 Tabs.Macro360:Slider({ Title = "Probabilidad de acierto (%)", Step = 1, Value = {Min = 1, Max = 100, Default = state.macro360HitChance}, Callback = function(v) state.macro360HitChance = v end })
 Tabs.Macro360:Slider({ Title = "Tiempo de reacción (s)", Step = 0.1, Value = {Min = 0, Max = 1, Default = state.macro360Reaction}, Callback = function(v) state.macro360Reaction = v end })
 Tabs.Macro360:Slider({ Title = "Delay entre Disparos (s)", Step = 0.01, Value = {Min = 0.01, Max = 1.0, Default = state.macro360Cooldown}, Callback = function(v) state.macro360Cooldown = v end })
+
+-- Toggle para mostrar el botón flotante 360
+Tabs.Macro360:Toggle({ 
+    Title = "Mostrar Botón Flotante", 
+    Value = false, 
+    Callback = function(v) 
+        floatingBtn360.Visible = v 
+        if v then updateVisual360() end
+    end 
+})
 
 -- ANIMACIONES
 local animToggle
@@ -694,7 +796,9 @@ Tabs.Configs:Button({ Title = "🗑️ Borrar", Callback = function()
     if isfile and isfile(path) and delfile then pcall(delfile, path); if configDropdown then configDropdown:Refresh(listV33Configs()) end end
 end })
 
+-- ==========================================
 -- MACROS CON ANTI-LOBBY
+-- ==========================================
 local macroBusy=false; local lastMacro=0
 local function runMacro()
   if not state.macro or macroBusy then return end
