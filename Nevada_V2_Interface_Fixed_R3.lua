@@ -1,31 +1,15 @@
--- NEVADA V12.2 | Interfaz Xero (WindUI) con Carga Segura y Fallback
-local urlXero = "https://raw.githubusercontent.com/OnyxDevv/Onyx-web/refs/heads/main/main%20(3).lua"
-local urlSZK  = "https://raw.githubusercontent.com/ONYXHUB-X-SZK/SZKWINDUI/refs/heads/main/szk/lua/libary/wind%20ui/szkhub-libary.lua"
-
-local function intentarCargarUI(url)
-    local exito, resultado = pcall(function()
-        local source = game:HttpGet(url)
-        if not source or #source < 500 then return nil, "Archivo vacío o bloqueado" end
-        local func, err = loadstring(source)
-        if not func then return nil, "Error al compilar: " .. tostring(err) end
-        return func()
-    end)
-    if exito and resultado then return true, resultado end
-    return false, tostring(resultado)
-end
-
-local ok, WindUI = intentarCargarUI(urlXero)
-if not ok then
-    warn("[Nevada] Falló enlace de Xero. Intentando con SZK...")
-    ok, WindUI = intentarCargarUI(urlSZK)
-end
+-- NEVADA V16 | Interfaz WindUI (Xero Style) + Todo Funcional
+-- Cargar la librería oficial de WindUI
+local WindUI
+local ok, err = pcall(function()
+    WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
+end)
 
 if not ok or not WindUI then
     game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "Error Crítico",
-        Text = "No se pudo cargar la interfaz. Revisa tu conexión o usa otro executor."
+        Title = "Error de Interfaz",
+        Text = "No se pudo descargar la UI. Activa las HTTP requests en tu ejecutor."
     })
-    warn("[Nevada] Error final de UI:", WindUI)
     return
 end
 
@@ -43,7 +27,6 @@ local OWNER, REPO, BRANCH = "sanxsmov", "Mis-soundsp", "main"
 local FOLDERS = {"sounds", "SoundsV2"}
 local RAW = "https://raw.githubusercontent.com/" .. OWNER .. "/" .. REPO .. "/" .. BRANCH .. "/"
 local API_ROOT = "https://api.github.com/repos/" .. OWNER .. "/" .. REPO .. "/contents/"
-
 local SKYBOX_REPO = "sanxsmov/Onyx-web"
 local SKYBOX_FOLDER = "skyboxes"
 local SKYBOX_RAW = "https://raw.githubusercontent.com/" .. SKYBOX_REPO .. "/main/" .. SKYBOX_FOLDER .. "/"
@@ -85,11 +68,9 @@ local state = {
   folder = FOLDERS[1], animEnabled = false, animMode = "pack", selectedAnimPack = "Default",
   customMix = {Idle="Default", Walk="Default", Run="Default", Jump="Default", Fall="Default", Swim="Default", SwimIdle="Default"},
 }
-local sounds, soundCache, soundCategory = {}, {}, "Arma"
+local sounds, soundCache, currentSoundCategory = {}, {}, "Arma"
 
--- ==========================================
--- [FIX] SKYBOX ORIGINAL GUARDADO
--- ==========================================
+-- SKYBOX GUARDADO
 local originalSky = Lighting:FindFirstChildOfClass("Sky")
 local originalSkyProperties = nil
 if originalSky then
@@ -100,9 +81,7 @@ if originalSky then
     }
 end
 
--- ==========================================
--- ANIMACIONES
--- ==========================================
+-- LOGICA DE ANIMACIONES
 local originalAnimations = nil
 local animationGuards = setmetatable({}, {__mode = "k"})
 
@@ -127,9 +106,7 @@ local function captureOriginalAnimations(char)
 end
 
 local function clearAnimationGuards()
-    for anim, conn in pairs(animationGuards) do
-        if conn then pcall(function() conn:Disconnect() end) end
-    end
+    for anim, conn in pairs(animationGuards) do if conn then pcall(function() conn:Disconnect() end) end end
     animationGuards = setmetatable({}, {__mode = "k"})
 end
 
@@ -170,23 +147,17 @@ local function fastApply(char)
             guardAnimation(animate, "idle", "Animation1", p.Idle)
             guardAnimation(animate, "idle", "Animation2", p.Idle)
         end
-        if mix.Walk == "Default" then
-            if originalAnimations and originalAnimations.Walk then guardAnimation(animate, "walk", "WalkAnim", originalAnimations.Walk:match("%d+")) end
+        if mix.Walk == "Default" then if originalAnimations and originalAnimations.Walk then guardAnimation(animate, "walk", "WalkAnim", originalAnimations.Walk:match("%d+")) end
         else local p = AnimationPacks[mix.Walk] or AnimationPacks["Default"]; guardAnimation(animate, "walk", "WalkAnim", p.Walk) end
-        if mix.Run == "Default" then
-            if originalAnimations and originalAnimations.Run then guardAnimation(animate, "run", "RunAnim", originalAnimations.Run:match("%d+")) end
+        if mix.Run == "Default" then if originalAnimations and originalAnimations.Run then guardAnimation(animate, "run", "RunAnim", originalAnimations.Run:match("%d+")) end
         else local p = AnimationPacks[mix.Run] or AnimationPacks["Default"]; guardAnimation(animate, "run", "RunAnim", p.Run) end
-        if mix.Jump == "Default" then
-            if originalAnimations and originalAnimations.Jump then guardAnimation(animate, "jump", "JumpAnim", originalAnimations.Jump:match("%d+")) end
+        if mix.Jump == "Default" then if originalAnimations and originalAnimations.Jump then guardAnimation(animate, "jump", "JumpAnim", originalAnimations.Jump:match("%d+")) end
         else local p = AnimationPacks[mix.Jump] or AnimationPacks["Default"]; guardAnimation(animate, "jump", "JumpAnim", p.Jump) end
-        if mix.Fall == "Default" then
-            if originalAnimations and originalAnimations.Fall then guardAnimation(animate, "fall", "FallAnim", originalAnimations.Fall:match("%d+")) end
+        if mix.Fall == "Default" then if originalAnimations and originalAnimations.Fall then guardAnimation(animate, "fall", "FallAnim", originalAnimations.Fall:match("%d+")) end
         else local p = AnimationPacks[mix.Fall] or AnimationPacks["Default"]; guardAnimation(animate, "fall", "FallAnim", p.Fall) end
-        if mix.Swim == "Default" then
-            if originalAnimations and originalAnimations.Swim then guardAnimation(animate, "swim", "Swim", originalAnimations.Swim:match("%d+")) end
+        if mix.Swim == "Default" then if originalAnimations and originalAnimations.Swim then guardAnimation(animate, "swim", "Swim", originalAnimations.Swim:match("%d+")) end
         else local p = AnimationPacks[mix.Swim] or AnimationPacks["Default"]; guardAnimation(animate, "swim", "Swim", p.Swim) end
-        if mix.SwimIdle == "Default" then
-            if originalAnimations and originalAnimations.SwimIdle then guardAnimation(animate, "swimidle", "SwimIdle", originalAnimations.SwimIdle:match("%d+")) end
+        if mix.SwimIdle == "Default" then if originalAnimations and originalAnimations.SwimIdle then guardAnimation(animate, "swimidle", "SwimIdle", originalAnimations.SwimIdle:match("%d+")) end
         else local p = AnimationPacks[mix.SwimIdle] or AnimationPacks["Default"]; guardAnimation(animate, "swimidle", "SwimIdle", p.SwimIdle) end
     else
         local pack = AnimationPacks[state.selectedAnimPack] or AnimationPacks["Default"]
@@ -202,20 +173,14 @@ local function fastApply(char)
 end
 
 local function restoreAllOriginal()
-    local char = player.Character
-    if not char then return end
-    local animate = char:FindFirstChild("Animate")
-    if not animate then return end
-    clearAnimationGuards()
-    captureOriginalAnimations(char)
+    local char = player.Character; if not char then return end
+    local animate = char:FindFirstChild("Animate"); if not animate then return end
+    clearAnimationGuards(); captureOriginalAnimations(char)
     if originalAnimations then
         local function setOrig(folderName, animName, origKey)
-            local folder = animate:FindFirstChild(folderName)
-            if not folder then return end
+            local folder = animate:FindFirstChild(folderName); if not folder then return end
             local anim = folder:FindFirstChild(animName)
-            if anim and anim:IsA("Animation") and originalAnimations[origKey] then
-                anim.AnimationId = originalAnimations[origKey]
-            end
+            if anim and anim:IsA("Animation") and originalAnimations[origKey] then anim.AnimationId = originalAnimations[origKey] end
         end
         setOrig("idle", "Animation1", "Idle1"); setOrig("idle", "Animation2", "Idle2")
         setOrig("walk", "WalkAnim", "Walk"); setOrig("run", "RunAnim", "Run")
@@ -228,8 +193,7 @@ local function onCharacterAdded(char)
     originalAnimations = nil
     if not state.animEnabled then return end
     task.spawn(function()
-        char:WaitForChild("Humanoid", 5)
-        char:WaitForChild("Animate", 5)
+        char:WaitForChild("Humanoid", 5); char:WaitForChild("Animate", 5)
         task.wait(0.35)
         if char and char.Parent and state.animEnabled then fastApply(char) end
     end)
@@ -237,9 +201,7 @@ end
 if player.Character then onCharacterAdded(player.Character) end
 player.CharacterAdded:Connect(onCharacterAdded)
 
--- ==========================================
 -- SKYBOX, SONIDOS Y TEAM CHECK
--- ==========================================
 local function downloadImg(url, name)
     if not (writefile and isfile and getcustomasset) then return nil end
     local path = "NevadaSky_" .. name .. ".png"
@@ -247,19 +209,15 @@ local function downloadImg(url, name)
         local ok, body = pcall(function() return game:HttpGet(url) end)
         if ok and body and #body > 0 then pcall(writefile, path, body) else return nil end
     end
-    local success, asset = pcall(getcustomasset, path)
-    if success then return asset end
+    local success, asset = pcall(getcustomasset, path); if success then return asset end
     return nil
 end
 
 local function applySkyFromGitHub(skyName)
     local baseUrl = SKYBOX_RAW .. skyName .. "/"
-    local aBk = downloadImg(baseUrl .. "bk.png", skyName.."_bk")
-    local aDn = downloadImg(baseUrl .. "dn.png", skyName.."_dn")
-    local aFt = downloadImg(baseUrl .. "ft.png", skyName.."_ft")
-    local aLf = downloadImg(baseUrl .. "lf.png", skyName.."_lf")
-    local aRt = downloadImg(baseUrl .. "rt.png", skyName.."_rt")
-    local aUp = downloadImg(baseUrl .. "up.png", skyName.."_up")
+    local aBk = downloadImg(baseUrl .. "bk.png", skyName.."_bk"); local aDn = downloadImg(baseUrl .. "dn.png", skyName.."_dn")
+    local aFt = downloadImg(baseUrl .. "ft.png", skyName.."_ft"); local aLf = downloadImg(baseUrl .. "lf.png", skyName.."_lf")
+    local aRt = downloadImg(baseUrl .. "rt.png", skyName.."_rt"); local aUp = downloadImg(baseUrl .. "up.png", skyName.."_up")
     if aBk and aDn and aFt and aLf and aRt and aUp then
         pcall(function()
             local sky = Lighting:FindFirstChildOfClass("Sky")
@@ -277,10 +235,8 @@ local function getPlayerTeam(p)
     if p.Team and p.Team.Name ~= "" then return p.Team.Name end
     local attr = p:GetAttribute("Team") or p:GetAttribute("team")
     if attr and tostring(attr) ~= "" then return tostring(attr) end
-    local gui = player:FindFirstChild("PlayerGui")
-    local main = gui and gui:FindFirstChild("Main")
-    local frame = main and main:FindFirstChild("MainGameFrame")
-    local score = frame and frame:FindFirstChild("IngameScore")
+    local gui = player:FindFirstChild("PlayerGui"); local main = gui and gui:FindFirstChild("Main")
+    local frame = main and main:FindFirstChild("MainGameFrame"); local score = frame and frame:FindFirstChild("IngameScore")
     if score then
         for _, teamName in ipairs({"TeamRed", "TeamBlue"}) do
             local teamFolder = score:FindFirstChild(teamName)
@@ -288,9 +244,7 @@ local function getPlayerTeam(p)
                 if teamFolder:FindFirstChild(p.Name) then return teamName == "TeamRed" and "Red" or "Blue" end
                 for _, entry in ipairs(teamFolder:GetChildren()) do
                     local txt = entry:FindFirstChild("PlayerName", true)
-                    if txt and txt:IsA("TextLabel") and string.lower(txt.Text) == string.lower(p.Name) then
-                        return teamName == "TeamRed" and "Red" or "Blue"
-                    end
+                    if txt and txt:IsA("TextLabel") and string.lower(txt.Text) == string.lower(p.Name) then return teamName == "TeamRed" and "Red" or "Blue" end
                 end
             end
         end
@@ -300,8 +254,7 @@ end
 
 local function isEnemy(targetPlayer)
     if not targetPlayer or targetPlayer == player then return false end
-    local myTeam = getPlayerTeam(player)
-    local targetTeam = getPlayerTeam(targetPlayer)
+    local myTeam = getPlayerTeam(player); local targetTeam = getPlayerTeam(targetPlayer)
     if myTeam and targetTeam then return string.lower(myTeam) ~= string.lower(targetTeam) end
     return false
 end
@@ -340,50 +293,37 @@ local function playSound(url)
   local asset = soundCache[url]
   if not asset then
     if writefile and isfile and getcustomasset then
-      local name = "nevada_" .. (url:match("([^/]+)$") or "sound.mp3")
-      name = name:gsub("[^%w%._%-]", "_")
+      local name = "nevada_" .. (url:match("([^/]+)$") or "sound.mp3"); name = name:gsub("[^%w%._%-]", "_")
       if not isfile(name) then
         local ok, body = pcall(function() return game:HttpGet(url) end)
         if not ok or type(body) ~= "string" or #body == 0 then return end
         local wrote = pcall(writefile, name, body); if not wrote then return end
       end
-      local ok, result = pcall(getcustomasset, name)
-      if not ok then return end
-      asset = result
-    else
-      asset = url
-    end
+      local ok, result = pcall(getcustomasset, name); if not ok then return end; asset = result
+    else asset = url end
     soundCache[url] = asset
   end
-  local s = Instance.new("Sound")
-  s.SoundId, s.Volume, s.Parent = asset, 1, SoundService
-  s:Play()
-  s.Ended:Connect(function() s:Destroy() end)
-  task.delay(20, function() if s.Parent then s:Destroy() end end)
+  local s = Instance.new("Sound"); s.SoundId, s.Volume, s.Parent = asset, 1, SoundService
+  s:Play(); s.Ended:Connect(function() s:Destroy() end); task.delay(20, function() if s.Parent then s:Destroy() end end)
 end
 
-local ORIGINAL_SHOT="10209603"
-local ORIGINAL_KILL="296102734"
+local ORIGINAL_SHOT="10209603"; local ORIGINAL_KILL="296102734"
 local watchedSounds=setmetatable({}, {__mode="k"})
 local function watchNativeSound(obj)
   if not obj:IsA("Sound") or watchedSounds[obj] then return end
   watchedSounds[obj]=true
   local function check()
     if not obj.Parent then return end
-    local id = tostring(obj.SoundId or ""):match("(%d+)")
-    local n = obj.Name:lower()
-    local category = nil
+    local id = tostring(obj.SoundId or ""):match("(%d+)"); local n = obj.Name:lower(); local category = nil
     if n:find("jump") or n:find("saltar") or n:find("land") or n:find("fall") then category = "Saltar"
     elseif id == ORIGINAL_SHOT or (n:find("gun") and obj:FindFirstAncestorWhichIsA("Tool")) then category = "Arma"
     elseif id == ORIGINAL_KILL or n:find("kill") then category = "Matar" end
     if not category then return end
     local custom=state.selected[category]
     if not state.enabled[category] or state.muted[category] or not custom or custom.URL=="" then return end
-    pcall(function() obj.Volume=0 end)
-    playSound(custom.URL)
+    pcall(function() obj.Volume=0 end); playSound(custom.URL)
   end
-  obj.Played:Connect(check)
-  if obj.IsPlaying or obj.Playing then task.defer(check) end
+  obj.Played:Connect(check); if obj.IsPlaying or obj.Playing then task.defer(check) end
 end
 local function scanSoundTree(root)
   if not root then return end
@@ -391,27 +331,17 @@ local function scanSoundTree(root)
   for _,obj in ipairs(root:GetDescendants()) do if obj:IsA("Sound") then watchNativeSound(obj) end end
   root.DescendantAdded:Connect(watchNativeSound)
 end
-scanSoundTree(workspace)
-scanSoundTree(SoundService)
+scanSoundTree(workspace); scanSoundTree(SoundService)
 
-local lastJumpState = setmetatable({}, {__mode = "k"})
-local lastJumpSoundAt = 0
+local lastJumpState = setmetatable({}, {__mode = "k"}); local lastJumpSoundAt = 0
 RunService.Heartbeat:Connect(function()
-    local char = player.Character
-    if not char then return end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
-    local currentState = hum:GetState()
-    local isJumping = (currentState == Enum.HumanoidStateType.Jumping)
-    local wasJumping = lastJumpState[char] or false
+    local char = player.Character; if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid"); if not hum then return end
+    local isJumping = (hum:GetState() == Enum.HumanoidStateType.Jumping); local wasJumping = lastJumpState[char] or false
     if isJumping and not wasJumping then
         local custom = state.selected["Saltar"]
         if state.enabled["Saltar"] and not state.muted["Saltar"] and custom and custom.URL ~= "" then
-            local now = os.clock()
-            if now - lastJumpSoundAt > 0.15 then
-                lastJumpSoundAt = now
-                playSound(custom.URL)
-            end
+            local now = os.clock(); if now - lastJumpSoundAt > 0.15 then lastJumpSoundAt = now; playSound(custom.URL) end
         end
     end
     lastJumpState[char] = isJumping
@@ -437,69 +367,44 @@ end
 local function refreshCatalog()
   local loaded=false
   for _,folder in ipairs(FOLDERS) do if fetchFolder(folder) then loaded=true; break end end
-  table.sort(sounds,function(a,b) return a.Name:lower()<b.Name:lower() end)
-  return loaded
+  table.sort(sounds,function(a,b) return a.Name:lower()<b.Name:lower() end); return loaded
 end
 
--- ==========================================
 -- CONFIG SYSTEM
--- ==========================================
-local CONFIG_FOLDER = "NevadaV12_Configs"
+local CONFIG_FOLDER = "NevadaV16_Configs"
 if isfolder and not isfolder(CONFIG_FOLDER) then makefolder(CONFIG_FOLDER) end
 
-local function serializeV12()
+local function serializeV16()
     return {
-        Version = "V12.2",
+        Version = "V16",
         Sonidos = {
-            Selected = {
-                Arma = { Name = state.selected.Arma.Name, URL = state.selected.Arma.URL },
-                Saltar = { Name = state.selected.Saltar.Name, URL = state.selected.Saltar.URL },
-                Matar = { Name = state.selected.Matar.Name, URL = state.selected.Matar.URL },
-            },
+            Selected = { Arma = { Name = state.selected.Arma.Name, URL = state.selected.Arma.URL }, Saltar = { Name = state.selected.Saltar.Name, URL = state.selected.Saltar.URL }, Matar = { Name = state.selected.Matar.Name, URL = state.selected.Matar.URL } },
             Enabled = { Arma = state.enabled.Arma, Saltar = state.enabled.Saltar, Matar = state.enabled.Matar },
             Muted = { Arma = state.muted.Arma, Saltar = state.muted.Saltar, Matar = state.muted.Matar },
         },
         Skybox = { Selected = state.selectedSky, AutoLoad = state.autoLoadSky },
         Animaciones = {
             Enabled = state.animEnabled, Mode = state.animMode, SelectedPack = state.selectedAnimPack,
-            CustomMix = {
-                Idle = state.customMix.Idle, Walk = state.customMix.Walk, Run = state.customMix.Run,
-                Jump = state.customMix.Jump, Fall = state.customMix.Fall,
-                Swim = state.customMix.Swim, SwimIdle = state.customMix.SwimIdle,
-            },
+            CustomMix = { Idle = state.customMix.Idle, Walk = state.customMix.Walk, Run = state.customMix.Run, Jump = state.customMix.Jump, Fall = state.customMix.Fall, Swim = state.customMix.Swim, SwimIdle = state.customMix.SwimIdle },
         },
         Macros = {
             Weapon = state.macro, WeaponEquipDelay = state.equipDelay, WeaponShootDelay = state.shootDelay,
             Knife = state.knifeMacroEnabled, KnifeEquipDelay = state.knifeEquipDelay, KnifeThrowDelay = state.knifeThrowDelay,
-            Macro360 = state.macro360Enabled, Macro360Fov = state.macro360Fov,
-            Macro360HitChance = state.macro360HitChance, Macro360Reaction = state.macro360Reaction,
-            Macro360Cooldown = state.macro360Cooldown,
+            Macro360 = state.macro360Enabled, Macro360Fov = state.macro360Fov, Macro360HitChance = state.macro360HitChance, Macro360Reaction = state.macro360Reaction, Macro360Cooldown = state.macro360Cooldown,
         },
     }
 end
 
-local function applyV12Config(data)
-    if type(data) ~= "table" then return false, "Config inválida" end
+local function applyV16Config(data)
+    if type(data) ~= "table" then return false end
     if data.Sonidos then
-        if data.Sonidos.Selected then
-            for cat in pairs(state.selected) do
-                if data.Sonidos.Selected[cat] then
-                    state.selected[cat].Name = data.Sonidos.Selected[cat].Name or "Ninguno"
-                    state.selected[cat].URL = data.Sonidos.Selected[cat].URL or ""
-                end
-            end
-        end
+        if data.Sonidos.Selected then for cat in pairs(state.selected) do if data.Sonidos.Selected[cat] then state.selected[cat].Name = data.Sonidos.Selected[cat].Name or "Ninguno"; state.selected[cat].URL = data.Sonidos.Selected[cat].URL or "" end end end
         if data.Sonidos.Enabled then for cat in pairs(state.enabled) do if data.Sonidos.Enabled[cat] ~= nil then state.enabled[cat] = data.Sonidos.Enabled[cat] end end end
         if data.Sonidos.Muted then for cat in pairs(state.muted) do if data.Sonidos.Muted[cat] ~= nil then state.muted[cat] = data.Sonidos.Muted[cat] end end end
     end
-    if data.Skybox then
-        state.selectedSky = data.Skybox.Selected or ""
-        state.autoLoadSky = data.Skybox.AutoLoad == true
-        if state.autoLoadSky and state.selectedSky ~= "" then task.spawn(function() pcall(applySkyFromGitHub, state.selectedSky) end) end
-    end
+    if data.Skybox then state.selectedSky = data.Skybox.Selected or ""; state.autoLoadSky = data.Skybox.AutoLoad == true end
     if data.Animaciones then
-        state.animMode = data.Animaciones.Mode or "pack"
-        state.selectedAnimPack = data.Animaciones.SelectedPack or "Default"
+        state.animMode = data.Animaciones.Mode or "pack"; state.selectedAnimPack = data.Animaciones.SelectedPack or "Default"
         if data.Animaciones.CustomMix then for slot, packName in pairs(data.Animaciones.CustomMix) do if state.customMix[slot] ~= nil then state.customMix[slot] = packName end end end
         state.animEnabled = data.Animaciones.Enabled == true
         if state.animEnabled then task.spawn(function() fastApply(player.Character) end) else restoreAllOriginal() end
@@ -520,27 +425,20 @@ local function applyV12Config(data)
     return true
 end
 
-local function listV12Configs()
+local function listV16Configs()
     local list = {}
     if listfiles and isfolder and isfolder(CONFIG_FOLDER) then
-        for _, f in ipairs(listfiles(CONFIG_FOLDER)) do
-            if f:match("%.json$") then
-                local n = f:match("([^/\\]+)%.json$")
-                if n and n ~= "_autosave" then table.insert(list, n) end
-            end
-        end
+        for _, f in ipairs(listfiles(CONFIG_FOLDER)) do if f:match("%.json$") then local n = f:match("([^/\\]+)%.json$"); if n and n ~= "_autosave" then table.insert(list, n) end end end
     end
     if #list == 0 then list = {"Ninguna"} end
     return list
 end
 
--- ==========================================
--- UI WINDUI (Xero Style)
--- ==========================================
+-- CREACION DE LA INTERFAZ WINDUI
 local Window = WindUI:CreateWindow({
     Title = "NEVADA | DUELS",
-    Subtitle = "V12",
-    Theme = "Xero",
+    Subtitle = "V16",
+    Theme = "Xero", -- Tema de Xero
     Author = "by Ti",
     Size = UDim2.fromOffset(620, 350),
     OpenButton = {Title = "Abrir Nevada", Enabled = true},
@@ -561,8 +459,7 @@ local Tabs = {
 }
 
 -- INICIO
-Tabs.Inicio:Paragraph({ Title = "Bienvenido a Nevada V12", Desc = "Interfaz rediseñada estilo Xero." })
-Tabs.Inicio:Button({ Title = "Unirse al Discord", Callback = function() pcall(function() setclipboard("https://discord.gg/") end) end })
+Tabs.Inicio:Paragraph({ Title = "Bienvenido a Nevada V16", Desc = "Interfaz oficial de WindUI (Estilo Xero)." })
 
 -- MACRO
 Tabs.Macro:Toggle({ Title = "Activar Macro de Arma", Value = state.macro, Callback = function(v) state.macro = v end })
@@ -594,13 +491,8 @@ Instance.new("UICorner", floatingBtn).CornerRadius = UDim.new(0, 8)
 local function setMacro360State(nuevoEstado)
     state.macro360Enabled = nuevoEstado
     if floatingBtn then
-        if nuevoEstado then
-            floatingBtn.Text = "MACRO 360: ON"
-            floatingBtn.BackgroundColor3 = Color3.fromRGB(50,220,153)
-        else
-            floatingBtn.Text = "MACRO 360: OFF"
-            floatingBtn.BackgroundColor3 = Color3.fromRGB(200,50,50)
-        end
+        if nuevoEstado then floatingBtn.Text = "MACRO 360: ON"; floatingBtn.BackgroundColor3 = Color3.fromRGB(50,220,153)
+        else floatingBtn.Text = "MACRO 360: OFF"; floatingBtn.BackgroundColor3 = Color3.fromRGB(200,50,50) end
     end
 end
 
@@ -613,12 +505,8 @@ Tabs.Macro360:Slider({ Title = "Delay entre Disparos (s)", Step = 0.01, Value = 
 -- ANIMACIONES
 local animToggle
 animToggle = Tabs.Animaciones:Toggle({
-    Title = "Activar Animaciones Custom",
-    Value = state.animEnabled,
-    Callback = function(v)
-        state.animEnabled = v
-        if v then fastApply(player.Character) else restoreAllOriginal() end
-    end
+    Title = "Activar Animaciones Custom", Value = state.animEnabled,
+    Callback = function(v) state.animEnabled = v; if v then fastApply(player.Character) else restoreAllOriginal() end end
 })
 
 Tabs.Animaciones:Section({Title = "Packs Completos"})
@@ -627,15 +515,10 @@ for name in pairs(AnimationPacks) do if name ~= "Default" then table.insert(sort
 table.sort(sortedPacks)
 
 Tabs.Animaciones:Dropdown({
-    Title = "Selecciona un Pack",
-    Values = sortedPacks,
-    Value = state.selectedAnimPack,
+    Title = "Selecciona un Pack", Values = sortedPacks, Value = state.selectedAnimPack,
     Callback = function(packName)
-        state.selectedAnimPack = packName
-        state.animMode = "pack"
-        state.animEnabled = true
-        if animToggle then animToggle:Set(true) end
-        fastApply(player.Character)
+        state.selectedAnimPack = packName; state.animMode = "pack"; state.animEnabled = true
+        if animToggle then animToggle:Set(true) end; fastApply(player.Character)
     end
 })
 
@@ -650,23 +533,17 @@ table.insert(mixerOptions, 1, "Default")
 
 for _, slot in ipairs(slotOrder) do
     Tabs.Animaciones:Dropdown({
-        Title = "Mix: " .. slotDisplay[slot],
-        Values = mixerOptions,
-        Value = state.customMix[slot] or "Default",
+        Title = "Mix: " .. slotDisplay[slot], Values = mixerOptions, Value = state.customMix[slot] or "Default",
         Callback = function(val)
-            state.customMix[slot] = val
-            state.animMode = "mix"
-            state.animEnabled = true
-            if animToggle then animToggle:Set(true) end
-            fastApply(player.Character)
+            state.customMix[slot] = val; state.animMode = "mix"; state.animEnabled = true
+            if animToggle then animToggle:Set(true) end; fastApply(player.Character)
         end
     })
 end
 
 Tabs.Animaciones:Button({ Title = "Restaurar Default", Callback = function()
     state.animMode = "pack"; state.selectedAnimPack = "Default"; state.animEnabled = false
-    if animToggle then animToggle:Set(false) end
-    restoreAllOriginal()
+    if animToggle then animToggle:Set(false) end; restoreAllOriginal()
 end })
 
 -- SONIDOS
@@ -675,9 +552,7 @@ local enableToggle, muteToggle
 local currentSoundCategory = "Arma"
 
 Tabs.Sonidos:Dropdown({
-    Title = "Categoría",
-    Values = {"Arma", "Saltar", "Matar"},
-    Value = "Arma",
+    Title = "Categoría", Values = {"Arma", "Saltar", "Matar"}, Value = "Arma",
     Callback = function(v)
         currentSoundCategory = v
         if soundDropdown then soundDropdown:Refresh(listSoundNames()) end
@@ -694,35 +569,17 @@ local function listSoundNames()
 end
 
 soundDropdown = Tabs.Sonidos:Dropdown({
-    Title = "Selecciona Sonido",
-    Values = listSoundNames(),
-    Value = "Cargando...",
+    Title = "Selecciona Sonido", Values = listSoundNames(), Value = "Cargando...",
     Callback = function(selectedName)
-        for _, s in ipairs(sounds) do
-            if s.Name == selectedName then
-                state.selected[currentSoundCategory] = {Name=s.Name, URL=s.URL}
-                break
-            end
-        end
+        for _, s in ipairs(sounds) do if s.Name == selectedName then state.selected[currentSoundCategory] = {Name=s.Name, URL=s.URL} break end end
     end
 })
 
-enableToggle = Tabs.Sonidos:Toggle({
-    Title = "Activar este sonido",
-    Value = state.enabled[currentSoundCategory],
-    Callback = function(v) state.enabled[currentSoundCategory] = v end
-})
-
-muteToggle = Tabs.Sonidos:Toggle({
-    Title = "Silenciar este sonido",
-    Value = state.muted[currentSoundCategory],
-    Callback = function(v) state.muted[currentSoundCategory] = v end
-})
+enableToggle = Tabs.Sonidos:Toggle({ Title = "Activar este sonido", Value = state.enabled[currentSoundCategory], Callback = function(v) state.enabled[currentSoundCategory] = v end })
+muteToggle = Tabs.Sonidos:Toggle({ Title = "Silenciar este sonido", Value = state.muted[currentSoundCategory], Callback = function(v) state.muted[currentSoundCategory] = v end })
 
 Tabs.Sonidos:Button({ Title = "Actualizar Catálogo (GitHub)", Callback = function()
-    task.spawn(function()
-        if refreshCatalog() and soundDropdown then soundDropdown:Refresh(listSoundNames()) end
-    end)
+    task.spawn(function() if refreshCatalog() and soundDropdown then soundDropdown:Refresh(listSoundNames()) end end)
 end })
 
 task.spawn(function()
@@ -731,19 +588,10 @@ task.spawn(function()
 end)
 
 -- SKYBOX
-Tabs.Skybox:Toggle({
-    Title = "Auto-Cargar último cielo",
-    Value = state.autoLoadSky,
-    Callback = function(v)
-        state.autoLoadSky = v
-        if v and state.selectedSky ~= "" then applySkyFromGitHub(state.selectedSky) end
-    end
-})
-
+Tabs.Skybox:Toggle({ Title = "Auto-Cargar último cielo", Value = state.autoLoadSky, Callback = function(v) state.autoLoadSky = v; if v and state.selectedSky ~= "" then applySkyFromGitHub(state.selectedSky) end end })
 Tabs.Skybox:Button({ Title = "Restaurar Cielo Original", Callback = function()
     if originalSkyProperties then
-        local sky = Lighting:FindFirstChildOfClass("Sky")
-        if not sky then sky = Instance.new("Sky"); sky.Parent = Lighting end
+        local sky = Lighting:FindFirstChildOfClass("Sky"); if not sky then sky = Instance.new("Sky"); sky.Parent = Lighting end
         sky.SkyboxBk=originalSkyProperties.SkyboxBk; sky.SkyboxDn=originalSkyProperties.SkyboxDn
         sky.SkyboxFt=originalSkyProperties.SkyboxFt; sky.SkyboxLf=originalSkyProperties.SkyboxLf
         sky.SkyboxRt=originalSkyProperties.SkyboxRt; sky.SkyboxUp=originalSkyProperties.SkyboxUp
@@ -760,15 +608,7 @@ task.spawn(function()
     local skyNames = {}
     for _, item in ipairs(data) do if item.type == "dir" then table.insert(skyNames, item.name) end end
     if #skyNames > 0 then
-        Tabs.Skybox:Dropdown({
-            Title = "Selecciona un Cielo",
-            Values = skyNames,
-            Value = skyNames[1],
-            Callback = function(skyName)
-                state.selectedSky = skyName
-                applySkyFromGitHub(skyName)
-            end
-        })
+        Tabs.Skybox:Dropdown({ Title = "Selecciona un Cielo", Values = skyNames, Value = skyNames[1], Callback = function(skyName) state.selectedSky = skyName; applySkyFromGitHub(skyName) end })
     end
 end)
 
@@ -777,29 +617,15 @@ local selectedConfigName = "Ninguna"
 local configNameInput = "config1"
 
 local configDropdown
-configDropdown = Tabs.Configs:Dropdown({
-    Title = "Configs Guardadas",
-    Values = listV12Configs(),
-    Value = "Ninguna",
-    Callback = function(v) selectedConfigName = v end
-})
-
-Tabs.Configs:Input({
-    Title = "Nombre de la Config",
-    Placeholder = "Ej: aimbot_pro",
-    Callback = function(txt) configNameInput = txt end
-})
+configDropdown = Tabs.Configs:Dropdown({ Title = "Configs Guardadas", Values = listV16Configs(), Value = "Ninguna", Callback = function(v) selectedConfigName = v end })
+Tabs.Configs:Input({ Title = "Nombre de la Config", Placeholder = "Ej: aimbot_pro", Callback = function(txt) configNameInput = txt end })
 
 Tabs.Configs:Button({ Title = "💾 Guardar", Callback = function()
     if configNameInput == "" or configNameInput == nil then return end
-    local safeName = configNameInput:gsub("[^%w%-_ ]", ""):gsub("%s+", "_")
-    if safeName == "" then return end
+    local safeName = configNameInput:gsub("[^%w%-_ ]", ""):gsub("%s+", "_"); if safeName == "" then return end
     local path = CONFIG_FOLDER .. "/" .. safeName .. ".json"
-    local ok, encoded = pcall(function() return HttpService:JSONEncode(serializeV12()) end)
-    if ok then
-        pcall(writefile, path, encoded)
-        if configDropdown then configDropdown:Refresh(listV12Configs()) end
-    end
+    local ok, encoded = pcall(function() return HttpService:JSONEncode(serializeV16()) end)
+    if ok then pcall(writefile, path, encoded); if configDropdown then configDropdown:Refresh(listV16Configs()) end end
 end })
 
 Tabs.Configs:Button({ Title = "📂 Cargar", Callback = function()
@@ -807,41 +633,27 @@ Tabs.Configs:Button({ Title = "📂 Cargar", Callback = function()
     local path = CONFIG_FOLDER .. "/" .. selectedConfigName .. ".json"
     if isfile and isfile(path) then
         local ok, data = pcall(function() return HttpService:JSONDecode(readfile(path)) end)
-        if ok and type(data) == "table" then applyV12Config(data) end
+        if ok and type(data) == "table" then applyV16Config(data) end
     end
 end })
 
 Tabs.Configs:Button({ Title = "🗑️ Borrar", Callback = function()
     if selectedConfigName == "Ninguna" then return end
     local path = CONFIG_FOLDER .. "/" .. selectedConfigName .. ".json"
-    if isfile and isfile(path) and delfile then
-        pcall(delfile, path)
-        if configDropdown then configDropdown:Refresh(listV12Configs()) end
-    end
+    if isfile and isfile(path) and delfile then pcall(delfile, path); if configDropdown then configDropdown:Refresh(listV16Configs()) end end
 end })
 
--- ==========================================
 -- MACROS
--- ==========================================
-local macroBusy=false
-local lastMacro=0
+local macroBusy=false; local lastMacro=0
 local function runMacro()
   if not state.macro or macroBusy then return end
   local char=player.Character; if not char then return end
   local hum=char:FindFirstChildOfClass("Humanoid"); if not hum or hum.Health<=0 then return end
-  local backpack=player:FindFirstChildOfClass("Backpack")
-  if not backpack then return end
+  local backpack=player:FindFirstChildOfClass("Backpack"); if not backpack then return end
   local tool=char:FindFirstChildOfClass("Tool")
-  if not tool then
-    for _,item in ipairs(backpack:GetChildren()) do
-      if item:IsA("Tool") and (item.name:lower():find("pistol") or item.name:lower():find("gun") or item.name:lower():find("sheriff") or item.name:lower():find("revolver")) then
-        tool=item; break
-      end
-    end
-  end
+  if not tool then for _,item in ipairs(backpack:GetChildren()) do if item:IsA("Tool") and (item.name:lower():find("pistol") or item.name:lower():find("gun") or item.name:lower():find("sheriff") or item.name:lower():find("revolver")) then tool=item; break end end end
   if not tool then return end
-  local now=os.clock()
-  if now-lastMacro< (tonumber(state.shootDelay) or 0.10) then return end
+  local now=os.clock(); if now-lastMacro< (tonumber(state.shootDelay) or 0.10) then return end
   macroBusy=true; lastMacro=now
   task.spawn(function()
     local shouldHolster=false
@@ -852,8 +664,7 @@ local function runMacro()
       if state.macro and player.Character==char and hum.Health>0 and tool.Parent==char then
         shouldHolster=true; tool:Activate()
         task.wait(math.max(0.01, tonumber(state.shootDelay) or 0.10))
-        pcall(function() tool:Deactivate() end)
-        task.wait(0.15)
+        pcall(function() tool:Deactivate() end); task.wait(0.15)
       end
     end)
     if shouldHolster and player.Character==char and hum.Parent==char then pcall(function() hum:UnequipTools() end) end
@@ -864,21 +675,16 @@ end
 local knifeBusy = false
 local function runKnifeMacro()
   if not state.knifeMacroEnabled or knifeBusy then return end
-  local character = player.Character
-  local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+  local character = player.Character; local humanoid = character and character:FindFirstChildOfClass("Humanoid")
   local knife = nil
   for _, item in ipairs(character:GetChildren()) do if item:IsA("Tool") and item:FindFirstChild("Throw") then knife = item break end end
-  if not knife and character:FindFirstChildOfClass("Backpack") then
-      for _, item in ipairs(character:FindFirstChildOfClass("Backpack"):GetChildren()) do if item:IsA("Tool") and item:FindFirstChild("Throw") then knife = item break end end
-  end
+  if not knife and character:FindFirstChildOfClass("Backpack") then for _, item in ipairs(character:FindFirstChildOfClass("Backpack"):GetChildren()) do if item:IsA("Tool") and item:FindFirstChild("Throw") then knife = item break end end end
   if not (knife and humanoid) then return end
   knifeBusy = true
   task.spawn(function()
     pcall(function()
         if knife.Parent ~= character then humanoid:EquipTool(knife); task.wait(0.15) end
-        pcall(function() knife:Activate() end)
-        task.wait(state.knifeThrowDelay)
-        task.wait(0.15)
+        pcall(function() knife:Activate() end); task.wait(state.knifeThrowDelay); task.wait(0.15)
         pcall(function() if humanoid and humanoid.Parent then humanoid:UnequipTools() end end)
     end)
     knifeBusy = false
@@ -897,95 +703,31 @@ UserInputService.TouchStarted:Connect(function(input,processed)
 end)
 UserInputService.TouchEnded:Connect(function(input,processed)
   if processed or not touchStart or not touchTime then touchStart=nil; touchTime=nil; return end
-  local delta=(input.Position-touchStart).Magnitude
-  local elapsed=os.clock()-touchTime
+  local delta=(input.Position-touchStart).Magnitude; local elapsed=os.clock()-touchTime
   touchStart=nil; touchTime=nil
   if delta<18 and elapsed>=0.025 and elapsed<0.6 then runMacro() end
 end)
 
 -- MACRO 360
-local m360 = {wasInLobby = true, gameTicks = 0, isEquipped = false}
-local function isInLobbyRobust()
-    local char = player.Character
-    if not char then return true end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum or hum.Health <= 0 then return true end
-    if char:FindFirstChildOfClass("ForceField") then return true end
-    if player.Team then
-        local t = player.Team.Name:lower()
-        if t:find("lobby") or t:find("spectat") or t:find("menu") or t:find("waiting") or t:find("afk") then return true end
-    end
-    local gui = player:FindFirstChild("PlayerGui")
-    local main = gui and gui:FindFirstChild("Main")
-    local frame = main and main:FindFirstChild("MainGameFrame")
-    if not frame then return true end
-    local score = frame:FindFirstChild("IngameScore")
-    if not score then return true end
-    if score:IsA("GuiObject") and not score.Visible then return true end
-    local anyInGame = false
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= player and p.Character then
-            local pHum = p.Character:FindFirstChildOfClass("Humanoid")
-            if pHum and pHum.Health > 0 and not p.Character:FindFirstChildOfClass("ForceField") then
-                anyInGame = true; break
-            end
-        end
-    end
-    if not anyInGame then return true end
-    return false
-end
-
-local function isValid360Target(p)
-    if not p or p == player then return false end
-    local char = p.Character
-    if not char then return false end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum or hum.Health <= 0 then return false end
-    if char:FindFirstChildOfClass("ForceField") then return false end
-    if not isEnemy(p) then return false end
-    return true
-end
-
-local function getGun(char, backpack)
-    local tool = char:FindFirstChildOfClass("Tool")
-    if tool and esPistola(tool) then return tool, true end
-    if backpack then for _, item in ipairs(backpack:GetChildren()) do if item:IsA("Tool") and esPistola(item) then return item, false end end end
-    return nil, false
-end
-
 task.spawn(function()
-    local params = RaycastParams.new()
-    params.FilterType = Enum.RaycastFilterType.Exclude
+    local params = RaycastParams.new(); params.FilterType = Enum.RaycastFilterType.Exclude
     while task.wait(0.05) do
-        if not state.macro360Enabled then m360.wasInLobby = true; m360.gameTicks = 0; m360.isEquipped = false; continue end
-        if isInLobbyRobust() then
-            m360.gameTicks = 0; m360.wasInLobby = true
-            if m360.isEquipped then local c = player.Character; local h = c and c:FindFirstChildOfClass("Humanoid"); if h then pcall(function() h:UnequipTools() end) end; m360.isEquipped = false end
-            continue
-        else m360.gameTicks = m360.gameTicks + 1 end
-        if m360.gameTicks < 2 then continue end
-        m360.wasInLobby = false
-
+        if not state.macro360Enabled then continue end
         local char = player.Character; if not char then continue end
         local hum = char:FindFirstChildOfClass("Humanoid"); local hrp = char:FindFirstChild("HumanoidRootPart")
         if not hum or hum.Health <= 0 or not hrp then continue end
-
-        local myPos = hrp.Position
-        local bestPart, bestDist = nil, math.huge
+        local myPos = hrp.Position; local bestPart, bestDist = nil, math.huge
         for _, p in ipairs(Players:GetPlayers()) do
-            if isValid360Target(p) then
-                local enemyChar = p.Character; local enemyHrp = enemyChar and enemyChar:FindFirstChild("HumanoidRootPart")
-                if enemyHrp then
-                    local dist = (enemyHrp.Position - myPos).Magnitude
+            if p ~= player and isEnemy(p) and p.Character then
+                local eChar = p.Character; local eHum = eChar:FindFirstChildOfClass("Humanoid"); local eHrp = eChar:FindFirstChild("HumanoidRootPart")
+                if eHum and eHum.Health > 0 and eHrp then
+                    local dist = (eHrp.Position - myPos).Magnitude
                     if dist <= state.macro360Fov then
-                        params.FilterDescendantsInstances = { char, enemyChar }
-                        if not workspace:Raycast(myPos, enemyHrp.Position - myPos, params) then
-                            for _, part in ipairs(enemyChar:GetChildren()) do
-                                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" and part.Name ~= "Humanoid" then
-                                    local partDist = (part.Position - myPos).Magnitude
-                                    if partDist < bestDist then
-                                        if not workspace:Raycast(myPos, part.Position - myPos, params) then bestDist = partDist; bestPart = part end
-                                    end
+                        params.FilterDescendantsInstances = {char, eChar}
+                        if not workspace:Raycast(myPos, eHrp.Position - myPos, params) then
+                            for _, part in ipairs(eChar:GetChildren()) do
+                                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                                    if part.Position:Distance(myPos) < bestDist then bestDist = part.Position:Distance(myPos); bestPart = part end
                                 end
                             end
                         end
@@ -993,32 +735,16 @@ task.spawn(function()
                 end
             end
         end
-
-        local backpack = player:FindFirstChildOfClass("Backpack")
-        local tool, wasEquipped = getGun(char, backpack)
-
-        if not bestPart then
-            if m360.isEquipped then pcall(function() hum:UnequipTools() end); m360.isEquipped = false end
-            continue
-        end
-        if not tool then continue end
-
-        if not wasEquipped then
-            if m360.isEquipped then continue end
-            m360.isEquipped = true
-            pcall(function() hum:EquipTool(tool) end)
-            task.wait(0.08)
-            if tool.Parent ~= char then continue end
-        else m360.isEquipped = true end
-
-        if tool.Parent == char then
-            getgenv().NevadaTargetPart = bestPart
-            pcall(function() tool:Activate() end)
-            task.wait(0.05)
-            pcall(function() tool:Deactivate() end)
-            getgenv().NevadaTargetPart = nil
+        if bestPart then
+            local backpack = player:FindFirstChildOfClass("Backpack"); local tool = char:FindFirstChildOfClass("Tool")
+            if not tool and backpack then for _, item in ipairs(backpack:GetChildren()) do if esPistola(item) then tool = item break end end end
+            if tool and tool.Parent == char then
+                getgenv().NevadaTargetPart = bestPart
+                pcall(function() tool:Activate() end); task.wait(state.macro360Cooldown)
+                pcall(function() tool:Deactivate() end); getgenv().NevadaTargetPart = nil
+            end
         end
     end
 end)
 
-print("[Nevada V12.2] ✅ Cargado correctamente.")
+print("[Nevada V16] ✅ Cargado usando WindUI Oficial.")
