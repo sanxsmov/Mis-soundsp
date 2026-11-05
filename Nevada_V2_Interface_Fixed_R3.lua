@@ -1,33 +1,20 @@
--- NEVADA V19 | WindUI Oficial Corregido + Todas las Funciones
+-- NEVADA V22 | Interfaz WindUI (Xero) + Catálogo de 5 Fondos Personales
+print("[Nevada] Iniciando script...")
+
 local function CargarWindUI()
-    local urls = {
-        "https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua",
-        "https://raw.githubusercontent.com/Footagesus/WindUI/main/source/WindUI.lua",
-        "https://github.com/Footagesus/WindUI/raw/main/dist/main.lua"
-    }
-    for _, url in ipairs(urls) do
-        local exito, source = pcall(function() return game:HttpGet(url) end)
-        if exito and source and #source > 1000 then
-            local chunk, err = loadstring(source)
-            if chunk then
-                local ok, ui = pcall(chunk)
-                if ok and ui then
-                    print("[Nevada] ✅ WindUI cargado correctamente.")
-                    return ui
-                end
-            end
-        end
-    end
+    local url = "https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"
+    local exito, source = pcall(function() return game:HttpGet(url) end)
+    if not exito or not source or #source < 1000 then return nil end
+    local chunk, err = loadstring(source)
+    if not chunk then return nil end
+    local ok, ui = pcall(chunk)
+    if ok and ui then return ui end
     return nil
 end
 
 local WindUI = CargarWindUI()
-
 if not WindUI then
-    game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "Error de Interfaz",
-        Text = "Tu ejecutor bloquea GitHub. Usa Delta, Wave o Codex."
-    })
+    game:GetService("StarterGui"):SetCore("SendNotification", {Title = "Error", Text = "No se pudo cargar la UI."})
     return
 end
 
@@ -49,6 +36,34 @@ local SKYBOX_REPO = "sanxsmov/Onyx-web"
 local SKYBOX_FOLDER = "skyboxes"
 local SKYBOX_RAW = "https://raw.githubusercontent.com/" .. SKYBOX_REPO .. "/main/" .. SKYBOX_FOLDER .. "/"
 local SKYBOX_API = "https://api.github.com/repos/" .. SKYBOX_REPO .. "/contents/" .. SKYBOX_FOLDER
+
+-- ==========================================
+-- CATÁLOGO DE TUS 5 FONDOS
+-- ==========================================
+local BG_LIST = {
+    { name = "Fondo 1", url = "https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/images/1.jpg" },
+    { name = "Fondo 2", url = "https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/images/2.jpg" },
+    { name = "Fondo 3", url = "https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/images/3.jpg" },
+    { name = "Fondo 4", url = "https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/images/4.jpg" },
+    { name = "Fondo 5", url = "https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/images/5.jpg" }
+}
+
+local function CargarFondo(url)
+    if not url or url == "" then return nil end
+    if writefile and isfile and getcustomasset then
+        local fileName = "NevadaBG_" .. tostring(math.random(1, 10000)) .. ".jpg"
+        local ok, body = pcall(function() return game:HttpGet(url) end)
+        if ok and body and #body > 0 then
+            pcall(writefile, fileName, body)
+            local success, asset = pcall(getcustomasset, fileName)
+            if success then return asset end
+        end
+    end
+    return nil
+end
+
+-- Variable global para el fondo inicial (1.jpg)
+local FondoAsset = CargarFondo(BG_LIST[1].url)
 
 local AnimationPacks = {
     ["Default"]     = {Idle="507766666", Walk="507777826", Run="507767714", Jump="507765000", Fall="507767968", Swim="507784897", SwimIdle="507785072"},
@@ -88,7 +103,6 @@ local state = {
 }
 local sounds, soundCache, currentSoundCategory = {}, {}, "Arma"
 
--- SKYBOX GUARDADO
 local originalSky = Lighting:FindFirstChildOfClass("Sky")
 local originalSkyProperties = nil
 if originalSky then
@@ -99,7 +113,6 @@ if originalSky then
     }
 end
 
--- LOGICA DE ANIMACIONES
 local originalAnimations = nil
 local animationGuards = setmetatable({}, {__mode = "k"})
 
@@ -217,7 +230,6 @@ end
 if player.Character then onCharacterAdded(player.Character) end
 player.CharacterAdded:Connect(onCharacterAdded)
 
--- SKYBOX, SONIDOS Y TEAM CHECK
 local function downloadImg(url, name)
     if not (writefile and isfile and getcustomasset) then return nil end
     local path = "NevadaSky_" .. name .. ".png"
@@ -386,13 +398,12 @@ local function refreshCatalog()
   table.sort(sounds,function(a,b) return a.Name:lower()<b.Name:lower() end); return loaded
 end
 
--- CONFIG SYSTEM
-local CONFIG_FOLDER = "NevadaV19_Configs"
+local CONFIG_FOLDER = "NevadaV22_Configs"
 if isfolder and not isfolder(CONFIG_FOLDER) then makefolder(CONFIG_FOLDER) end
 
-local function serializeV19()
+local function serializeV22()
     return {
-        Version = "V19",
+        Version = "V22",
         Sonidos = { Selected = { Arma = state.selected.Arma, Saltar = state.selected.Saltar, Matar = state.selected.Matar }, Enabled = state.enabled, Muted = state.muted },
         Skybox = { Selected = state.selectedSky, AutoLoad = state.autoLoadSky },
         Animaciones = { Enabled = state.animEnabled, Mode = state.animMode, SelectedPack = state.selectedAnimPack, CustomMix = state.customMix },
@@ -400,7 +411,7 @@ local function serializeV19()
     }
 end
 
-local function applyV19Config(data)
+local function applyV22Config(data)
     if type(data) ~= "table" then return false end
     if data.Sonidos then
         if data.Sonidos.Selected then for cat in pairs(state.selected) do if data.Sonidos.Selected[cat] then state.selected[cat] = data.Sonidos.Selected[cat] end end end
@@ -418,7 +429,7 @@ local function applyV19Config(data)
     return true
 end
 
-local function listV19Configs()
+local function listV22Configs()
     local list = {}
     if listfiles and isfolder and isfolder(CONFIG_FOLDER) then
         for _, f in ipairs(listfiles(CONFIG_FOLDER)) do if f:match("%.json$") then local n = f:match("([^/\\]+)%.json$"); if n and n ~= "_autosave" then table.insert(list, n) end end end
@@ -428,34 +439,103 @@ local function listV19Configs()
 end
 
 -- ==========================================
--- CREACIÓN DE LA INTERFAZ WINDUI
+-- INTERFAZ WINDUI CON EL CATÁLOGO DE FONDOS
 -- ==========================================
 local Window = WindUI:CreateWindow({
     Title = "Nevada | DUELS",
-    Subtitle = "V19",
-    Theme = "Xero",
-    Author = "by Ti",
+    Subtitle = "by Ti",
+    Theme = "Dark",
     Size = UDim2.fromOffset(620, 350),
     MinSize = Vector2.new(330, 270),
     Resizable = true,
-    OpenButton = {Title = "Abrir Nevada", Enabled = true},
+    Transparent = false,
+    Acrylic = false,
+    ElementsRadius = 12,
+    Background = FondoAsset,
+    BackgroundImageTransparency = 0.25,
+    OpenButton = {Title = "Abrir Xero", Enabled = true},
 })
+
+-- Función mágica de Xero para encontrar el fondo y cambiarlo
+local WindUI_BgCache = nil
+local function findWindUIBackground()
+    if WindUI_BgCache and WindUI_BgCache.Parent then return WindUI_BgCache end
+    WindUI_BgCache = nil
+    local best, bestSize = nil, 0
+    local roots = {}
+    pcall(function() if gethui then table.insert(roots, gethui()) end end)
+    pcall(function() table.insert(roots, game:GetService("CoreGui")) end)
+    pcall(function() local pg = player:FindFirstChild("PlayerGui"); if pg then table.insert(roots, pg) end end)
+
+    local function scan(inst, depth)
+        if depth > 12 then return end
+        if inst:IsA("ImageLabel") then
+            local sz = inst.AbsoluteSize.X * inst.AbsoluteSize.Y
+            if sz > bestSize then bestSize = sz; best = inst end
+        end
+        for _, c in ipairs(inst:GetChildren()) do scan(c, depth + 1) end
+    end
+    for _, root in ipairs(roots) do
+        if root then for _, c in ipairs(root:GetChildren()) do scan(c, 0) end end
+    end
+    WindUI_BgCache = best
+    return best
+end
+
+local function setWindowBackground(assetId)
+    if not assetId then return end
+    pcall(function() if Window.SetBackground then Window:SetBackground(assetId) end end)
+    pcall(function() if Window.Background then Window.Background = assetId end end)
+    local bg = findWindUIBackground()
+    if bg then
+        pcall(function()
+            bg.Image = assetId
+            if bg.ImageTransparency > 0.6 then bg.ImageTransparency = 0.25 end
+        end)
+    end
+    task.spawn(function()
+        task.wait(0.15)
+        local bg2 = findWindUIBackground()
+        if bg2 and bg2 ~= bg then pcall(function() bg2.Image = assetId end) end
+    end)
+end
 
 local MainSection = Window:Section({ Title = "PRINCIPAL", Opened = true })
 local PersonalSection = Window:Section({ Title = "PERSONAL", Opened = true })
 
 local Tabs = {
-    Inicio = MainSection:Tab({Title = "Inicio", Icon = "solar:home-bold"}),
-    Macro = MainSection:Tab({Title = "Macro", Icon = "solar:target-bold"}),
-    Cuchillo = MainSection:Tab({Title = "Cuchillo", Icon = "solar:knife-bold"}),
-    Macro360 = MainSection:Tab({Title = "Macro 360", Icon = "solar:crosshair-bold"}),
-    Animaciones = PersonalSection:Tab({Title = "Animaciones", Icon = "solar:running-bold"}),
-    Sonidos = PersonalSection:Tab({Title = "Sonidos", Icon = "solar:volume-loud-bold"}),
-    Skybox = PersonalSection:Tab({Title = "Skybox", Icon = "solar:cloud-bold"}),
-    Configs = PersonalSection:Tab({Title = "Configs", Icon = "solar:settings-bold"}),
+    Inicio = MainSection:Tab({Title = "Inicio", Icon = "home"}),
+    Macro = MainSection:Tab({Title = "Macro", Icon = "crosshair"}),
+    Cuchillo = MainSection:Tab({Title = "Cuchillo", Icon = "target"}),
+    Macro360 = MainSection:Tab({Title = "Macro 360", Icon = "eye"}),
+    Animaciones = PersonalSection:Tab({Title = "Animaciones", Icon = "activity"}),
+    Sonidos = PersonalSection:Tab({Title = "Sonidos", Icon = "volume-2"}),
+    Skybox = PersonalSection:Tab({Title = "Skybox", Icon = "cloud"}),
+    Configs = PersonalSection:Tab({Title = "Configs", Icon = "settings"}),
 }
 
-Tabs.Inicio:Paragraph({ Title = "Bienvenido a Nevada V19", Desc = "Interfaz oficial WindUI (Xero) con enlace corregido." })
+-- AGREGAMOS EL CATÁLOGO DE FONDOS EN LA PESTAÑA CONFIGS
+Tabs.Configs:Section({ Title = "Catálogo de Fondos" })
+local bgNames = {}
+for _, bg in ipairs(BG_LIST) do table.insert(bgNames, bg.name) end
+
+Tabs.Configs:Dropdown({
+    Title = "Selecciona un Fondo",
+    Values = bgNames,
+    Value = "Fondo 1",
+    Callback = function(selectedName)
+        for _, bg in ipairs(BG_LIST) do
+            if bg.name == selectedName then
+                local newAsset = CargarFondo(bg.url)
+                if newAsset then
+                    setWindowBackground(newAsset)
+                    print("[Nevada] Fondo cambiado a: " .. selectedName)
+                end
+                break
+            end
+        end
+    end
+})
 
 -- MACRO
 Tabs.Macro:Toggle({ Title = "Activar Macro de Arma", Value = state.macro, Callback = function(v) state.macro = v end })
@@ -586,23 +666,23 @@ end)
 local selectedConfigName = "Ninguna"
 local configNameInput = "config1"
 local configDropdown
-configDropdown = Tabs.Configs:Dropdown({ Title = "Configs Guardadas", Values = listV19Configs(), Value = "Ninguna", Callback = function(v) selectedConfigName = v end })
+configDropdown = Tabs.Configs:Dropdown({ Title = "Configs Guardadas", Values = listV22Configs(), Value = "Ninguna", Callback = function(v) selectedConfigName = v end })
 Tabs.Configs:Input({ Title = "Nombre de la Config", Placeholder = "Ej: aimbot_pro", Callback = function(txt) configNameInput = txt end })
 Tabs.Configs:Button({ Title = "💾 Guardar", Callback = function()
     if configNameInput == "" or configNameInput == nil then return end
     local safeName = configNameInput:gsub("[^%w%-_ ]", ""):gsub("%s+", "_"); if safeName == "" then return end
-    local ok, encoded = pcall(function() return HttpService:JSONEncode(serializeV19()) end)
-    if ok then pcall(writefile, CONFIG_FOLDER .. "/" .. safeName .. ".json", encoded); if configDropdown then configDropdown:Refresh(listV19Configs()) end end
+    local ok, encoded = pcall(function() return HttpService:JSONEncode(serializeV22()) end)
+    if ok then pcall(writefile, CONFIG_FOLDER .. "/" .. safeName .. ".json", encoded); if configDropdown then configDropdown:Refresh(listV22Configs()) end end
 end })
 Tabs.Configs:Button({ Title = "📂 Cargar", Callback = function()
     if selectedConfigName == "Ninguna" or selectedConfigName == "" then return end
     local path = CONFIG_FOLDER .. "/" .. selectedConfigName .. ".json"
-    if isfile and isfile(path) then local ok, data = pcall(function() return HttpService:JSONDecode(readfile(path)) end); if ok and type(data) == "table" then applyV19Config(data) end end
+    if isfile and isfile(path) then local ok, data = pcall(function() return HttpService:JSONDecode(readfile(path)) end); if ok and type(data) == "table" then applyV22Config(data) end end
 end })
 Tabs.Configs:Button({ Title = "🗑️ Borrar", Callback = function()
     if selectedConfigName == "Ninguna" then return end
     local path = CONFIG_FOLDER .. "/" .. selectedConfigName .. ".json"
-    if isfile and isfile(path) and delfile then pcall(delfile, path); if configDropdown then configDropdown:Refresh(listV19Configs()) end end
+    if isfile and isfile(path) and delfile then pcall(delfile, path); if configDropdown then configDropdown:Refresh(listV22Configs()) end end
 end })
 
 -- MACROS
@@ -705,4 +785,4 @@ task.spawn(function()
     end
 end)
 
-print("[Nevada V19] ✅ Cargado correctamente con la interfaz oficial.")
+print("[Nevada V22] ✅ Cargado con éxito. Tienes 5 fondos disponibles en la pestaña Configs.")
