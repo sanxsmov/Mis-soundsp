@@ -1,51 +1,43 @@
--- NEVADA V18 | Carga WindUI exactamente como Xero (con respaldos)
-local WindUI
-local urls = {
-    "https://raw.githubusercontent.com/OnyxDevv/Onyx-web/refs/heads/main/main%20(3).lua",
-    "https://raw.githubusercontent.com/ONYXHUB-X-SZK/SZKWINDUI/refs/heads/main/szk/lua/libary/wind%20ui/szkhub-libary.lua",
-    "https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"
-}
-
-local function loadWindUI()
-    -- 1. Intentar archivo local (como hace Xero)
-    if isfile and readfile and isfile("XeroHub_UI.lua") then
-        local source = readfile("XeroHub_UI.lua")
-        local chunk = loadstring(source)
-        if chunk then local ok, ui = pcall(chunk); if ok and ui then return ui end end
+-- NEVADA V19 | Enlace Oficial WindUI (Footagesus)
+local function CargarWindUI()
+    -- Enlace oficial de releases de WindUI
+    local url = "https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"
+    
+    local exito, source = pcall(function() return game:HttpGet(url) end)
+    if not exito or not source or #source < 1000 then
+        warn("[Nevada] ❌ No se pudo descargar WindUI desde el enlace oficial.")
+        return nil
     end
-
-    -- 2. Intentar URLs
-    for _, url in ipairs(urls) do
-        local exito, source = pcall(function() return game:HttpGet(url) end)
-        if exito and source and #source > 1000 then
-            -- Xero parchea aquí en memoria, nosotros también lo haremos
-            source = source:gsub(
-                'AutoFarm="06",%["Gráficos"%]="07",Animaciones="08",Apariencia="09",%["Generar Armas"%]="10",%["Configuración"%]="11",%["Créditos"%]="12"',
-                'AutoFarm="06",["Gráficos"]="07",Sonidos="08",Animaciones="09",Apariencia="10",["Generar Armas"]="11",["Configuración"]="12",["Créditos"]="13"',
-                1
-            )
-            local chunk, err = loadstring(source)
-            if chunk then
-                local ok, ui = pcall(chunk)
-                if ok and ui then return ui end
-            end
-        end
+    
+    local chunk, err = loadstring(source)
+    if not chunk then
+        warn("[Nevada] ❌ Error al compilar WindUI: " .. tostring(err))
+        return nil
     end
-    return nil
+    
+    local ok, ui = pcall(chunk)
+    if ok and ui then
+        print("[Nevada] ✅ WindUI cargado correctamente.")
+        return ui
+    else
+        warn("[Nevada] ❌ Error al inicializar WindUI: " .. tostring(ui))
+        return nil
+    end
 end
 
-WindUI = loadWindUI()
+local WindUI = CargarWindUI()
 
 if not WindUI then
+    -- Si falla, avisamos y detenemos para no dejar macros a ciegas
     game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "Error Crítico",
-        Text = "No se pudo cargar WindUI. Tu ejecutor bloquea GitHub."
+        Title = "Error de Interfaz",
+        Text = "Usa el enlace oficial de WindUI. Revisa la consola."
     })
     return
 end
 
 -- ==========================================
--- LÓGICA DE NEVADA (Igual que V17)
+-- LÓGICA DE NEVADA (Igual que V18)
 -- ==========================================
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
@@ -405,12 +397,12 @@ local function refreshCatalog()
 end
 
 -- CONFIG SYSTEM
-local CONFIG_FOLDER = "NevadaV18_Configs"
+local CONFIG_FOLDER = "NevadaV19_Configs"
 if isfolder and not isfolder(CONFIG_FOLDER) then makefolder(CONFIG_FOLDER) end
 
-local function serializeV18()
+local function serializeV19()
     return {
-        Version = "V18",
+        Version = "V19",
         Sonidos = { Selected = { Arma = state.selected.Arma, Saltar = state.selected.Saltar, Matar = state.selected.Matar }, Enabled = state.enabled, Muted = state.muted },
         Skybox = { Selected = state.selectedSky, AutoLoad = state.autoLoadSky },
         Animaciones = { Enabled = state.animEnabled, Mode = state.animMode, SelectedPack = state.selectedAnimPack, CustomMix = state.customMix },
@@ -418,7 +410,7 @@ local function serializeV18()
     }
 end
 
-local function applyV18Config(data)
+local function applyV19Config(data)
     if type(data) ~= "table" then return false end
     if data.Sonidos then
         if data.Sonidos.Selected then for cat in pairs(state.selected) do if data.Sonidos.Selected[cat] then state.selected[cat] = data.Sonidos.Selected[cat] end end end
@@ -432,13 +424,11 @@ local function applyV18Config(data)
         state.animEnabled = data.Animaciones.Enabled == true
         if state.animEnabled then task.spawn(function() fastApply(player.Character) end) else restoreAllOriginal() end
     end
-    if data.Macros then
-        for k, v in pairs(data.Macros) do if state[k] ~= nil then state[k] = v end end
-    end
+    if data.Macros then for k, v in pairs(data.Macros) do if state[k] ~= nil then state[k] = v end end end
     return true
 end
 
-local function listV18Configs()
+local function listV19Configs()
     local list = {}
     if listfiles and isfolder and isfolder(CONFIG_FOLDER) then
         for _, f in ipairs(listfiles(CONFIG_FOLDER)) do if f:match("%.json$") then local n = f:match("([^/\\]+)%.json$"); if n and n ~= "_autosave" then table.insert(list, n) end end end
@@ -452,7 +442,7 @@ end
 -- ==========================================
 local Window = WindUI:CreateWindow({
     Title = "Nevada | DUELS",
-    Subtitle = "V18",
+    Subtitle = "V19",
     Theme = "Xero",
     Author = "by Ti",
     Size = UDim2.fromOffset(620, 350),
@@ -475,7 +465,7 @@ local Tabs = {
     Configs = PersonalSection:Tab({Title = "Configs", Icon = "solar:settings-bold"}),
 }
 
-Tabs.Inicio:Paragraph({ Title = "Bienvenido a Nevada V18", Desc = "Interfaz oficial WindUI (Xero)." })
+Tabs.Inicio:Paragraph({ Title = "Bienvenido a Nevada V19", Desc = "Interfaz oficial WindUI (Xero) con enlace corregido." })
 
 -- MACRO
 Tabs.Macro:Toggle({ Title = "Activar Macro de Arma", Value = state.macro, Callback = function(v) state.macro = v end })
@@ -606,23 +596,23 @@ end)
 local selectedConfigName = "Ninguna"
 local configNameInput = "config1"
 local configDropdown
-configDropdown = Tabs.Configs:Dropdown({ Title = "Configs Guardadas", Values = listV18Configs(), Value = "Ninguna", Callback = function(v) selectedConfigName = v end })
+configDropdown = Tabs.Configs:Dropdown({ Title = "Configs Guardadas", Values = listV19Configs(), Value = "Ninguna", Callback = function(v) selectedConfigName = v end })
 Tabs.Configs:Input({ Title = "Nombre de la Config", Placeholder = "Ej: aimbot_pro", Callback = function(txt) configNameInput = txt end })
 Tabs.Configs:Button({ Title = "💾 Guardar", Callback = function()
     if configNameInput == "" or configNameInput == nil then return end
     local safeName = configNameInput:gsub("[^%w%-_ ]", ""):gsub("%s+", "_"); if safeName == "" then return end
-    local ok, encoded = pcall(function() return HttpService:JSONEncode(serializeV18()) end)
-    if ok then pcall(writefile, CONFIG_FOLDER .. "/" .. safeName .. ".json", encoded); if configDropdown then configDropdown:Refresh(listV18Configs()) end end
+    local ok, encoded = pcall(function() return HttpService:JSONEncode(serializeV19()) end)
+    if ok then pcall(writefile, CONFIG_FOLDER .. "/" .. safeName .. ".json", encoded); if configDropdown then configDropdown:Refresh(listV19Configs()) end end
 end })
 Tabs.Configs:Button({ Title = "📂 Cargar", Callback = function()
     if selectedConfigName == "Ninguna" or selectedConfigName == "" then return end
     local path = CONFIG_FOLDER .. "/" .. selectedConfigName .. ".json"
-    if isfile and isfile(path) then local ok, data = pcall(function() return HttpService:JSONDecode(readfile(path)) end); if ok and type(data) == "table" then applyV18Config(data) end end
+    if isfile and isfile(path) then local ok, data = pcall(function() return HttpService:JSONDecode(readfile(path)) end); if ok and type(data) == "table" then applyV19Config(data) end end
 end })
 Tabs.Configs:Button({ Title = "🗑️ Borrar", Callback = function()
     if selectedConfigName == "Ninguna" then return end
     local path = CONFIG_FOLDER .. "/" .. selectedConfigName .. ".json"
-    if isfile and isfile(path) and delfile then pcall(delfile, path); if configDropdown then configDropdown:Refresh(listV18Configs()) end end
+    if isfile and isfile(path) and delfile then pcall(delfile, path); if configDropdown then configDropdown:Refresh(listV19Configs()) end end
 end })
 
 -- MACROS
@@ -725,4 +715,4 @@ task.spawn(function()
     end
 end)
 
-print("[Nevada V18] ✅ Cargado usando la misma lógica de Xero.")
+print("[Nevada V19] ✅ Cargado usando el enlace oficial de WindUI.")
