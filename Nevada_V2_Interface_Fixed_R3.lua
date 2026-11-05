@@ -1,4 +1,4 @@
--- NEVADA V33 | Script Completo y Unificado
+-- NEVADA V33 | Script Completo Unificado
 print("[Nevada] Iniciando script...")
 
 local Players = game:GetService("Players")
@@ -9,6 +9,7 @@ local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
+local mouse = player:GetMouse()
 local requestFn = (syn and syn.request) or (http and http.request) or request or http_request
 
 local OWNER, REPO, BRANCH = "sanxsmov", "Mis-soundsp", "main"
@@ -21,7 +22,7 @@ local SKYBOX_RAW = "https://raw.githubusercontent.com/" .. SKYBOX_REPO .. "/main
 local SKYBOX_API = "https://api.github.com/repos/" .. SKYBOX_REPO .. "/contents/" .. SKYBOX_FOLDER
 
 -- ==========================================
--- HOOK INTACTO (AL INICIO PARA EVITAR FALLOS)
+-- HOOKS (RAYCAST Y MOUSE)
 -- ==========================================
 getgenv().NevadaTargetPart = nil
 local oldNamecall
@@ -46,7 +47,19 @@ if hookmetamethod and getnamecallmethod and checkcaller then
         return oldNamecall(self, ...)
     end)
 end
-print("[Nevada] Hook instalado correctamente.")
+
+local oldIndex
+if hookmetamethod and checkcaller then
+    oldIndex = hookmetamethod(game, "__index", function(t, k)
+        local target = getgenv().NevadaTargetPart
+        if not checkcaller() and t == mouse and target and target.Parent then
+            if k == "Hit" or k == "hit" then return target.CFrame
+            elseif k == "Target" or k == "target" then return target end
+        end
+        return oldIndex(t, k)
+    end)
+end
+print("[Nevada] Hooks instalados correctamente.")
 
 -- ==========================================
 -- CARGA DE WINDUI
@@ -917,22 +930,39 @@ local function runMacro()
   local hum=char:FindFirstChildOfClass("Humanoid"); if not hum or hum.Health<=0 then return end
   local backpack=player:FindFirstChildOfClass("Backpack"); if not backpack then return end
   local tool=char:FindFirstChildOfClass("Tool")
-  if not tool then for _,item in ipairs(backpack:GetChildren()) do if item:IsA("Tool") and (item.name:lower():find("pistol") or item.name:lower():find("gun") or item.name:lower():find("sheriff") or item.name:lower():find("revolver")) then tool=item; break end end end
+  
+  if not tool then 
+      for _,item in ipairs(backpack:GetChildren()) do 
+          if item:IsA("Tool") and (item.name:lower():find("pistol") or item.name:lower():find("gun") or item.name:lower():find("sheriff") or item.name:lower():find("revolver")) then 
+              tool=item; break 
+          end 
+      end 
+  end
   if not tool then return end
+
   local now=os.clock(); if now-lastMacro< (tonumber(state.shootDelay) or 0.10) then return end
   macroBusy=true; lastMacro=now
+  
   task.spawn(function()
-    local shouldHolster=false
-    pcall(function()
-      if not state.macro or player.Character~=char then return end
-      if tool.Parent==backpack then hum:EquipTool(tool); shouldHolster=true end
-      task.wait(math.max(0.01, tonumber(state.equipDelay) or 0.05))
-      if state.macro and player.Character==char and hum.Health>0 and tool.Parent==char then
-        shouldHolster=true; tool:Activate(); task.wait(math.max(0.01, tonumber(state.shootDelay) or 0.10))
-        pcall(function() tool:Deactivate() end); task.wait(0.15)
-      end
-    end)
-    if shouldHolster and player.Character==char and hum.Parent==char then pcall(function() hum:UnequipTools() end) end
+    local wasEquipped = (tool.Parent == char)
+    if not wasEquipped then 
+        hum:EquipTool(tool)
+        task.wait(math.max(0.01, tonumber(state.equipDelay) or 0.05))
+    end
+    
+    if state.macro and player.Character==char and hum.Health>0 and tool.Parent==char then
+        -- Disparo rápido
+        pcall(function() 
+            tool:Activate() 
+            task.delay(0.02, function() if tool.Parent == char then tool:Deactivate() end end)
+        end)
+    end
+    
+    -- Solo guardamos el arma si la macro lo equipó
+    if not wasEquipped and player.Character==char and hum.Parent==char then 
+        task.wait(math.max(0.01, tonumber(state.shootDelay) or 0.10))
+        pcall(function() hum:UnequipTools() end) 
+    end
     macroBusy=false
   end)
 end
