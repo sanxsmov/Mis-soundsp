@@ -1,18 +1,52 @@
--- NEVADA V16 | Interfaz WindUI (Xero Style) + Todo Funcional
--- Cargar la librería oficial de WindUI
+-- NEVADA V18 | Carga WindUI exactamente como Xero (con respaldos)
 local WindUI
-local ok, err = pcall(function()
-    WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
-end)
+local urls = {
+    "https://raw.githubusercontent.com/OnyxDevv/Onyx-web/refs/heads/main/main%20(3).lua",
+    "https://raw.githubusercontent.com/ONYXHUB-X-SZK/SZKWINDUI/refs/heads/main/szk/lua/libary/wind%20ui/szkhub-libary.lua",
+    "https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"
+}
 
-if not ok or not WindUI then
+local function loadWindUI()
+    -- 1. Intentar archivo local (como hace Xero)
+    if isfile and readfile and isfile("XeroHub_UI.lua") then
+        local source = readfile("XeroHub_UI.lua")
+        local chunk = loadstring(source)
+        if chunk then local ok, ui = pcall(chunk); if ok and ui then return ui end end
+    end
+
+    -- 2. Intentar URLs
+    for _, url in ipairs(urls) do
+        local exito, source = pcall(function() return game:HttpGet(url) end)
+        if exito and source and #source > 1000 then
+            -- Xero parchea aquí en memoria, nosotros también lo haremos
+            source = source:gsub(
+                'AutoFarm="06",%["Gráficos"%]="07",Animaciones="08",Apariencia="09",%["Generar Armas"%]="10",%["Configuración"%]="11",%["Créditos"%]="12"',
+                'AutoFarm="06",["Gráficos"]="07",Sonidos="08",Animaciones="09",Apariencia="10",["Generar Armas"]="11",["Configuración"]="12",["Créditos"]="13"',
+                1
+            )
+            local chunk, err = loadstring(source)
+            if chunk then
+                local ok, ui = pcall(chunk)
+                if ok and ui then return ui end
+            end
+        end
+    end
+    return nil
+end
+
+WindUI = loadWindUI()
+
+if not WindUI then
     game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "Error de Interfaz",
-        Text = "No se pudo descargar la UI. Activa las HTTP requests en tu ejecutor."
+        Title = "Error Crítico",
+        Text = "No se pudo cargar WindUI. Tu ejecutor bloquea GitHub."
     })
     return
 end
 
+-- ==========================================
+-- LÓGICA DE NEVADA (Igual que V17)
+-- ==========================================
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
@@ -371,61 +405,40 @@ local function refreshCatalog()
 end
 
 -- CONFIG SYSTEM
-local CONFIG_FOLDER = "NevadaV16_Configs"
+local CONFIG_FOLDER = "NevadaV18_Configs"
 if isfolder and not isfolder(CONFIG_FOLDER) then makefolder(CONFIG_FOLDER) end
 
-local function serializeV16()
+local function serializeV18()
     return {
-        Version = "V16",
-        Sonidos = {
-            Selected = { Arma = { Name = state.selected.Arma.Name, URL = state.selected.Arma.URL }, Saltar = { Name = state.selected.Saltar.Name, URL = state.selected.Saltar.URL }, Matar = { Name = state.selected.Matar.Name, URL = state.selected.Matar.URL } },
-            Enabled = { Arma = state.enabled.Arma, Saltar = state.enabled.Saltar, Matar = state.enabled.Matar },
-            Muted = { Arma = state.muted.Arma, Saltar = state.muted.Saltar, Matar = state.muted.Matar },
-        },
+        Version = "V18",
+        Sonidos = { Selected = { Arma = state.selected.Arma, Saltar = state.selected.Saltar, Matar = state.selected.Matar }, Enabled = state.enabled, Muted = state.muted },
         Skybox = { Selected = state.selectedSky, AutoLoad = state.autoLoadSky },
-        Animaciones = {
-            Enabled = state.animEnabled, Mode = state.animMode, SelectedPack = state.selectedAnimPack,
-            CustomMix = { Idle = state.customMix.Idle, Walk = state.customMix.Walk, Run = state.customMix.Run, Jump = state.customMix.Jump, Fall = state.customMix.Fall, Swim = state.customMix.Swim, SwimIdle = state.customMix.SwimIdle },
-        },
-        Macros = {
-            Weapon = state.macro, WeaponEquipDelay = state.equipDelay, WeaponShootDelay = state.shootDelay,
-            Knife = state.knifeMacroEnabled, KnifeEquipDelay = state.knifeEquipDelay, KnifeThrowDelay = state.knifeThrowDelay,
-            Macro360 = state.macro360Enabled, Macro360Fov = state.macro360Fov, Macro360HitChance = state.macro360HitChance, Macro360Reaction = state.macro360Reaction, Macro360Cooldown = state.macro360Cooldown,
-        },
+        Animaciones = { Enabled = state.animEnabled, Mode = state.animMode, SelectedPack = state.selectedAnimPack, CustomMix = state.customMix },
+        Macros = { Weapon = state.macro, WeaponEquipDelay = state.equipDelay, WeaponShootDelay = state.shootDelay, Knife = state.knifeMacroEnabled, KnifeEquipDelay = state.knifeEquipDelay, KnifeThrowDelay = state.knifeThrowDelay, Macro360 = state.macro360Enabled, Macro360Fov = state.macro360Fov, Macro360HitChance = state.macro360HitChance, Macro360Reaction = state.macro360Reaction, Macro360Cooldown = state.macro360Cooldown },
     }
 end
 
-local function applyV16Config(data)
+local function applyV18Config(data)
     if type(data) ~= "table" then return false end
     if data.Sonidos then
-        if data.Sonidos.Selected then for cat in pairs(state.selected) do if data.Sonidos.Selected[cat] then state.selected[cat].Name = data.Sonidos.Selected[cat].Name or "Ninguno"; state.selected[cat].URL = data.Sonidos.Selected[cat].URL or "" end end end
+        if data.Sonidos.Selected then for cat in pairs(state.selected) do if data.Sonidos.Selected[cat] then state.selected[cat] = data.Sonidos.Selected[cat] end end end
         if data.Sonidos.Enabled then for cat in pairs(state.enabled) do if data.Sonidos.Enabled[cat] ~= nil then state.enabled[cat] = data.Sonidos.Enabled[cat] end end end
         if data.Sonidos.Muted then for cat in pairs(state.muted) do if data.Sonidos.Muted[cat] ~= nil then state.muted[cat] = data.Sonidos.Muted[cat] end end end
     end
     if data.Skybox then state.selectedSky = data.Skybox.Selected or ""; state.autoLoadSky = data.Skybox.AutoLoad == true end
     if data.Animaciones then
         state.animMode = data.Animaciones.Mode or "pack"; state.selectedAnimPack = data.Animaciones.SelectedPack or "Default"
-        if data.Animaciones.CustomMix then for slot, packName in pairs(data.Animaciones.CustomMix) do if state.customMix[slot] ~= nil then state.customMix[slot] = packName end end end
+        if data.Animaciones.CustomMix then for slot, pack in pairs(data.Animaciones.CustomMix) do if state.customMix[slot] ~= nil then state.customMix[slot] = pack end end end
         state.animEnabled = data.Animaciones.Enabled == true
         if state.animEnabled then task.spawn(function() fastApply(player.Character) end) else restoreAllOriginal() end
     end
     if data.Macros then
-        if data.Macros.Weapon ~= nil then state.macro = data.Macros.Weapon end
-        if data.Macros.WeaponEquipDelay then state.equipDelay = data.Macros.WeaponEquipDelay end
-        if data.Macros.WeaponShootDelay then state.shootDelay = data.Macros.WeaponShootDelay end
-        if data.Macros.Knife ~= nil then state.knifeMacroEnabled = data.Macros.Knife end
-        if data.Macros.KnifeEquipDelay then state.knifeEquipDelay = data.Macros.KnifeEquipDelay end
-        if data.Macros.KnifeThrowDelay then state.knifeThrowDelay = data.Macros.KnifeThrowDelay end
-        if data.Macros.Macro360 ~= nil then state.macro360Enabled = data.Macros.Macro360 end
-        if data.Macros.Macro360Fov then state.macro360Fov = data.Macros.Macro360Fov end
-        if data.Macros.Macro360HitChance then state.macro360HitChance = data.Macros.Macro360HitChance end
-        if data.Macros.Macro360Reaction then state.macro360Reaction = data.Macros.Macro360Reaction end
-        if data.Macros.Macro360Cooldown then state.macro360Cooldown = data.Macros.Macro360Cooldown end
+        for k, v in pairs(data.Macros) do if state[k] ~= nil then state[k] = v end end
     end
     return true
 end
 
-local function listV16Configs()
+local function listV18Configs()
     local list = {}
     if listfiles and isfolder and isfolder(CONFIG_FOLDER) then
         for _, f in ipairs(listfiles(CONFIG_FOLDER)) do if f:match("%.json$") then local n = f:match("([^/\\]+)%.json$"); if n and n ~= "_autosave" then table.insert(list, n) end end end
@@ -434,13 +447,17 @@ local function listV16Configs()
     return list
 end
 
--- CREACION DE LA INTERFAZ WINDUI
+-- ==========================================
+-- CREACIÓN DE LA INTERFAZ USANDO WINDUI (XERO STYLE)
+-- ==========================================
 local Window = WindUI:CreateWindow({
-    Title = "NEVADA | DUELS",
-    Subtitle = "V16",
-    Theme = "Xero", -- Tema de Xero
+    Title = "Nevada | DUELS",
+    Subtitle = "V18",
+    Theme = "Xero",
     Author = "by Ti",
     Size = UDim2.fromOffset(620, 350),
+    MinSize = Vector2.new(330, 270),
+    Resizable = true,
     OpenButton = {Title = "Abrir Nevada", Enabled = true},
 })
 
@@ -458,8 +475,7 @@ local Tabs = {
     Configs = PersonalSection:Tab({Title = "Configs", Icon = "solar:settings-bold"}),
 }
 
--- INICIO
-Tabs.Inicio:Paragraph({ Title = "Bienvenido a Nevada V16", Desc = "Interfaz oficial de WindUI (Estilo Xero)." })
+Tabs.Inicio:Paragraph({ Title = "Bienvenido a Nevada V18", Desc = "Interfaz oficial WindUI (Xero)." })
 
 -- MACRO
 Tabs.Macro:Toggle({ Title = "Activar Macro de Arma", Value = state.macro, Callback = function(v) state.macro = v end })
@@ -504,23 +520,17 @@ Tabs.Macro360:Slider({ Title = "Delay entre Disparos (s)", Step = 0.01, Value = 
 
 -- ANIMACIONES
 local animToggle
-animToggle = Tabs.Animaciones:Toggle({
-    Title = "Activar Animaciones Custom", Value = state.animEnabled,
-    Callback = function(v) state.animEnabled = v; if v then fastApply(player.Character) else restoreAllOriginal() end end
-})
+animToggle = Tabs.Animaciones:Toggle({ Title = "Activar Animaciones Custom", Value = state.animEnabled, Callback = function(v) state.animEnabled = v; if v then fastApply(player.Character) else restoreAllOriginal() end end })
 
 Tabs.Animaciones:Section({Title = "Packs Completos"})
 local sortedPacks = {}
 for name in pairs(AnimationPacks) do if name ~= "Default" then table.insert(sortedPacks, name) end end
 table.sort(sortedPacks)
 
-Tabs.Animaciones:Dropdown({
-    Title = "Selecciona un Pack", Values = sortedPacks, Value = state.selectedAnimPack,
-    Callback = function(packName)
-        state.selectedAnimPack = packName; state.animMode = "pack"; state.animEnabled = true
-        if animToggle then animToggle:Set(true) end; fastApply(player.Character)
-    end
-})
+Tabs.Animaciones:Dropdown({ Title = "Selecciona un Pack", Values = sortedPacks, Value = state.selectedAnimPack, Callback = function(packName)
+    state.selectedAnimPack = packName; state.animMode = "pack"; state.animEnabled = true
+    if animToggle then animToggle:Set(true) end; fastApply(player.Character)
+end })
 
 Tabs.Animaciones:Section({Title = "Personalizar (Mixer)"})
 local slotOrder = {"Idle", "Walk", "Run", "Jump", "Fall", "Swim", "SwimIdle"}
@@ -532,13 +542,10 @@ for i, v in ipairs(mixerOptions) do if v == "Default" then table.remove(mixerOpt
 table.insert(mixerOptions, 1, "Default")
 
 for _, slot in ipairs(slotOrder) do
-    Tabs.Animaciones:Dropdown({
-        Title = "Mix: " .. slotDisplay[slot], Values = mixerOptions, Value = state.customMix[slot] or "Default",
-        Callback = function(val)
-            state.customMix[slot] = val; state.animMode = "mix"; state.animEnabled = true
-            if animToggle then animToggle:Set(true) end; fastApply(player.Character)
-        end
-    })
+    Tabs.Animaciones:Dropdown({ Title = "Mix: " .. slotDisplay[slot], Values = mixerOptions, Value = state.customMix[slot] or "Default", Callback = function(val)
+        state.customMix[slot] = val; state.animMode = "mix"; state.animEnabled = true
+        if animToggle then animToggle:Set(true) end; fastApply(player.Character)
+    end })
 end
 
 Tabs.Animaciones:Button({ Title = "Restaurar Default", Callback = function()
@@ -547,20 +554,7 @@ Tabs.Animaciones:Button({ Title = "Restaurar Default", Callback = function()
 end })
 
 -- SONIDOS
-local soundDropdown
-local enableToggle, muteToggle
-local currentSoundCategory = "Arma"
-
-Tabs.Sonidos:Dropdown({
-    Title = "Categoría", Values = {"Arma", "Saltar", "Matar"}, Value = "Arma",
-    Callback = function(v)
-        currentSoundCategory = v
-        if soundDropdown then soundDropdown:Refresh(listSoundNames()) end
-        if enableToggle then enableToggle:Set(state.enabled[currentSoundCategory]) end
-        if muteToggle then muteToggle:Set(state.muted[currentSoundCategory]) end
-    end
-})
-
+local soundDropdown, enableToggle, muteToggle
 local function listSoundNames()
     local names = {}
     for _, s in ipairs(sounds) do table.insert(names, s.Name) end
@@ -568,24 +562,22 @@ local function listSoundNames()
     return names
 end
 
-soundDropdown = Tabs.Sonidos:Dropdown({
-    Title = "Selecciona Sonido", Values = listSoundNames(), Value = "Cargando...",
-    Callback = function(selectedName)
-        for _, s in ipairs(sounds) do if s.Name == selectedName then state.selected[currentSoundCategory] = {Name=s.Name, URL=s.URL} break end end
-    end
-})
+Tabs.Sonidos:Dropdown({ Title = "Categoría", Values = {"Arma", "Saltar", "Matar"}, Value = "Arma", Callback = function(v)
+    currentSoundCategory = v
+    if soundDropdown then soundDropdown:Refresh(listSoundNames()) end
+    if enableToggle then enableToggle:Set(state.enabled[currentSoundCategory]) end
+    if muteToggle then muteToggle:Set(state.muted[currentSoundCategory]) end
+end })
+
+soundDropdown = Tabs.Sonidos:Dropdown({ Title = "Selecciona Sonido", Values = listSoundNames(), Value = "Cargando...", Callback = function(selectedName)
+    for _, s in ipairs(sounds) do if s.Name == selectedName then state.selected[currentSoundCategory] = {Name=s.Name, URL=s.URL} break end end
+end })
 
 enableToggle = Tabs.Sonidos:Toggle({ Title = "Activar este sonido", Value = state.enabled[currentSoundCategory], Callback = function(v) state.enabled[currentSoundCategory] = v end })
 muteToggle = Tabs.Sonidos:Toggle({ Title = "Silenciar este sonido", Value = state.muted[currentSoundCategory], Callback = function(v) state.muted[currentSoundCategory] = v end })
 
-Tabs.Sonidos:Button({ Title = "Actualizar Catálogo (GitHub)", Callback = function()
-    task.spawn(function() if refreshCatalog() and soundDropdown then soundDropdown:Refresh(listSoundNames()) end end)
-end })
-
-task.spawn(function()
-    refreshCatalog()
-    if soundDropdown then soundDropdown:Refresh(listSoundNames()) end
-end)
+Tabs.Sonidos:Button({ Title = "Actualizar Catálogo (GitHub)", Callback = function() task.spawn(function() if refreshCatalog() and soundDropdown then soundDropdown:Refresh(listSoundNames()) end end) end })
+task.spawn(function() refreshCatalog(); if soundDropdown then soundDropdown:Refresh(listSoundNames()) end end)
 
 -- SKYBOX
 Tabs.Skybox:Toggle({ Title = "Auto-Cargar último cielo", Value = state.autoLoadSky, Callback = function(v) state.autoLoadSky = v; if v and state.selectedSky ~= "" then applySkyFromGitHub(state.selectedSky) end end })
@@ -607,40 +599,30 @@ task.spawn(function()
     if not parsedOk or type(data) ~= "table" then return end
     local skyNames = {}
     for _, item in ipairs(data) do if item.type == "dir" then table.insert(skyNames, item.name) end end
-    if #skyNames > 0 then
-        Tabs.Skybox:Dropdown({ Title = "Selecciona un Cielo", Values = skyNames, Value = skyNames[1], Callback = function(skyName) state.selectedSky = skyName; applySkyFromGitHub(skyName) end })
-    end
+    if #skyNames > 0 then Tabs.Skybox:Dropdown({ Title = "Selecciona un Cielo", Values = skyNames, Value = skyNames[1], Callback = function(skyName) state.selectedSky = skyName; applySkyFromGitHub(skyName) end }) end
 end)
 
 -- CONFIGS
 local selectedConfigName = "Ninguna"
 local configNameInput = "config1"
-
 local configDropdown
-configDropdown = Tabs.Configs:Dropdown({ Title = "Configs Guardadas", Values = listV16Configs(), Value = "Ninguna", Callback = function(v) selectedConfigName = v end })
+configDropdown = Tabs.Configs:Dropdown({ Title = "Configs Guardadas", Values = listV18Configs(), Value = "Ninguna", Callback = function(v) selectedConfigName = v end })
 Tabs.Configs:Input({ Title = "Nombre de la Config", Placeholder = "Ej: aimbot_pro", Callback = function(txt) configNameInput = txt end })
-
 Tabs.Configs:Button({ Title = "💾 Guardar", Callback = function()
     if configNameInput == "" or configNameInput == nil then return end
     local safeName = configNameInput:gsub("[^%w%-_ ]", ""):gsub("%s+", "_"); if safeName == "" then return end
-    local path = CONFIG_FOLDER .. "/" .. safeName .. ".json"
-    local ok, encoded = pcall(function() return HttpService:JSONEncode(serializeV16()) end)
-    if ok then pcall(writefile, path, encoded); if configDropdown then configDropdown:Refresh(listV16Configs()) end end
+    local ok, encoded = pcall(function() return HttpService:JSONEncode(serializeV18()) end)
+    if ok then pcall(writefile, CONFIG_FOLDER .. "/" .. safeName .. ".json", encoded); if configDropdown then configDropdown:Refresh(listV18Configs()) end end
 end })
-
 Tabs.Configs:Button({ Title = "📂 Cargar", Callback = function()
     if selectedConfigName == "Ninguna" or selectedConfigName == "" then return end
     local path = CONFIG_FOLDER .. "/" .. selectedConfigName .. ".json"
-    if isfile and isfile(path) then
-        local ok, data = pcall(function() return HttpService:JSONDecode(readfile(path)) end)
-        if ok and type(data) == "table" then applyV16Config(data) end
-    end
+    if isfile and isfile(path) then local ok, data = pcall(function() return HttpService:JSONDecode(readfile(path)) end); if ok and type(data) == "table" then applyV18Config(data) end end
 end })
-
 Tabs.Configs:Button({ Title = "🗑️ Borrar", Callback = function()
     if selectedConfigName == "Ninguna" then return end
     local path = CONFIG_FOLDER .. "/" .. selectedConfigName .. ".json"
-    if isfile and isfile(path) and delfile then pcall(delfile, path); if configDropdown then configDropdown:Refresh(listV16Configs()) end end
+    if isfile and isfile(path) and delfile then pcall(delfile, path); if configDropdown then configDropdown:Refresh(listV18Configs()) end end
 end })
 
 -- MACROS
@@ -662,8 +644,7 @@ local function runMacro()
       if tool.Parent==backpack then hum:EquipTool(tool); shouldHolster=true end
       task.wait(math.max(0.01, tonumber(state.equipDelay) or 0.05))
       if state.macro and player.Character==char and hum.Health>0 and tool.Parent==char then
-        shouldHolster=true; tool:Activate()
-        task.wait(math.max(0.01, tonumber(state.shootDelay) or 0.10))
+        shouldHolster=true; tool:Activate(); task.wait(math.max(0.01, tonumber(state.shootDelay) or 0.10))
         pcall(function() tool:Deactivate() end); task.wait(0.15)
       end
     end)
@@ -697,10 +678,7 @@ UserInputService.InputBegan:Connect(function(input,processed)
   if input.KeyCode == Enum.KeyCode.ButtonL2 then runKnifeMacro() end
 end)
 local touchStart,touchTime=nil,nil
-UserInputService.TouchStarted:Connect(function(input,processed)
-  if processed then return end
-  touchStart=input.Position; touchTime=os.clock()
-end)
+UserInputService.TouchStarted:Connect(function(input,processed) if processed then return end; touchStart=input.Position; touchTime=os.clock() end)
 UserInputService.TouchEnded:Connect(function(input,processed)
   if processed or not touchStart or not touchTime then touchStart=nil; touchTime=nil; return end
   local delta=(input.Position-touchStart).Magnitude; local elapsed=os.clock()-touchTime
@@ -747,4 +725,4 @@ task.spawn(function()
     end
 end)
 
-print("[Nevada V16] ✅ Cargado usando WindUI Oficial.")
+print("[Nevada V18] ✅ Cargado usando la misma lógica de Xero.")
