@@ -1,4 +1,4 @@
--- NEVADA V33 | Script Completo Corregido
+-- NEVADA V33 | Script Completo y Unificado
 print("[Nevada] Iniciando script...")
 
 local Players = game:GetService("Players")
@@ -21,7 +21,7 @@ local SKYBOX_RAW = "https://raw.githubusercontent.com/" .. SKYBOX_REPO .. "/main
 local SKYBOX_API = "https://api.github.com/repos/" .. SKYBOX_REPO .. "/contents/" .. SKYBOX_FOLDER
 
 -- ==========================================
--- HOOK INTACTO (COLOCADO AL INICIO PARA QUE NADA LO ROMPA)
+-- HOOK INTACTO (AL INICIO PARA EVITAR FALLOS)
 -- ==========================================
 getgenv().NevadaTargetPart = nil
 local oldNamecall
@@ -69,7 +69,7 @@ if not WindUI then
 end
 
 -- ==========================================
--- CATÁLOGO DE TUS 5 FONDOS
+-- CATÁLOGO DE FONDOS Y FUNCIÓN CACHÉ
 -- ==========================================
 local BG_LIST = {
     { name = "Fondo 1", url = "https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/images/1.jpg" },
@@ -99,30 +99,33 @@ end
 
 local FondoAsset = CargarFondo(BG_LIST[1].url)
 
+-- ==========================================
+-- ANIMACIONES (IDs CORREGIDOS + IDLE2)
+-- ==========================================
 local AnimationPacks = {
-    ["Default"]     = {Idle="507766666", Walk="507777826", Run="507767714", Jump="507765000", Fall="507767968", Swim="507784897", SwimIdle="507785072"},
-    ["Hombre Lobo"] = {Idle="1083195517", Walk="1083178339", Run="1083216690", Jump="1083218792", Fall="1083189019", Swim="1083178339", SwimIdle="1083214717"},
-    ["Ninja"]       = {Idle="616006778", Walk="656121766", Run="656118852", Jump="656117878", Fall="656115606", Swim="656119721", SwimIdle="656121397"},
-    ["Zombie"]      = {Idle="616158929", Walk="616168032", Run="616163682", Jump="616161997", Fall="616157476", Swim="616168032", SwimIdle="616158929"},
-    ["Robot"]       = {Idle="616088211", Walk="616095330", Run="616091570", Jump="616090535", Fall="616087089", Swim="616092998", SwimIdle="616094091"},
-    ["Levitation"]  = {Idle="616006778", Walk="616013216", Run="616010382", Jump="616008936", Fall="616005863", Swim="616011509", SwimIdle="616012453"},
-    ["Toy"]         = {Idle="10921301576", Walk="10921312010", Run="10921306285", Jump="10921308158", Fall="10921307241", Swim="10921309319", SwimIdle="10921310341"},
-    ["Superhero"]   = {Idle="10921288909", Walk="10921298616", Run="10921291831", Jump="10921294559", Fall="10921293373", Swim="10921295495", SwimIdle="10921297391"},
-    ["Cartoony"]    = {Idle="742637544", Walk="742640026", Run="742638842", Jump="742637942", Fall="742637151", Swim="742640026", SwimIdle="742638445"},
-    ["Vampire"]     = {Idle="1083445855", Walk="1083473930", Run="1083462077", Jump="1083455352", Fall="1083443587", Swim="1083473930", SwimIdle="1083450166"},
-    ["Elder"]       = {Idle="845397899", Walk="845403856", Run="845386501", Jump="845398858", Fall="845396048", Swim="845403856", SwimIdle="845400520"},
-    ["Stylish"]     = {Idle="616136790", Walk="616146177", Run="616140816", Jump="616139451", Fall="616134815", Swim="616143378", SwimIdle="616138447"},
-    ["Astronaut"]   = {Idle="891621366", Walk="891667138", Run="891636393", Jump="891627522", Fall="891617961", Swim="891667138", SwimIdle="891633237"},
-    ["Bubbly"]      = {Idle="910004836", Walk="910034870", Run="910025107", Jump="910016857", Fall="910001910", Swim="910028158", SwimIdle="910009958"},
-    ["Knight"]      = {Idle="657595757", Walk="657552124", Run="657564596", Jump="658409194", Fall="657600338", Swim="657552124", SwimIdle="657568135"},
-    ["Mage"]        = {Idle="707742142", Walk="707897309", Run="707861613", Jump="707853694", Fall="707829716", Swim="707897309", SwimIdle="707855907"},
-    ["Pirate"]      = {Idle="750781874", Walk="750785693", Run="750783738", Jump="750782230", Fall="750780242", Swim="750785693", SwimIdle="750782770"},
-    ["Patrol"]      = {Idle="1149612882", Walk="1151231493", Run="1150967949", Jump="1148811837", Fall="1148863382", Swim="1151231493", SwimIdle="1150842221"},
-    ["Confident"]   = {Idle="1069977950", Walk="1070017263", Run="1070001516", Jump="1069984524", Fall="1069973677", Swim="1070017263", SwimIdle="1069987858"},
-    ["Popstar"]     = {Idle="1212900985", Walk="1212980338", Run="1212980348", Jump="1212954642", Fall="1212900995", Swim="1212980338", SwimIdle="1150842221"},
-    ["Cowboy"]      = {Idle="1014390418", Walk="1014421541", Run="1014401683", Jump="1014394726", Fall="1014384571", Swim="1014421541", SwimIdle="1014398616"},
-    ["Sneaky"]      = {Idle="1132473842", Walk="1132510133", Run="1132494274", Jump="1132489853", Fall="1132469004", Swim="1132510133", SwimIdle="1132477671"},
-    ["Princess"]    = {Idle="941003647", Walk="941028902", Run="941015281", Jump="941008832", Fall="941000007", Swim="941028902", SwimIdle="941013098"},
+    ["Default"]     = {Idle="507766666", Idle2="507766951", Walk="507777826", Run="507767714", Jump="507765000", Fall="507767968", Swim="507784897", SwimIdle="507785072"},
+    ["Hombre Lobo"] = {Idle="1083195517", Idle2="1083214717", Walk="1083178339", Run="1083216690", Jump="1083218792", Fall="1083189019", Swim="1083178339", SwimIdle="1083214717"},
+    ["Ninja"]       = {Idle="656117400", Idle2="656118341", Walk="656121766", Run="656118852", Jump="656117878", Fall="656115606", Swim="656119721", SwimIdle="656121397"},
+    ["Zombie"]      = {Idle="616158929", Idle2="616160636", Walk="616168032", Run="616163682", Jump="616161997", Fall="616157476", Swim="616168032", SwimIdle="616158929"},
+    ["Robot"]       = {Idle="616088211", Idle2="616089559", Walk="616095330", Run="616091570", Jump="616090535", Fall="616087089", Swim="616092998", SwimIdle="616094091"},
+    ["Levitation"]  = {Idle="616006778", Idle2="616008087", Walk="616013216", Run="616010382", Jump="616008936", Fall="616005863", Swim="616011509", SwimIdle="616012453"},
+    ["Toy"]         = {Idle="10921301576", Idle2="10921302241", Walk="10921312010", Run="10921306285", Jump="10921308158", Fall="10921307241", Swim="10921309319", SwimIdle="10921310341"},
+    ["Superhero"]   = {Idle="10921288909", Idle2="10921290167", Walk="10921298616", Run="10921291831", Jump="10921294559", Fall="10921293373", Swim="10921295495", SwimIdle="10921297391"},
+    ["Cartoony"]    = {Idle="742637544", Idle2="742638445", Walk="742640026", Run="742638842", Jump="742637942", Fall="742637151", Swim="742640026", SwimIdle="742638445"},
+    ["Vampire"]     = {Idle="1083445855", Idle2="1083450166", Walk="1083473930", Run="1083462077", Jump="1083455352", Fall="1083443587", Swim="1083473930", SwimIdle="1083450166"},
+    ["Elder"]       = {Idle="845397899", Idle2="845400520", Walk="845403856", Run="845386501", Jump="845398858", Fall="845396048", Swim="845403856", SwimIdle="845400520"},
+    ["Stylish"]     = {Idle="616136790", Idle2="616138447", Walk="616146177", Run="616140816", Jump="616139451", Fall="616134815", Swim="616143378", SwimIdle="616138447"},
+    ["Astronaut"]   = {Idle="891621366", Idle2="891633237", Walk="891667138", Run="891636393", Jump="891627522", Fall="891617961", Swim="891667138", SwimIdle="891633237"},
+    ["Bubbly"]      = {Idle="910004836", Idle2="910009958", Walk="910034870", Run="910025107", Jump="910016857", Fall="910001910", Swim="910028158", SwimIdle="910009958"},
+    ["Knight"]      = {Idle="657595757", Idle2="657568135", Walk="657552124", Run="657564596", Jump="658409194", Fall="657600338", Swim="657552124", SwimIdle="657568135"},
+    ["Mage"]        = {Idle="707742142", Idle2="707855907", Walk="707897309", Run="707861613", Jump="707853694", Fall="707829716", Swim="707897309", SwimIdle="707855907"},
+    ["Pirate"]      = {Idle="750781874", Idle2="750782770", Walk="750785693", Run="750783738", Jump="750782230", Fall="750780242", Swim="750785693", SwimIdle="750782770"},
+    ["Patrol"]      = {Idle="1149612882", Idle2="1150842221", Walk="1151231493", Run="1150967949", Jump="1148811837", Fall="1148863382", Swim="1151231493", SwimIdle="1150842221"},
+    ["Confident"]   = {Idle="1069977950", Idle2="1069987858", Walk="1070017263", Run="1070001516", Jump="1069984524", Fall="1069973677", Swim="1070017263", SwimIdle="1069987858"},
+    ["Popstar"]     = {Idle="1212900985", Idle2="1150842221", Walk="1212980338", Run="1212980348", Jump="1212954642", Fall="1212900995", Swim="1212980338", SwimIdle="1150842221"},
+    ["Cowboy"]      = {Idle="1014390418", Idle2="1014398616", Walk="1014421541", Run="1014401683", Jump="1014394726", Fall="1014384571", Swim="1014421541", SwimIdle="1014398616"},
+    ["Sneaky"]      = {Idle="1132473842", Idle2="1132477671", Walk="1132510133", Run="1132494274", Jump="1132489853", Fall="1132469004", Swim="1132510133", SwimIdle="1132477671"},
+    ["Princess"]    = {Idle="941003647", Idle2="941013098", Walk="941028902", Run="941015281", Jump="941008832", Fall="941000007", Swim="941028902", SwimIdle="941013098"},
 }
 
 local state = {
@@ -239,7 +242,8 @@ local function fastApply(char)
         else
             local p = AnimationPacks[mix.Idle] or AnimationPacks["Default"]
             guardAnimation(animate, "idle", "Animation1", p.Idle)
-            guardAnimation(animate, "idle", "Animation2", p.Idle)
+            local idle2 = p.Idle2 or (originalAnimations and originalAnimations.Idle2 and originalAnimations.Idle2:match("%d+")) or p.Idle
+            guardAnimation(animate, "idle", "Animation2", idle2)
         end
         if mix.Walk == "Default" then if originalAnimations and originalAnimations.Walk then guardAnimation(animate, "walk", "WalkAnim", originalAnimations.Walk:match("%d+")) end
         else local p = AnimationPacks[mix.Walk] or AnimationPacks["Default"]; guardAnimation(animate, "walk", "WalkAnim", p.Walk) end
@@ -256,7 +260,8 @@ local function fastApply(char)
     else
         local pack = AnimationPacks[state.selectedAnimPack] or AnimationPacks["Default"]
         guardAnimation(animate, "idle", "Animation1", pack.Idle)
-        guardAnimation(animate, "idle", "Animation2", pack.Idle)
+        local idle2 = pack.Idle2 or (originalAnimations and originalAnimations.Idle2 and originalAnimations.Idle2:match("%d+")) or pack.Idle
+        guardAnimation(animate, "idle", "Animation2", idle2)
         guardAnimation(animate, "walk", "WalkAnim", pack.Walk)
         guardAnimation(animate, "run", "RunAnim", pack.Run)
         guardAnimation(animate, "jump", "JumpAnim", pack.Jump)
@@ -507,7 +512,7 @@ local Window = WindUI:CreateWindow({
 })
 
 -- ==========================================
--- BOTÓN FLOTANTE MACRO 360 (FIX DE PARENTING)
+-- BOTÓN FLOTANTE MACRO 360
 -- ==========================================
 local buttonGui = Instance.new("ScreenGui")
 buttonGui.Name = "Nevada360Gui"
