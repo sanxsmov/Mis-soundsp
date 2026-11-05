@@ -1,44 +1,36 @@
--- NEVADA V19 | Enlace Oficial WindUI (Footagesus)
+-- NEVADA V19 | WindUI Oficial Corregido + Todas las Funciones
 local function CargarWindUI()
-    -- Enlace oficial de releases de WindUI
-    local url = "https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"
-    
-    local exito, source = pcall(function() return game:HttpGet(url) end)
-    if not exito or not source or #source < 1000 then
-        warn("[Nevada] ❌ No se pudo descargar WindUI desde el enlace oficial.")
-        return nil
+    local urls = {
+        "https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua",
+        "https://raw.githubusercontent.com/Footagesus/WindUI/main/source/WindUI.lua",
+        "https://github.com/Footagesus/WindUI/raw/main/dist/main.lua"
+    }
+    for _, url in ipairs(urls) do
+        local exito, source = pcall(function() return game:HttpGet(url) end)
+        if exito and source and #source > 1000 then
+            local chunk, err = loadstring(source)
+            if chunk then
+                local ok, ui = pcall(chunk)
+                if ok and ui then
+                    print("[Nevada] ✅ WindUI cargado correctamente.")
+                    return ui
+                end
+            end
+        end
     end
-    
-    local chunk, err = loadstring(source)
-    if not chunk then
-        warn("[Nevada] ❌ Error al compilar WindUI: " .. tostring(err))
-        return nil
-    end
-    
-    local ok, ui = pcall(chunk)
-    if ok and ui then
-        print("[Nevada] ✅ WindUI cargado correctamente.")
-        return ui
-    else
-        warn("[Nevada] ❌ Error al inicializar WindUI: " .. tostring(ui))
-        return nil
-    end
+    return nil
 end
 
 local WindUI = CargarWindUI()
 
 if not WindUI then
-    -- Si falla, avisamos y detenemos para no dejar macros a ciegas
     game:GetService("StarterGui"):SetCore("SendNotification", {
         Title = "Error de Interfaz",
-        Text = "Usa el enlace oficial de WindUI. Revisa la consola."
+        Text = "Tu ejecutor bloquea GitHub. Usa Delta, Wave o Codex."
     })
     return
 end
 
--- ==========================================
--- LÓGICA DE NEVADA (Igual que V18)
--- ==========================================
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
@@ -146,9 +138,7 @@ local function guardAnimation(animate, folderName, animName, id)
     if anim.AnimationId ~= target then anim.AnimationId = target end
     if animationGuards[anim] then pcall(function() animationGuards[anim]:Disconnect() end) end
     animationGuards[anim] = anim:GetPropertyChangedSignal("AnimationId"):Connect(function()
-        if state.animEnabled and anim.Parent and anim.AnimationId ~= target then
-            anim.AnimationId = target
-        end
+        if state.animEnabled and anim.Parent and anim.AnimationId ~= target then anim.AnimationId = target end
     end)
 end
 
@@ -438,7 +428,7 @@ local function listV19Configs()
 end
 
 -- ==========================================
--- CREACIÓN DE LA INTERFAZ USANDO WINDUI (XERO STYLE)
+-- CREACIÓN DE LA INTERFAZ WINDUI
 -- ==========================================
 local Window = WindUI:CreateWindow({
     Title = "Nevada | DUELS",
@@ -715,4 +705,4 @@ task.spawn(function()
     end
 end)
 
-print("[Nevada V19] ✅ Cargado usando el enlace oficial de WindUI.")
+print("[Nevada V19] ✅ Cargado correctamente con la interfaz oficial.")
