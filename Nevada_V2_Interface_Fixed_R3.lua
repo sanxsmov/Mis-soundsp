@@ -223,6 +223,17 @@ local function guardAnimation(animate, folderName, animName, id)
     end)
 end
 
+local function clearAllAnimations(char)
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+    local animator = hum:FindFirstChildOfClass("Animator")
+    local tracks = animator and animator:GetPlayingAnimationTracks() or hum:GetPlayingAnimationTracks()
+    for _, track in pairs(tracks) do 
+        pcall(function() track:Stop(0) track:Destroy() end) 
+    end
+end
+
 local function fastApply(char)
     if not state.animEnabled or not char or not char.Parent then return end
     local animate = char:FindFirstChild("Animate")
@@ -230,6 +241,74 @@ local function fastApply(char)
     captureOriginalAnimations(char)
     clearAnimationGuards()
 
+    -- ✅ 1. Detener animaciones viejas y deshabilitar Animate
+    clearAllAnimations(char)
+    animate.Disabled = true
+    task.wait(0.1)
+
+    -- ✅ 2. Función helper para asignar IDs sin guard (temporal)
+    local function setAnim(folderName, animName, id)
+        if not id then return end
+        local folder = animate:FindFirstChild(folderName)
+        if folder then
+            local anim = folder:FindFirstChild(animName)
+            if anim and anim:IsA("Animation") then
+                anim.AnimationId = "rbxassetid://" .. tostring(id)
+            end
+        end
+    end
+
+    -- ✅ 3. Asignar los nuevos IDs
+    if state.animMode == "mix" then
+        local mix = state.customMix
+        if mix.Idle == "Default" then
+            if originalAnimations then
+                setAnim("idle", "Animation1", originalAnimations.Idle1 and originalAnimations.Idle1:match("%d+"))
+                setAnim("idle", "Animation2", originalAnimations.Idle2 and originalAnimations.Idle2:match("%d+"))
+            end
+        else
+            local p = AnimationPacks[mix.Idle] or AnimationPacks["Default"]
+            setAnim("idle", "Animation1", p.Idle)
+            setAnim("idle", "Animation2", p.Idle2 or p.Idle)
+        end
+        if mix.Walk == "Default" then if originalAnimations and originalAnimations.Walk then setAnim("walk", "WalkAnim", originalAnimations.Walk:match("%d+")) end
+        else local p = AnimationPacks[mix.Walk] or AnimationPacks["Default"]; setAnim("walk", "WalkAnim", p.Walk) end
+        if mix.Run == "Default" then if originalAnimations and originalAnimations.Run then setAnim("run", "RunAnim", originalAnimations.Run:match("%d+")) end
+        else local p = AnimationPacks[mix.Run] or AnimationPacks["Default"]; setAnim("run", "RunAnim", p.Run) end
+        if mix.Jump == "Default" then if originalAnimations and originalAnimations.Jump then setAnim("jump", "JumpAnim", originalAnimations.Jump:match("%d+")) end
+        else local p = AnimationPacks[mix.Jump] or AnimationPacks["Default"]; setAnim("jump", "JumpAnim", p.Jump) end
+        if mix.Fall == "Default" then if originalAnimations and originalAnimations.Fall then setAnim("fall", "FallAnim", originalAnimations.Fall:match("%d+")) end
+        else local p = AnimationPacks[mix.Fall] or AnimationPacks["Default"]; setAnim("fall", "FallAnim", p.Fall) end
+        if mix.Swim == "Default" then if originalAnimations and originalAnimations.Swim then setAnim("swim", "Swim", originalAnimations.Swim:match("%d+")) end
+        else local p = AnimationPacks[mix.Swim] or AnimationPacks["Default"]; setAnim("swim", "Swim", p.Swim) end
+        if mix.SwimIdle == "Default" then if originalAnimations and originalAnimations.SwimIdle then setAnim("swimidle", "SwimIdle", originalAnimations.SwimIdle:match("%d+")) end
+        else local p = AnimationPacks[mix.SwimIdle] or AnimationPacks["Default"]; setAnim("swimidle", "SwimIdle", p.SwimIdle) end
+    else
+        local pack = AnimationPacks[state.selectedAnimPack] or AnimationPacks["Default"]
+        setAnim("idle", "Animation1", pack.Idle)
+        setAnim("idle", "Animation2", pack.Idle2 or pack.Idle)
+        setAnim("walk", "WalkAnim", pack.Walk)
+        setAnim("run", "RunAnim", pack.Run)
+        setAnim("jump", "JumpAnim", pack.Jump)
+        setAnim("fall", "FallAnim", pack.Fall)
+        setAnim("swim", "Swim", pack.Swim)
+        setAnim("swimidle", "SwimIdle", pack.SwimIdle)
+    end
+
+    -- ✅ 4. Volver a habilitar Animate y forzar recarga
+    task.wait(0.1)
+    animate.Disabled = false
+    
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        pcall(function()
+            hum:ChangeState(Enum.HumanoidStateType.Landed)
+            task.wait(0.05)
+            hum:ChangeState(Enum.HumanoidStateType.Running)
+        end)
+    end
+
+    -- ✅ 5. Ahora aplicar los guards (anti-sobrescritura del juego)
     if state.animMode == "mix" then
         local mix = state.customMix
         if mix.Idle == "Default" then
@@ -274,17 +353,38 @@ end
 local function restoreAllOriginal()
     local char = player.Character; if not char then return end
     local animate = char:FindFirstChild("Animate"); if not animate then return end
-    clearAnimationGuards(); captureOriginalAnimations(char)
+    
+    clearAnimationGuards()
+    captureOriginalAnimations(char)
+    clearAllAnimations(char)
+    
+    animate.Disabled = true
+    task.wait(0.1)
+
     if originalAnimations then
         local function setOrig(folderName, animName, origKey)
             local folder = animate:FindFirstChild(folderName); if not folder then return end
             local anim = folder:FindFirstChild(animName)
-            if anim and anim:IsA("Animation") and originalAnimations[origKey] then anim.AnimationId = originalAnimations[origKey] end
+            if anim and anim:IsA("Animation") and originalAnimations[origKey] then 
+                anim.AnimationId = originalAnimations[origKey] 
+            end
         end
         setOrig("idle", "Animation1", "Idle1"); setOrig("idle", "Animation2", "Idle2")
         setOrig("walk", "WalkAnim", "Walk"); setOrig("run", "RunAnim", "Run")
         setOrig("jump", "JumpAnim", "Jump"); setOrig("fall", "FallAnim", "Fall")
         setOrig("swim", "Swim", "Swim"); setOrig("swimidle", "SwimIdle", "SwimIdle")
+    end
+
+    task.wait(0.1)
+    animate.Disabled = false
+
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        pcall(function()
+            hum:ChangeState(Enum.HumanoidStateType.Landed)
+            task.wait(0.05)
+            hum:ChangeState(Enum.HumanoidStateType.Running)
+        end)
     end
 end
 
