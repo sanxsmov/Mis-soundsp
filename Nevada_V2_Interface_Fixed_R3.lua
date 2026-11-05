@@ -1,4 +1,4 @@
--- NEVADA V29 | Botón exacto de Xero (Nativo) + Macro Anti-Lobby
+-- NEVADA V30 | Botón Flotante Garantizado (Estilo Captura) + Todo Funcional
 print("[Nevada] Iniciando script...")
 
 local function CargarWindUI()
@@ -431,12 +431,12 @@ local function refreshCatalog()
   table.sort(sounds,function(a,b) return a.Name:lower()<b.Name:lower() end); return loaded
 end
 
-local CONFIG_FOLDER = "NevadaV29_Configs"
+local CONFIG_FOLDER = "NevadaV30_Configs"
 if isfolder and not isfolder(CONFIG_FOLDER) then makefolder(CONFIG_FOLDER) end
 
-local function serializeV29()
+local function serializeV30()
     return {
-        Version = "V29",
+        Version = "V30",
         Sonidos = { Selected = { Arma = state.selected.Arma, Saltar = state.selected.Saltar, Matar = state.selected.Matar }, Enabled = state.enabled, Muted = state.muted },
         Skybox = { Selected = state.selectedSky, AutoLoad = state.autoLoadSky },
         Animaciones = { Enabled = state.animEnabled, Mode = state.animMode, SelectedPack = state.selectedAnimPack, CustomMix = state.customMix },
@@ -444,7 +444,7 @@ local function serializeV29()
     }
 end
 
-local function applyV29Config(data)
+local function applyV30Config(data)
     if type(data) ~= "table" then return false end
     if data.Sonidos then
         if data.Sonidos.Selected then for cat in pairs(state.selected) do if data.Sonidos.Selected[cat] then state.selected[cat] = data.Sonidos.Selected[cat] end end end
@@ -462,7 +462,7 @@ local function applyV29Config(data)
     return true
 end
 
-local function listV29Configs()
+local function listV30Configs()
     local list = {}
     if listfiles and isfolder and isfolder(CONFIG_FOLDER) then
         for _, f in ipairs(listfiles(CONFIG_FOLDER)) do if f:match("%.json$") then local n = f:match("([^/\\]+)%.json$"); if n and n ~= "_autosave" then table.insert(list, n) end end end
@@ -472,12 +472,12 @@ local function listV29Configs()
 end
 
 -- ==========================================
--- INTERFAZ WINDUI (BOTÓN NATIVO DE XERO)
+-- INTERFAZ WINDUI (BOTÓN FORZADO A APARECER)
 -- ==========================================
 local Window = WindUI:CreateWindow({
     Title = "Nevada | DUELS",
     Subtitle = "by Ti",
-    Theme = "Dark",
+    Theme = "Xero", -- Usamos el tema Xero para que el botón se vea bien
     Size = UDim2.fromOffset(620, 350),
     MinSize = Vector2.new(330, 270),
     Resizable = true,
@@ -486,8 +486,17 @@ local Window = WindUI:CreateWindow({
     ElementsRadius = 12,
     Background = FondoAsset,
     BackgroundImageTransparency = 0.25,
-    -- ESTA ES LA LÍNEA EXACTA DE XERO (Sin iconos ni colores extra que rompan la UI)
-    OpenButton = {Title = "Abri NVD", Enabled = true}
+    -- CONFIGURACIÓN EXACTA DE LA CAPTURA (SZK) ADAPTADA A NEGRO
+    OpenButton = {
+        Title = "Abri NVD",
+        Icon = "rbxassetid://85755059842228",
+        Enabled = true,
+        OnlyMobile = false, -- Fuerza a que aparezca en PC/Móvil
+        Draggable = true, -- Permite arrastrarlo
+        Scale = 0.85,
+        StrokeThickness = 1.5,
+        Color = ColorSequence.new(Color3.fromRGB(20,20,20), Color3.fromRGB(60,60,60)) -- Negro/Gris oscuro
+    }
 })
 
 -- Función para cambiar el fondo
@@ -666,23 +675,23 @@ end)
 local selectedConfigName = "Ninguna"
 local configNameInput = "config1"
 local configDropdown
-configDropdown = Tabs.Configs:Dropdown({ Title = "Configs Guardadas", Values = listV29Configs(), Value = "Ninguna", Callback = function(v) selectedConfigName = v end })
+configDropdown = Tabs.Configs:Dropdown({ Title = "Configs Guardadas", Values = listV30Configs(), Value = "Ninguna", Callback = function(v) selectedConfigName = v end })
 Tabs.Configs:Input({ Title = "Nombre de la Config", Placeholder = "Ej: aimbot_pro", Callback = function(txt) configNameInput = txt end })
 Tabs.Configs:Button({ Title = "💾 Guardar", Callback = function()
     if configNameInput == "" or configNameInput == nil then return end
     local safeName = configNameInput:gsub("[^%w%-_ ]", ""):gsub("%s+", "_"); if safeName == "" then return end
-    local ok, encoded = pcall(function() return HttpService:JSONEncode(serializeV29()) end)
-    if ok then pcall(writefile, CONFIG_FOLDER .. "/" .. safeName .. ".json", encoded); if configDropdown then configDropdown:Refresh(listV29Configs()) end end
+    local ok, encoded = pcall(function() return HttpService:JSONEncode(serializeV30()) end)
+    if ok then pcall(writefile, CONFIG_FOLDER .. "/" .. safeName .. ".json", encoded); if configDropdown then configDropdown:Refresh(listV30Configs()) end end
 end })
 Tabs.Configs:Button({ Title = "📂 Cargar", Callback = function()
     if selectedConfigName == "Ninguna" or selectedConfigName == "" then return end
     local path = CONFIG_FOLDER .. "/" .. selectedConfigName .. ".json"
-    if isfile and isfile(path) then local ok, data = pcall(function() return HttpService:JSONDecode(readfile(path)) end); if ok and type(data) == "table" then applyV29Config(data) end end
+    if isfile and isfile(path) then local ok, data = pcall(function() return HttpService:JSONDecode(readfile(path)) end); if ok and type(data) == "table" then applyV30Config(data) end end
 end })
 Tabs.Configs:Button({ Title = "🗑️ Borrar", Callback = function()
     if selectedConfigName == "Ninguna" then return end
     local path = CONFIG_FOLDER .. "/" .. selectedConfigName .. ".json"
-    if isfile and isfile(path) and delfile then pcall(delfile, path); if configDropdown then configDropdown:Refresh(listV29Configs()) end end
+    if isfile and isfile(path) and delfile then pcall(delfile, path); if configDropdown then configDropdown:Refresh(listV30Configs()) end end
 end })
 
 -- MACROS CON ANTI-LOBBY
@@ -794,4 +803,4 @@ task.spawn(function()
     end
 end)
 
-print("[Nevada V29] ✅ Cargado correctamente.")
+print("[Nevada V30] ✅ Cargado correctamente.")
