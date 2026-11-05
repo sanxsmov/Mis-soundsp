@@ -1,4 +1,4 @@
--- NEVADA V33 | Botón Nativo de WindUI (Configuración Correcta) + Todo lo demás
+-- NEVADA V33 | Script Completo Corregido
 print("[Nevada] Iniciando script...")
 
 local function CargarWindUI()
@@ -51,9 +51,7 @@ local BG_LIST = {
 local function CargarFondo(url)
     if not url or url == "" then return nil end
     if writefile and isfile and getcustomasset then
-        -- ✅ Guarda con el nombre real del archivo para no re-descargar y evitar el HTTP 402
         local fileName = "NevadaBG_" .. tostring(url:match("([^/]+)$") or "default.jpg")
-        
         if not isfile(fileName) then
             local ok, body = pcall(function() return game:HttpGet(url) end)
             if ok and body and #body > 0 then
@@ -109,7 +107,7 @@ local state = {
 local sounds, soundCache, currentSoundCategory = {}, {}, "Arma"
 
 -- ==========================================
--- FUNCIÓN ANTI-LOBBY ESTRICTA
+-- ANTI-LOBBY
 -- ==========================================
 local function estaEnLobby()
     local char = player.Character
@@ -117,18 +115,15 @@ local function estaEnLobby()
     local hum = char:FindFirstChildOfClass("Humanoid")
     if not hum or hum.Health <= 0 then return true end
     if char:FindFirstChildOfClass("ForceField") then return true end
-
     if player.Team then
         local t = player.Team.Name:lower()
         if t:find("lobby") or t:find("spectat") or t:find("menu") or t:find("waiting") or t:find("dead") then return true end
     end
-
     local gui = player:FindFirstChild("PlayerGui")
     local main = gui and gui:FindFirstChild("Main")
     local frame = main and main:FindFirstChild("MainGameFrame")
     local score = frame and frame:FindFirstChild("IngameScore")
     if not score then return true end 
-
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if hrp then
         local safeZones = {
@@ -331,9 +326,7 @@ local function esPistola(tool)
     return tool:FindFirstChild("showBeam") ~= nil or tool.Name:lower():find("gun") or tool.Name:lower():find("pistol") or tool.Name:lower():find("revolver")
 end
 
--- ==========================================
--- HOOK INTACTO (SIN MODIFICACIONES)
--- ==========================================
+-- HOOK (INTACTO)
 getgenv().NevadaTargetPart = nil
 local oldNamecall
 if hookmetamethod and getnamecallmethod and checkcaller then
@@ -481,12 +474,12 @@ local function listV33Configs()
 end
 
 -- ==========================================
--- INTERFAZ WINDUI (CON EL FIX DEL TEMA)
+-- INTERFAZ WINDUI
 -- ==========================================
 local Window = WindUI:CreateWindow({
     Title = "Nevada | DUELS",
     Author = "by Ti",
-    Theme = "Dark", -- ✅ FIX: "Graphite" causaba el error PanelBackground
+    Theme = "Dark",
     Size = UDim2.fromOffset(620, 350),
     MinSize = Vector2.new(330, 270),
     Resizable = true,
@@ -508,20 +501,38 @@ local Window = WindUI:CreateWindow({
 })
 
 -- ==========================================
--- BOTÓN FLOTANTE MACRO 360 (ESTILO XEROHUB)
+-- BOTÓN FLOTANTE MACRO 360 (FIX DE PARENTING)
 -- ==========================================
+local buttonGui = Instance.new("ScreenGui")
+buttonGui.Name = "Nevada360Gui"
+buttonGui.ResetOnSpawn = false
+buttonGui.IgnoreGuiInset = true
+buttonGui.DisplayOrder = 999
+buttonGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+-- Parent con gethui / syn.protect_gui / playerGui (fallback)
+local guiParent = playerGui
+pcall(function()
+    if gethui then
+        guiParent = gethui()
+    elseif syn and syn.protect_gui then
+        syn.protect_gui(buttonGui)
+        guiParent = game:GetService("CoreGui")
+    end
+end)
+buttonGui.Parent = guiParent
+
 local floatingBtn360 = Instance.new("TextButton")
 floatingBtn360.Name = "Nevada360Btn"
 floatingBtn360.Size = UDim2.fromOffset(156, 48)
 floatingBtn360.Position = UDim2.new(0.8, -150, 0.5, 0)
 floatingBtn360.BackgroundColor3 = Color3.fromRGB(14, 14, 14)
 floatingBtn360.BackgroundTransparency = 0.06
-floatingBtn360.Text = "Macro 360: OFF"
-floatingBtn360.TextTransparency = 1
+floatingBtn360.Text = ""
 floatingBtn360.AutoButtonColor = false
-floatingBtn360.Visible = false
+floatingBtn360.Visible = true
 floatingBtn360.ZIndex = 50
-floatingBtn360.Parent = game:GetService("CoreGui")
+floatingBtn360.Parent = buttonGui
 
 Instance.new("UICorner", floatingBtn360).CornerRadius = UDim.new(0, 12)
 local stroke360 = Instance.new("UIStroke", floatingBtn360)
@@ -610,7 +621,6 @@ floatingBtn360.MouseButton1Click:Connect(function()
     if not validClick360 then return end 
     state.macro360Enabled = not state.macro360Enabled
     updateVisual360()
-    -- Sincronizar con el Toggle del menú si existe
     if _G.NevadaTogMacro360 then
         pcall(function() _G.NevadaTogMacro360:Set(state.macro360Enabled) end)
     end
@@ -636,9 +646,6 @@ local Tabs = {
     Configs = PersonalSection:Tab({Title = "Configs", Icon = "settings"}),
 }
 
--- ==========================================
--- CONFIGS (FONDOS CON EL FIX NATIVO)
--- ==========================================
 Tabs.Configs:Section({ Title = "Catálogo de Fondos" })
 local bgNames = {}
 for _, bg in ipairs(BG_LIST) do table.insert(bgNames, bg.name) end
@@ -649,7 +656,6 @@ Tabs.Configs:Dropdown({
             if bg.name == selectedName then
                 local newAsset = CargarFondo(bg.url)
                 if newAsset then
-                    -- ✅ FIX NATIVO PARA CAMBIO INSTANTÁNEO
                     Window:SetBackgroundImage(newAsset)
                     Window:SetBackgroundImageTransparency(0.25)
                 end
@@ -659,37 +665,31 @@ Tabs.Configs:Dropdown({
     end
 })
 
--- MACRO
 Tabs.Macro:Toggle({ Title = "Activar Macro de Arma", Value = state.macro, Callback = function(v) state.macro = v end })
 Tabs.Macro:Slider({ Title = "Tiempo de Equipar", Step = 0.01, Value = {Min = 0.01, Max = 0.50, Default = state.equipDelay}, Callback = function(v) state.equipDelay = v end })
 Tabs.Macro:Slider({ Title = "Tiempo de Disparo", Step = 0.01, Value = {Min = 0.01, Max = 0.50, Default = state.shootDelay}, Callback = function(v) state.shootDelay = v end })
 
--- CUCHILLO
 Tabs.Cuchillo:Toggle({ Title = "Activar Macro Cuchillo (L2)", Value = state.knifeMacroEnabled, Callback = function(v) state.knifeMacroEnabled = v end })
 Tabs.Cuchillo:Slider({ Title = "Delay al Equipar", Step = 0.01, Value = {Min = 0.01, Max = 0.50, Default = state.knifeEquipDelay}, Callback = function(v) state.knifeEquipDelay = v end })
 Tabs.Cuchillo:Slider({ Title = "Delay al Lanzar", Step = 0.01, Value = {Min = 0.01, Max = 0.50, Default = state.knifeThrowDelay}, Callback = function(v) state.knifeThrowDelay = v end })
 
--- MACRO 360
 _G.NevadaTogMacro360 = Tabs.Macro360:Toggle({ Title = "Activar Auto Shoot / Macro 360", Value = state.macro360Enabled, Callback = function(v) 
     state.macro360Enabled = v
-    if updateVisual360 then updateVisual360() end -- Sincroniza el botón flotante
+    if updateVisual360 then updateVisual360() end
 end })
 Tabs.Macro360:Slider({ Title = "Tamaño del FOV", Step = 10, Value = {Min = 10, Max = 500, Default = state.macro360Fov}, Callback = function(v) state.macro360Fov = v end })
 Tabs.Macro360:Slider({ Title = "Probabilidad de acierto (%)", Step = 1, Value = {Min = 1, Max = 100, Default = state.macro360HitChance}, Callback = function(v) state.macro360HitChance = v end })
 Tabs.Macro360:Slider({ Title = "Tiempo de reacción (s)", Step = 0.1, Value = {Min = 0, Max = 1, Default = state.macro360Reaction}, Callback = function(v) state.macro360Reaction = v end })
 Tabs.Macro360:Slider({ Title = "Delay entre Disparos (s)", Step = 0.01, Value = {Min = 0.01, Max = 1.0, Default = state.macro360Cooldown}, Callback = function(v) state.macro360Cooldown = v end })
 
--- Toggle para mostrar el botón flotante 360
 Tabs.Macro360:Toggle({ 
     Title = "Mostrar Botón Flotante", 
-    Value = false, 
+    Value = true, 
     Callback = function(v) 
         floatingBtn360.Visible = v 
-        if v then updateVisual360() end
     end 
 })
 
--- ANIMACIONES
 local animToggle
 animToggle = Tabs.Animaciones:Toggle({ Title = "Activar Animaciones Custom", Value = state.animEnabled, Callback = function(v) state.animEnabled = v; if v then fastApply(player.Character) else restoreAllOriginal() end end })
 
@@ -724,7 +724,6 @@ Tabs.Animaciones:Button({ Title = "Restaurar Default", Callback = function()
     if animToggle then animToggle:Set(false) end; restoreAllOriginal()
 end })
 
--- SONIDOS
 local soundDropdown, enableToggle, muteToggle
 local function listSoundNames()
     local names = {}
@@ -750,7 +749,6 @@ muteToggle = Tabs.Sonidos:Toggle({ Title = "Silenciar este sonido", Value = stat
 Tabs.Sonidos:Button({ Title = "Actualizar Catálogo (GitHub)", Callback = function() task.spawn(function() if refreshCatalog() and soundDropdown then soundDropdown:Refresh(listSoundNames()) end end) end })
 task.spawn(function() refreshCatalog(); if soundDropdown then soundDropdown:Refresh(listSoundNames()) end end)
 
--- SKYBOX
 Tabs.Skybox:Toggle({ Title = "Auto-Cargar último cielo", Value = state.autoLoadSky, Callback = function(v) state.autoLoadSky = v; if v and state.selectedSky ~= "" then applySkyFromGitHub(state.selectedSky) end end })
 Tabs.Skybox:Button({ Title = "Restaurar Cielo Original", Callback = function()
     if originalSkyProperties then
@@ -773,7 +771,6 @@ task.spawn(function()
     if #skyNames > 0 then Tabs.Skybox:Dropdown({ Title = "Selecciona un Cielo", Values = skyNames, Value = skyNames[1], Callback = function(skyName) state.selectedSky = skyName; applySkyFromGitHub(skyName) end }) end
 end)
 
--- CONFIGS
 local selectedConfigName = "Ninguna"
 local configNameInput = "config1"
 local configDropdown
@@ -796,9 +793,6 @@ Tabs.Configs:Button({ Title = "🗑️ Borrar", Callback = function()
     if isfile and isfile(path) and delfile then pcall(delfile, path); if configDropdown then configDropdown:Refresh(listV33Configs()) end end
 end })
 
--- ==========================================
--- MACROS CON ANTI-LOBBY
--- ==========================================
 local macroBusy=false; local lastMacro=0
 local function runMacro()
   if not state.macro or macroBusy then return end
@@ -868,7 +862,6 @@ UserInputService.TouchEnded:Connect(function(input,processed)
   if delta<18 and elapsed>=0.025 and elapsed<0.6 then runMacro() end
 end)
 
--- MACRO 360
 task.spawn(function()
     local params = RaycastParams.new(); params.FilterType = Enum.RaycastFilterType.Exclude
     while task.wait(0.05) do
