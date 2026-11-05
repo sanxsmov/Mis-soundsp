@@ -1,23 +1,6 @@
 -- NEVADA V33 | Script Completo Corregido
 print("[Nevada] Iniciando script...")
 
-local function CargarWindUI()
-    local url = "https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"
-    local exito, source = pcall(function() return game:HttpGet(url) end)
-    if not exito or not source or #source < 1000 then return nil end
-    local chunk, err = loadstring(source)
-    if not chunk then return nil end
-    local ok, ui = pcall(chunk)
-    if ok and ui then return ui end
-    return nil
-end
-
-local WindUI = CargarWindUI()
-if not WindUI then
-    game:GetService("StarterGui"):SetCore("SendNotification", {Title = "Error", Text = "No se pudo cargar la UI."})
-    return
-end
-
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local SoundService = game:GetService("SoundService")
@@ -36,6 +19,54 @@ local SKYBOX_REPO = "sanxsmov/Onyx-web"
 local SKYBOX_FOLDER = "skyboxes"
 local SKYBOX_RAW = "https://raw.githubusercontent.com/" .. SKYBOX_REPO .. "/main/" .. SKYBOX_FOLDER .. "/"
 local SKYBOX_API = "https://api.github.com/repos/" .. SKYBOX_REPO .. "/contents/" .. SKYBOX_FOLDER
+
+-- ==========================================
+-- HOOK INTACTO (COLOCADO AL INICIO PARA QUE NADA LO ROMPA)
+-- ==========================================
+getgenv().NevadaTargetPart = nil
+local oldNamecall
+if hookmetamethod and getnamecallmethod and checkcaller then
+    oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+        local method = getnamecallmethod()
+        if not checkcaller() and getgenv().NevadaTargetPart then
+            if method == "Raycast" and self == workspace then
+                local target = getgenv().NevadaTargetPart
+                if target and target.Parent then
+                    local origin, direction, p3 = ...
+                    if typeof(direction) == "Vector3" and direction.Magnitude > 20 then
+                        local camOrigin = workspace.CurrentCamera.CFrame.Position
+                        if (origin - camOrigin).Magnitude >= 1 then
+                            local newDir = (target.Position - origin).Unit * 5000
+                            return oldNamecall(self, origin, newDir, p3)
+                        end
+                    end
+                end
+            end
+        end
+        return oldNamecall(self, ...)
+    end)
+end
+print("[Nevada] Hook instalado correctamente.")
+
+-- ==========================================
+-- CARGA DE WINDUI
+-- ==========================================
+local function CargarWindUI()
+    local url = "https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"
+    local exito, source = pcall(function() return game:HttpGet(url) end)
+    if not exito or not source or #source < 1000 then return nil end
+    local chunk, err = loadstring(source)
+    if not chunk then return nil end
+    local ok, ui = pcall(chunk)
+    if ok and ui then return ui end
+    return nil
+end
+
+local WindUI = CargarWindUI()
+if not WindUI then
+    game:GetService("StarterGui"):SetCore("SendNotification", {Title = "Error", Text = "No se pudo cargar la UI."})
+    return
+end
 
 -- ==========================================
 -- CATÁLOGO DE TUS 5 FONDOS
@@ -326,31 +357,6 @@ local function esPistola(tool)
     return tool:FindFirstChild("showBeam") ~= nil or tool.Name:lower():find("gun") or tool.Name:lower():find("pistol") or tool.Name:lower():find("revolver")
 end
 
--- HOOK (INTACTO)
-getgenv().NevadaTargetPart = nil
-local oldNamecall
-if hookmetamethod and getnamecallmethod and checkcaller then
-    oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-        local method = getnamecallmethod()
-        if not checkcaller() and getgenv().NevadaTargetPart then
-            if method == "Raycast" and self == workspace then
-                local target = getgenv().NevadaTargetPart
-                if target and target.Parent then
-                    local origin, direction, p3 = ...
-                    if typeof(direction) == "Vector3" and direction.Magnitude > 20 then
-                        local camOrigin = workspace.CurrentCamera.CFrame.Position
-                        if (origin - camOrigin).Magnitude >= 1 then
-                            local newDir = (target.Position - origin).Unit * 5000
-                            return oldNamecall(self, origin, newDir, p3)
-                        end
-                    end
-                end
-            end
-        end
-        return oldNamecall(self, ...)
-    end)
-end
-
 local function playSound(url)
   if type(url) ~= "string" or url == "" then return end
   local asset = soundCache[url]
@@ -510,7 +516,6 @@ buttonGui.IgnoreGuiInset = true
 buttonGui.DisplayOrder = 999
 buttonGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
--- Parent con gethui / syn.protect_gui / playerGui (fallback)
 local guiParent = playerGui
 pcall(function()
     if gethui then
