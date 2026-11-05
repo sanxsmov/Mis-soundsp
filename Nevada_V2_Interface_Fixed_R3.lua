@@ -1,4 +1,4 @@
--- NEVADA V34 | Hooks + Background Cache + Macro 360 Robusta (V34) + Todo Funcional
+-- NEVADA V34 | Script Completo Unificado
 print("[Nevada] Iniciando script...")
 
 local Players = game:GetService("Players")
@@ -21,7 +21,7 @@ local SKYBOX_RAW = "https://raw.githubusercontent.com/" .. SKYBOX_REPO .. "/main
 local SKYBOX_API = "https://api.github.com/repos/" .. SKYBOX_REPO .. "/contents/" .. SKYBOX_FOLDER
 
 -- ==========================================
--- HOOK (SOLO NAMECALL COMO EN V34)
+-- HOOK (NAMECALL)
 -- ==========================================
 getgenv().NevadaTargetPart = nil
 local oldNamecall
@@ -100,7 +100,7 @@ end
 local FondoAsset = CargarFondo(BG_LIST[1].url)
 
 -- ==========================================
--- ANIMACIONES (CON IDLE2 PARA EVITAR MEZCLA)
+-- ANIMACIONES (CON IDLE2)
 -- ==========================================
 local AnimationPacks = {
     ["Default"]     = {Idle="507766666", Idle2="507766951", Walk="507777826", Run="507767714", Jump="507765000", Fall="507767968", Swim="507784897", SwimIdle="507785072"},
@@ -141,7 +141,7 @@ local state = {
 local sounds, soundCache, currentSoundCategory = {}, {}, "Arma"
 
 -- ==========================================
--- ANTI-LOBBY (BÁSICO)
+-- ANTI-LOBBY
 -- ==========================================
 local function estaEnLobby()
     local char = player.Character
@@ -184,6 +184,7 @@ if originalSky then
     }
 end
 
+-- Cache de animaciones originales (NO se resetea entre rondas para que sea más rápido)
 local originalAnimations = nil
 local animationGuards = setmetatable({}, {__mode = "k"})
 
@@ -237,6 +238,7 @@ local function clearAllAnimations(char)
     end
 end
 
+-- FASTAPPLY RÁPIDO CON HEARTBEAT
 local function fastApply(char)
     if not state.animEnabled or not char or not char.Parent then return end
     local animate = char:FindFirstChild("Animate")
@@ -246,7 +248,7 @@ local function fastApply(char)
 
     clearAllAnimations(char)
     animate.Disabled = true
-    task.wait(0.1)
+    RunService.Heartbeat:Wait()
 
     local function setAnim(folderName, animName, id)
         if not id then return end
@@ -295,14 +297,13 @@ local function fastApply(char)
         setAnim("swimidle", "SwimIdle", pack.SwimIdle)
     end
 
-    task.wait(0.1)
+    RunService.Heartbeat:Wait()
     animate.Disabled = false
     
     local hum = char:FindFirstChildOfClass("Humanoid")
     if hum then
         pcall(function()
             hum:ChangeState(Enum.HumanoidStateType.Landed)
-            task.wait(0.05)
             hum:ChangeState(Enum.HumanoidStateType.Running)
         end)
     end
@@ -357,7 +358,7 @@ local function restoreAllOriginal()
     clearAllAnimations(char)
     
     animate.Disabled = true
-    task.wait(0.1)
+    RunService.Heartbeat:Wait()
 
     if originalAnimations then
         local function setOrig(folderName, animName, origKey)
@@ -373,27 +374,46 @@ local function restoreAllOriginal()
         setOrig("swim", "Swim", "Swim"); setOrig("swimidle", "SwimIdle", "SwimIdle")
     end
 
-    task.wait(0.1)
+    RunService.Heartbeat:Wait()
     animate.Disabled = false
 
     local hum = char:FindFirstChildOfClass("Humanoid")
     if hum then
         pcall(function()
             hum:ChangeState(Enum.HumanoidStateType.Landed)
-            task.wait(0.05)
             hum:ChangeState(Enum.HumanoidStateType.Running)
         end)
     end
 end
 
+-- ✅ onCharacterAdded optimizado (NO resetea originalAnimations, hookea el Animate)
 local function onCharacterAdded(char)
-    originalAnimations = nil
     if not state.animEnabled then return end
+    
     task.spawn(function()
-        char:WaitForChild("Humanoid", 5); char:WaitForChild("Animate", 5)
-        task.wait(0.35)
-        if char and char.Parent and state.animEnabled then fastApply(char) end
+        local animate = char:WaitForChild("Animate", 2)
+        if not animate then return end
+        char:WaitForChild("Humanoid", 1)
+        RunService.Heartbeat:Wait()
+        if char and char.Parent and state.animEnabled then 
+            fastApply(char) 
+        end
     end)
+    
+    -- Hook: si el Animate se reemplaza (cambio de skin, ApplyDescription, etc)
+    if not char:GetAttribute("NevadaAnimHook") then
+        char:SetAttribute("NevadaAnimHook", true)
+        char.ChildAdded:Connect(function(child)
+            if child.Name == "Animate" and state.animEnabled then
+                task.defer(function()
+                    RunService.Heartbeat:Wait()
+                    if char.Parent and state.animEnabled then
+                        fastApply(char)
+                    end
+                end)
+            end
+        end)
+    end
 end
 if player.Character then onCharacterAdded(player.Character) end
 player.CharacterAdded:Connect(onCharacterAdded)
@@ -610,7 +630,7 @@ local Window = WindUI:CreateWindow({
 })
 
 -- ==========================================
--- BOTÓN FLOTANTE MACRO 360 (XEROHUB STYLE)
+-- BOTÓN FLOTANTE MACRO 360
 -- ==========================================
 local buttonGui = Instance.new("ScreenGui")
 buttonGui.Name = "Nevada360Gui"
@@ -902,7 +922,7 @@ Tabs.Configs:Button({ Title = "🗑️ Borrar", Callback = function()
 end })
 
 -- ==========================================
--- MACRO DE GUN (RÁPIDA)
+-- MACRO DE GUN
 -- ==========================================
 local macroBusy=false; local lastMacro=0
 local function runMacro()
@@ -992,7 +1012,7 @@ UserInputService.TouchEnded:Connect(function(input,processed)
 end)
 
 -- ==========================================
--- MACRO 360 (ROBADA DE V34 - ROBUSTA Y ANTISPAM)
+-- MACRO 360 (ROBUSTA CON M360 STATE)
 -- ==========================================
 local m360 = {wasInLobby = true, gameTicks = 0, isEquipped = false}
 
