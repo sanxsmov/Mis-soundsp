@@ -1,4 +1,4 @@
--- NEVADA V22 | Interfaz WindUI (Xero) + Catálogo de 5 Fondos Personales
+-- NEVADA V24 | Botón Flotante Estilo Xero + Macro Anti-Lobby
 print("[Nevada] Iniciando script...")
 
 local function CargarWindUI()
@@ -62,7 +62,6 @@ local function CargarFondo(url)
     return nil
 end
 
--- Variable global para el fondo inicial (1.jpg)
 local FondoAsset = CargarFondo(BG_LIST[1].url)
 
 local AnimationPacks = {
@@ -102,6 +101,33 @@ local state = {
   customMix = {Idle="Default", Walk="Default", Run="Default", Jump="Default", Fall="Default", Swim="Default", SwimIdle="Default"},
 }
 local sounds, soundCache, currentSoundCategory = {}, {}, "Arma"
+
+-- ==========================================
+-- FUNCIÓN ANTI-LOBBY PARA MACRO
+-- ==========================================
+local function estaEnLobby()
+    local char = player.Character
+    if not char then return true end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum or hum.Health <= 0 then return true end
+    if char:FindFirstChildOfClass("ForceField") then return true end
+    if player.Team then
+        local t = player.Team.Name:lower()
+        if t:find("lobby") or t:find("spectat") or t:find("menu") or t:find("waiting") then return true end
+    end
+    -- Zonas seguras conocidas (Lobby de MM2/Duels)
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        local safeZones = {
+            {Center = Vector3.new(-320.50, 280.82, 16.00), Radius = 500},
+            {Center = Vector3.new(1564.14, -155.45, 40.04), Radius = 300}
+        }
+        for _, zone in ipairs(safeZones) do
+            if (hrp.Position - zone.Center).Magnitude <= zone.Radius then return true end
+        end
+    end
+    return false
+end
 
 local originalSky = Lighting:FindFirstChildOfClass("Sky")
 local originalSkyProperties = nil
@@ -398,12 +424,12 @@ local function refreshCatalog()
   table.sort(sounds,function(a,b) return a.Name:lower()<b.Name:lower() end); return loaded
 end
 
-local CONFIG_FOLDER = "NevadaV22_Configs"
+local CONFIG_FOLDER = "NevadaV24_Configs"
 if isfolder and not isfolder(CONFIG_FOLDER) then makefolder(CONFIG_FOLDER) end
 
-local function serializeV22()
+local function serializeV24()
     return {
-        Version = "V22",
+        Version = "V24",
         Sonidos = { Selected = { Arma = state.selected.Arma, Saltar = state.selected.Saltar, Matar = state.selected.Matar }, Enabled = state.enabled, Muted = state.muted },
         Skybox = { Selected = state.selectedSky, AutoLoad = state.autoLoadSky },
         Animaciones = { Enabled = state.animEnabled, Mode = state.animMode, SelectedPack = state.selectedAnimPack, CustomMix = state.customMix },
@@ -411,7 +437,7 @@ local function serializeV22()
     }
 end
 
-local function applyV22Config(data)
+local function applyV24Config(data)
     if type(data) ~= "table" then return false end
     if data.Sonidos then
         if data.Sonidos.Selected then for cat in pairs(state.selected) do if data.Sonidos.Selected[cat] then state.selected[cat] = data.Sonidos.Selected[cat] end end end
@@ -429,7 +455,7 @@ local function applyV22Config(data)
     return true
 end
 
-local function listV22Configs()
+local function listV24Configs()
     local list = {}
     if listfiles and isfolder and isfolder(CONFIG_FOLDER) then
         for _, f in ipairs(listfiles(CONFIG_FOLDER)) do if f:match("%.json$") then local n = f:match("([^/\\]+)%.json$"); if n and n ~= "_autosave" then table.insert(list, n) end end end
@@ -439,7 +465,7 @@ local function listV22Configs()
 end
 
 -- ==========================================
--- INTERFAZ WINDUI CON EL CATÁLOGO DE FONDOS
+-- INTERFAZ WINDUI CON BOTÓN ESTILO XERO
 -- ==========================================
 local Window = WindUI:CreateWindow({
     Title = "Nevada | DUELS",
@@ -453,10 +479,19 @@ local Window = WindUI:CreateWindow({
     ElementsRadius = 12,
     Background = FondoAsset,
     BackgroundImageTransparency = 0.25,
-    OpenButton = {Title = "Abrir Xero", Enabled = true},
+    OpenButton = {
+        Title = "Abri NVD", 
+        Enabled = true,
+        Icon = "rbxassetid://85755059842228",
+        OnlyMobile = false,
+        Draggable = true,
+        Scale = 0.85,
+        StrokeThickness = 1.5,
+        Color = ColorSequence.new(Color3.fromRGB(20, 20, 20), Color3.fromRGB(50, 50, 50))
+    },
 })
 
--- Función mágica de Xero para encontrar el fondo y cambiarlo
+-- Función para cambiar el fondo
 local WindUI_BgCache = nil
 local function findWindUIBackground()
     if WindUI_BgCache and WindUI_BgCache.Parent then return WindUI_BgCache end
@@ -468,7 +503,11 @@ local function findWindUIBackground()
     pcall(function() local pg = player:FindFirstChild("PlayerGui"); if pg then table.insert(roots, pg) end end)
 
     local function scan(inst, depth)
-        if depth > 12 then return end
+        if depth > 10 then return end
+        if inst:IsA("ImageLabel") and inst.Name == "Background" then
+            best = inst
+            return
+        end
         if inst:IsA("ImageLabel") then
             local sz = inst.AbsoluteSize.X * inst.AbsoluteSize.Y
             if sz > bestSize then bestSize = sz; best = inst end
@@ -485,6 +524,7 @@ end
 local function setWindowBackground(assetId)
     if not assetId then return end
     pcall(function() if Window.SetBackground then Window:SetBackground(assetId) end end)
+    pcall(function() if Window.SetBackgroundImage then Window:SetBackgroundImage(assetId) end end)
     pcall(function() if Window.Background then Window.Background = assetId end end)
     local bg = findWindUIBackground()
     if bg then
@@ -666,29 +706,32 @@ end)
 local selectedConfigName = "Ninguna"
 local configNameInput = "config1"
 local configDropdown
-configDropdown = Tabs.Configs:Dropdown({ Title = "Configs Guardadas", Values = listV22Configs(), Value = "Ninguna", Callback = function(v) selectedConfigName = v end })
+configDropdown = Tabs.Configs:Dropdown({ Title = "Configs Guardadas", Values = listV24Configs(), Value = "Ninguna", Callback = function(v) selectedConfigName = v end })
 Tabs.Configs:Input({ Title = "Nombre de la Config", Placeholder = "Ej: aimbot_pro", Callback = function(txt) configNameInput = txt end })
 Tabs.Configs:Button({ Title = "💾 Guardar", Callback = function()
     if configNameInput == "" or configNameInput == nil then return end
     local safeName = configNameInput:gsub("[^%w%-_ ]", ""):gsub("%s+", "_"); if safeName == "" then return end
-    local ok, encoded = pcall(function() return HttpService:JSONEncode(serializeV22()) end)
-    if ok then pcall(writefile, CONFIG_FOLDER .. "/" .. safeName .. ".json", encoded); if configDropdown then configDropdown:Refresh(listV22Configs()) end end
+    local ok, encoded = pcall(function() return HttpService:JSONEncode(serializeV24()) end)
+    if ok then pcall(writefile, CONFIG_FOLDER .. "/" .. safeName .. ".json", encoded); if configDropdown then configDropdown:Refresh(listV24Configs()) end end
 end })
 Tabs.Configs:Button({ Title = "📂 Cargar", Callback = function()
     if selectedConfigName == "Ninguna" or selectedConfigName == "" then return end
     local path = CONFIG_FOLDER .. "/" .. selectedConfigName .. ".json"
-    if isfile and isfile(path) then local ok, data = pcall(function() return HttpService:JSONDecode(readfile(path)) end); if ok and type(data) == "table" then applyV22Config(data) end end
+    if isfile and isfile(path) then local ok, data = pcall(function() return HttpService:JSONDecode(readfile(path)) end); if ok and type(data) == "table" then applyV24Config(data) end end
 end })
 Tabs.Configs:Button({ Title = "🗑️ Borrar", Callback = function()
     if selectedConfigName == "Ninguna" then return end
     local path = CONFIG_FOLDER .. "/" .. selectedConfigName .. ".json"
-    if isfile and isfile(path) and delfile then pcall(delfile, path); if configDropdown then configDropdown:Refresh(listV22Configs()) end end
+    if isfile and isfile(path) and delfile then pcall(delfile, path); if configDropdown then configDropdown:Refresh(listV24Configs()) end end
 end })
 
 -- MACROS
 local macroBusy=false; local lastMacro=0
 local function runMacro()
   if not state.macro or macroBusy then return end
+  -- [NUEVO] EVITAR QUE SAQUE EL ARMA EN EL LOBBY O MUERTO
+  if estaEnLobby() then return end
+
   local char=player.Character; if not char then return end
   local hum=char:FindFirstChildOfClass("Humanoid"); if not hum or hum.Health<=0 then return end
   local backpack=player:FindFirstChildOfClass("Backpack"); if not backpack then return end
@@ -716,6 +759,8 @@ end
 local knifeBusy = false
 local function runKnifeMacro()
   if not state.knifeMacroEnabled or knifeBusy then return end
+  if estaEnLobby() then return end
+
   local character = player.Character; local humanoid = character and character:FindFirstChildOfClass("Humanoid")
   local knife = nil
   for _, item in ipairs(character:GetChildren()) do if item:IsA("Tool") and item:FindFirstChild("Throw") then knife = item break end end
@@ -785,4 +830,4 @@ task.spawn(function()
     end
 end)
 
-print("[Nevada V22] ✅ Cargado con éxito. Tienes 5 fondos disponibles en la pestaña Configs.")
+print("[Nevada V24] ✅ Cargado correctamente.")
