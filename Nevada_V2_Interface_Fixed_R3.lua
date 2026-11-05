@@ -1,4 +1,4 @@
--- NEVADA V24 | Botón Flotante Estilo Xero + Macro Anti-Lobby
+-- NEVADA V25 | Botón Forzado a Negro + Macro Anti-Lobby Estricta
 print("[Nevada] Iniciando script...")
 
 local function CargarWindUI()
@@ -103,19 +103,28 @@ local state = {
 local sounds, soundCache, currentSoundCategory = {}, {}, "Arma"
 
 -- ==========================================
--- FUNCIÓN ANTI-LOBBY PARA MACRO
+-- FUNCIÓN ANTI-LOBBY ESTRICTA
 -- ==========================================
 local function estaEnLobby()
     local char = player.Character
     if not char then return true end
     local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum or hum.Health <= 0 then return true end
-    if char:FindFirstChildOfClass("ForceField") then return true end
+    if not hum or hum.Health <= 0 then return true end -- Muerto
+    if char:FindFirstChildOfClass("ForceField") then return true end -- Protegido
+
     if player.Team then
         local t = player.Team.Name:lower()
-        if t:find("lobby") or t:find("spectat") or t:find("menu") or t:find("waiting") then return true end
+        if t:find("lobby") or t:find("spectat") or t:find("menu") or t:find("waiting") or t:find("dead") then return true end
     end
-    -- Zonas seguras conocidas (Lobby de MM2/Duels)
+
+    -- Si no hay scoreboard, estamos en el lobby
+    local gui = player:FindFirstChild("PlayerGui")
+    local main = gui and gui:FindFirstChild("Main")
+    local frame = main and main:FindFirstChild("MainGameFrame")
+    local score = frame and frame:FindFirstChild("IngameScore")
+    if not score then return true end 
+
+    -- Zonas seguras por si acaso
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if hrp then
         local safeZones = {
@@ -424,12 +433,12 @@ local function refreshCatalog()
   table.sort(sounds,function(a,b) return a.Name:lower()<b.Name:lower() end); return loaded
 end
 
-local CONFIG_FOLDER = "NevadaV24_Configs"
+local CONFIG_FOLDER = "NevadaV25_Configs"
 if isfolder and not isfolder(CONFIG_FOLDER) then makefolder(CONFIG_FOLDER) end
 
-local function serializeV24()
+local function serializeV25()
     return {
-        Version = "V24",
+        Version = "V25",
         Sonidos = { Selected = { Arma = state.selected.Arma, Saltar = state.selected.Saltar, Matar = state.selected.Matar }, Enabled = state.enabled, Muted = state.muted },
         Skybox = { Selected = state.selectedSky, AutoLoad = state.autoLoadSky },
         Animaciones = { Enabled = state.animEnabled, Mode = state.animMode, SelectedPack = state.selectedAnimPack, CustomMix = state.customMix },
@@ -437,7 +446,7 @@ local function serializeV24()
     }
 end
 
-local function applyV24Config(data)
+local function applyV25Config(data)
     if type(data) ~= "table" then return false end
     if data.Sonidos then
         if data.Sonidos.Selected then for cat in pairs(state.selected) do if data.Sonidos.Selected[cat] then state.selected[cat] = data.Sonidos.Selected[cat] end end end
@@ -455,7 +464,7 @@ local function applyV24Config(data)
     return true
 end
 
-local function listV24Configs()
+local function listV25Configs()
     local list = {}
     if listfiles and isfolder and isfolder(CONFIG_FOLDER) then
         for _, f in ipairs(listfiles(CONFIG_FOLDER)) do if f:match("%.json$") then local n = f:match("([^/\\]+)%.json$"); if n and n ~= "_autosave" then table.insert(list, n) end end end
@@ -465,7 +474,7 @@ local function listV24Configs()
 end
 
 -- ==========================================
--- INTERFAZ WINDUI CON BOTÓN ESTILO XERO
+-- INTERFAZ WINDUI CON BOTÓN FORZADO A NEGRO
 -- ==========================================
 local Window = WindUI:CreateWindow({
     Title = "Nevada | DUELS",
@@ -483,13 +492,40 @@ local Window = WindUI:CreateWindow({
         Title = "Abri NVD", 
         Enabled = true,
         Icon = "rbxassetid://85755059842228",
-        OnlyMobile = false,
-        Draggable = true,
-        Scale = 0.85,
-        StrokeThickness = 1.5,
-        Color = ColorSequence.new(Color3.fromRGB(20, 20, 20), Color3.fromRGB(50, 50, 50))
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(15, 15, 15)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(40, 40, 40))
+        }),
+        StrokeThickness = 2
     },
 })
+
+-- Forzador de color para el botón flotante (Estilo Xero)
+task.spawn(function()
+    task.wait(1)
+    local roots = {game:GetService("CoreGui"), playerGui}
+    if gethui then table.insert(roots, gethui()) end
+    
+    for _, root in ipairs(roots) do
+        if root then
+            local function scan(parent)
+                for _, child in ipairs(parent:GetDescendants()) do
+                    if child.Name == "OpenButton" or child.Name == "FloatingButton" then
+                        local gradient = child:FindFirstChildOfClass("UIGradient")
+                        if gradient then
+                            gradient.Color = ColorSequence.new(Color3.fromRGB(25,25,25), Color3.fromRGB(60,60,60))
+                        end
+                        local stroke = child:FindFirstChildOfClass("UIStroke")
+                        if stroke then
+                            stroke.Color = Color3.fromRGB(50,50,50)
+                        end
+                    end
+                end
+            end
+            pcall(scan, root)
+        end
+    end
+end)
 
 -- Función para cambiar el fondo
 local WindUI_BgCache = nil
@@ -504,19 +540,14 @@ local function findWindUIBackground()
 
     local function scan(inst, depth)
         if depth > 10 then return end
-        if inst:IsA("ImageLabel") and inst.Name == "Background" then
-            best = inst
-            return
-        end
+        if inst:IsA("ImageLabel") and inst.Name == "Background" then best = inst; return end
         if inst:IsA("ImageLabel") then
             local sz = inst.AbsoluteSize.X * inst.AbsoluteSize.Y
             if sz > bestSize then bestSize = sz; best = inst end
         end
         for _, c in ipairs(inst:GetChildren()) do scan(c, depth + 1) end
     end
-    for _, root in ipairs(roots) do
-        if root then for _, c in ipairs(root:GetChildren()) do scan(c, 0) end end
-    end
+    for _, root in ipairs(roots) do if root then for _, c in ipairs(root:GetChildren()) do scan(c, 0) end end end
     WindUI_BgCache = best
     return best
 end
@@ -567,10 +598,7 @@ Tabs.Configs:Dropdown({
         for _, bg in ipairs(BG_LIST) do
             if bg.name == selectedName then
                 local newAsset = CargarFondo(bg.url)
-                if newAsset then
-                    setWindowBackground(newAsset)
-                    print("[Nevada] Fondo cambiado a: " .. selectedName)
-                end
+                if newAsset then setWindowBackground(newAsset) end
                 break
             end
         end
@@ -706,31 +734,36 @@ end)
 local selectedConfigName = "Ninguna"
 local configNameInput = "config1"
 local configDropdown
-configDropdown = Tabs.Configs:Dropdown({ Title = "Configs Guardadas", Values = listV24Configs(), Value = "Ninguna", Callback = function(v) selectedConfigName = v end })
+configDropdown = Tabs.Configs:Dropdown({ Title = "Configs Guardadas", Values = listV25Configs(), Value = "Ninguna", Callback = function(v) selectedConfigName = v end })
 Tabs.Configs:Input({ Title = "Nombre de la Config", Placeholder = "Ej: aimbot_pro", Callback = function(txt) configNameInput = txt end })
 Tabs.Configs:Button({ Title = "💾 Guardar", Callback = function()
     if configNameInput == "" or configNameInput == nil then return end
     local safeName = configNameInput:gsub("[^%w%-_ ]", ""):gsub("%s+", "_"); if safeName == "" then return end
-    local ok, encoded = pcall(function() return HttpService:JSONEncode(serializeV24()) end)
-    if ok then pcall(writefile, CONFIG_FOLDER .. "/" .. safeName .. ".json", encoded); if configDropdown then configDropdown:Refresh(listV24Configs()) end end
+    local ok, encoded = pcall(function() return HttpService:JSONEncode(serializeV25()) end)
+    if ok then pcall(writefile, CONFIG_FOLDER .. "/" .. safeName .. ".json", encoded); if configDropdown then configDropdown:Refresh(listV25Configs()) end end
 end })
 Tabs.Configs:Button({ Title = "📂 Cargar", Callback = function()
     if selectedConfigName == "Ninguna" or selectedConfigName == "" then return end
     local path = CONFIG_FOLDER .. "/" .. selectedConfigName .. ".json"
-    if isfile and isfile(path) then local ok, data = pcall(function() return HttpService:JSONDecode(readfile(path)) end); if ok and type(data) == "table" then applyV24Config(data) end end
+    if isfile and isfile(path) then local ok, data = pcall(function() return HttpService:JSONDecode(readfile(path)) end); if ok and type(data) == "table" then applyV25Config(data) end end
 end })
 Tabs.Configs:Button({ Title = "🗑️ Borrar", Callback = function()
     if selectedConfigName == "Ninguna" then return end
     local path = CONFIG_FOLDER .. "/" .. selectedConfigName .. ".json"
-    if isfile and isfile(path) and delfile then pcall(delfile, path); if configDropdown then configDropdown:Refresh(listV24Configs()) end end
+    if isfile and isfile(path) and delfile then pcall(delfile, path); if configDropdown then configDropdown:Refresh(listV25Configs()) end end
 end })
 
--- MACROS
+-- MACROS CON ANTI-LOBBY
 local macroBusy=false; local lastMacro=0
 local function runMacro()
   if not state.macro or macroBusy then return end
-  -- [NUEVO] EVITAR QUE SAQUE EL ARMA EN EL LOBBY O MUERTO
-  if estaEnLobby() then return end
+  -- ANTI-LOBBY: Si está en lobby o muerto, guarda el arma y no hace nada.
+  if estaEnLobby() then
+      local char = player.Character
+      local hum = char and char:FindFirstChildOfClass("Humanoid")
+      if hum and char:FindFirstChildOfClass("Tool") then pcall(function() hum:UnequipTools() end) end
+      return
+  end
 
   local char=player.Character; if not char then return end
   local hum=char:FindFirstChildOfClass("Humanoid"); if not hum or hum.Health<=0 then return end
@@ -830,4 +863,4 @@ task.spawn(function()
     end
 end)
 
-print("[Nevada V24] ✅ Cargado correctamente.")
+print("[Nevada V25] ✅ Cargado correctamente.")
