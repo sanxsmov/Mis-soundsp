@@ -1,4 +1,4 @@
--- NEVADA V33 | Script Completo Unificado
+-- NEVADA V34 | Hooks + Background Cache + Macro 360 Robusta (V34) + Todo Funcional
 print("[Nevada] Iniciando script...")
 
 local Players = game:GetService("Players")
@@ -9,7 +9,6 @@ local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
-local mouse = player:GetMouse()
 local requestFn = (syn and syn.request) or (http and http.request) or request or http_request
 
 local OWNER, REPO, BRANCH = "sanxsmov", "Mis-soundsp", "main"
@@ -22,7 +21,7 @@ local SKYBOX_RAW = "https://raw.githubusercontent.com/" .. SKYBOX_REPO .. "/main
 local SKYBOX_API = "https://api.github.com/repos/" .. SKYBOX_REPO .. "/contents/" .. SKYBOX_FOLDER
 
 -- ==========================================
--- HOOKS (RAYCAST Y MOUSE)
+-- HOOK (SOLO NAMECALL COMO EN V34)
 -- ==========================================
 getgenv().NevadaTargetPart = nil
 local oldNamecall
@@ -47,19 +46,7 @@ if hookmetamethod and getnamecallmethod and checkcaller then
         return oldNamecall(self, ...)
     end)
 end
-
-local oldIndex
-if hookmetamethod and checkcaller then
-    oldIndex = hookmetamethod(game, "__index", function(t, k)
-        local target = getgenv().NevadaTargetPart
-        if not checkcaller() and t == mouse and target and target.Parent then
-            if k == "Hit" or k == "hit" then return target.CFrame
-            elseif k == "Target" or k == "target" then return target end
-        end
-        return oldIndex(t, k)
-    end)
-end
-print("[Nevada] Hooks instalados correctamente.")
+print("[Nevada] Hook instalado correctamente.")
 
 -- ==========================================
 -- CARGA DE WINDUI
@@ -113,7 +100,7 @@ end
 local FondoAsset = CargarFondo(BG_LIST[1].url)
 
 -- ==========================================
--- ANIMACIONES (IDs CORREGIDOS + IDLE2)
+-- ANIMACIONES (CON IDLE2 PARA EVITAR MEZCLA)
 -- ==========================================
 local AnimationPacks = {
     ["Default"]     = {Idle="507766666", Idle2="507766951", Walk="507777826", Run="507767714", Jump="507765000", Fall="507767968", Swim="507784897", SwimIdle="507785072"},
@@ -154,7 +141,7 @@ local state = {
 local sounds, soundCache, currentSoundCategory = {}, {}, "Arma"
 
 -- ==========================================
--- ANTI-LOBBY
+-- ANTI-LOBBY (BÁSICO)
 -- ==========================================
 local function estaEnLobby()
     local char = player.Character
@@ -184,6 +171,9 @@ local function estaEnLobby()
     return false
 end
 
+-- ==========================================
+-- SKYBOX Y ANIMACIONES HELPERS
+-- ==========================================
 local originalSky = Lighting:FindFirstChildOfClass("Sky")
 local originalSkyProperties = nil
 if originalSky then
@@ -254,12 +244,10 @@ local function fastApply(char)
     captureOriginalAnimations(char)
     clearAnimationGuards()
 
-    -- ✅ 1. Detener animaciones viejas y deshabilitar Animate
     clearAllAnimations(char)
     animate.Disabled = true
     task.wait(0.1)
 
-    -- ✅ 2. Función helper para asignar IDs sin guard (temporal)
     local function setAnim(folderName, animName, id)
         if not id then return end
         local folder = animate:FindFirstChild(folderName)
@@ -271,7 +259,6 @@ local function fastApply(char)
         end
     end
 
-    -- ✅ 3. Asignar los nuevos IDs
     if state.animMode == "mix" then
         local mix = state.customMix
         if mix.Idle == "Default" then
@@ -308,7 +295,6 @@ local function fastApply(char)
         setAnim("swimidle", "SwimIdle", pack.SwimIdle)
     end
 
-    -- ✅ 4. Volver a habilitar Animate y forzar recarga
     task.wait(0.1)
     animate.Disabled = false
     
@@ -321,7 +307,6 @@ local function fastApply(char)
         end)
     end
 
-    -- ✅ 5. Ahora aplicar los guards (anti-sobrescritura del juego)
     if state.animMode == "mix" then
         local mix = state.customMix
         if mix.Idle == "Default" then
@@ -557,12 +542,12 @@ local function refreshCatalog()
   table.sort(sounds,function(a,b) return a.Name:lower()<b.Name:lower() end); return loaded
 end
 
-local CONFIG_FOLDER = "NevadaV33_Configs"
+local CONFIG_FOLDER = "NevadaV34_Configs"
 if isfolder and not isfolder(CONFIG_FOLDER) then makefolder(CONFIG_FOLDER) end
 
-local function serializeV33()
+local function serializeV34()
     return {
-        Version = "V33",
+        Version = "V34",
         Sonidos = { Selected = { Arma = state.selected.Arma, Saltar = state.selected.Saltar, Matar = state.selected.Matar }, Enabled = state.enabled, Muted = state.muted },
         Skybox = { Selected = state.selectedSky, AutoLoad = state.autoLoadSky },
         Animaciones = { Enabled = state.animEnabled, Mode = state.animMode, SelectedPack = state.selectedAnimPack, CustomMix = state.customMix },
@@ -570,7 +555,7 @@ local function serializeV33()
     }
 end
 
-local function applyV33Config(data)
+local function applyV34Config(data)
     if type(data) ~= "table" then return false end
     if data.Sonidos then
         if data.Sonidos.Selected then for cat in pairs(state.selected) do if data.Sonidos.Selected[cat] then state.selected[cat] = data.Sonidos.Selected[cat] end end end
@@ -588,7 +573,7 @@ local function applyV33Config(data)
     return true
 end
 
-local function listV33Configs()
+local function listV34Configs()
     local list = {}
     if listfiles and isfolder and isfolder(CONFIG_FOLDER) then
         for _, f in ipairs(listfiles(CONFIG_FOLDER)) do if f:match("%.json$") then local n = f:match("([^/\\]+)%.json$"); if n and n ~= "_autosave" then table.insert(list, n) end end end
@@ -625,7 +610,7 @@ local Window = WindUI:CreateWindow({
 })
 
 -- ==========================================
--- BOTÓN FLOTANTE MACRO 360
+-- BOTÓN FLOTANTE MACRO 360 (XEROHUB STYLE)
 -- ==========================================
 local buttonGui = Instance.new("ScreenGui")
 buttonGui.Name = "Nevada360Gui"
@@ -897,25 +882,28 @@ end)
 local selectedConfigName = "Ninguna"
 local configNameInput = "config1"
 local configDropdown
-configDropdown = Tabs.Configs:Dropdown({ Title = "Configs Guardadas", Values = listV33Configs(), Value = "Ninguna", Callback = function(v) selectedConfigName = v end })
+configDropdown = Tabs.Configs:Dropdown({ Title = "Configs Guardadas", Values = listV34Configs(), Value = "Ninguna", Callback = function(v) selectedConfigName = v end })
 Tabs.Configs:Input({ Title = "Nombre de la Config", Placeholder = "Ej: aimbot_pro", Callback = function(txt) configNameInput = txt end })
 Tabs.Configs:Button({ Title = "💾 Guardar", Callback = function()
     if configNameInput == "" or configNameInput == nil then return end
     local safeName = configNameInput:gsub("[^%w%-_ ]", ""):gsub("%s+", "_"); if safeName == "" then return end
-    local ok, encoded = pcall(function() return HttpService:JSONEncode(serializeV33()) end)
-    if ok then pcall(writefile, CONFIG_FOLDER .. "/" .. safeName .. ".json", encoded); if configDropdown then configDropdown:Refresh(listV33Configs()) end end
+    local ok, encoded = pcall(function() return HttpService:JSONEncode(serializeV34()) end)
+    if ok then pcall(writefile, CONFIG_FOLDER .. "/" .. safeName .. ".json", encoded); if configDropdown then configDropdown:Refresh(listV34Configs()) end end
 end })
 Tabs.Configs:Button({ Title = "📂 Cargar", Callback = function()
     if selectedConfigName == "Ninguna" or selectedConfigName == "" then return end
     local path = CONFIG_FOLDER .. "/" .. selectedConfigName .. ".json"
-    if isfile and isfile(path) then local ok, data = pcall(function() return HttpService:JSONDecode(readfile(path)) end); if ok and type(data) == "table" then applyV33Config(data) end end
+    if isfile and isfile(path) then local ok, data = pcall(function() return HttpService:JSONDecode(readfile(path)) end); if ok and type(data) == "table" then applyV34Config(data) end end
 end })
 Tabs.Configs:Button({ Title = "🗑️ Borrar", Callback = function()
     if selectedConfigName == "Ninguna" then return end
     local path = CONFIG_FOLDER .. "/" .. selectedConfigName .. ".json"
-    if isfile and isfile(path) and delfile then pcall(delfile, path); if configDropdown then configDropdown:Refresh(listV33Configs()) end end
+    if isfile and isfile(path) and delfile then pcall(delfile, path); if configDropdown then configDropdown:Refresh(listV34Configs()) end end
 end })
 
+-- ==========================================
+-- MACRO DE GUN (RÁPIDA)
+-- ==========================================
 local macroBusy=false; local lastMacro=0
 local function runMacro()
   if not state.macro or macroBusy then return end
@@ -951,14 +939,12 @@ local function runMacro()
     end
     
     if state.macro and player.Character==char and hum.Health>0 and tool.Parent==char then
-        -- Disparo rápido
         pcall(function() 
             tool:Activate() 
             task.delay(0.02, function() if tool.Parent == char then tool:Deactivate() end end)
         end)
     end
     
-    -- Solo guardamos el arma si la macro lo equipó
     if not wasEquipped and player.Character==char and hum.Parent==char then 
         task.wait(math.max(0.01, tonumber(state.shootDelay) or 0.10))
         pcall(function() hum:UnequipTools() end) 
@@ -967,6 +953,9 @@ local function runMacro()
   end)
 end
 
+-- ==========================================
+-- MACRO DE CUCHILLO
+-- ==========================================
 local knifeBusy = false
 local function runKnifeMacro()
   if not state.knifeMacroEnabled or knifeBusy then return end
@@ -1002,25 +991,113 @@ UserInputService.TouchEnded:Connect(function(input,processed)
   if delta<18 and elapsed>=0.025 and elapsed<0.6 then runMacro() end
 end)
 
+-- ==========================================
+-- MACRO 360 (ROBADA DE V34 - ROBUSTA Y ANTISPAM)
+-- ==========================================
+local m360 = {wasInLobby = true, gameTicks = 0, isEquipped = false}
+
+local function isInLobbyRobust()
+    local char = player.Character
+    if not char then return true end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum or hum.Health <= 0 then return true end
+    if char:FindFirstChildOfClass("ForceField") then return true end
+    if player.Team then
+        local t = player.Team.Name:lower()
+        if t:find("lobby") or t:find("spectat") or t:find("menu") or t:find("waiting") or t:find("afk") then return true end
+    end
+    local gui = player:FindFirstChild("PlayerGui")
+    local main = gui and gui:FindFirstChild("Main")
+    local frame = main and main:FindFirstChild("MainGameFrame")
+    if not frame then return true end
+    local score = frame:FindFirstChild("IngameScore")
+    if not score then return true end
+    if score:IsA("GuiObject") and not score.Visible then return true end
+    local anyInGame = false
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= player and p.Character then
+            local pHum = p.Character:FindFirstChildOfClass("Humanoid")
+            if pHum and pHum.Health > 0 and not p.Character:FindFirstChildOfClass("ForceField") then
+                anyInGame = true; break
+            end
+        end
+    end
+    if not anyInGame then return true end
+    return false
+end
+
+local function isValid360Target(p)
+    if not p or p == player then return false end
+    local char = p.Character
+    if not char then return false end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum or hum.Health <= 0 then return false end
+    if char:FindFirstChildOfClass("ForceField") then return false end
+    if not isEnemy(p) then return false end
+    return true
+end
+
+local function getGun(char, backpack)
+    local tool = char:FindFirstChildOfClass("Tool")
+    if tool and esPistola(tool) then return tool, true end
+    if backpack then
+        for _, item in ipairs(backpack:GetChildren()) do
+            if item:IsA("Tool") and esPistola(item) then return item, false end
+        end
+    end
+    return nil, false
+end
+
 task.spawn(function()
-    local params = RaycastParams.new(); params.FilterType = Enum.RaycastFilterType.Exclude
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
     while task.wait(0.05) do
-        if not state.macro360Enabled then continue end
-        local char = player.Character; if not char then continue end
-        local hum = char:FindFirstChildOfClass("Humanoid"); local hrp = char:FindFirstChild("HumanoidRootPart")
+        if not state.macro360Enabled then
+            m360.wasInLobby = true; m360.gameTicks = 0; m360.isEquipped = false
+            continue
+        end
+        if isInLobbyRobust() then
+            m360.gameTicks = 0; m360.wasInLobby = true
+            if m360.isEquipped then
+                local c = player.Character
+                local h = c and c:FindFirstChildOfClass("Humanoid")
+                if h then pcall(function() h:UnequipTools() end) end
+                m360.isEquipped = false
+            end
+            continue
+        else
+            m360.gameTicks = m360.gameTicks + 1
+        end
+        if m360.gameTicks < 2 then continue end
+        m360.wasInLobby = false
+
+        local char = player.Character
+        if not char then continue end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        local hrp = char:FindFirstChild("HumanoidRootPart")
         if not hum or hum.Health <= 0 or not hrp then continue end
-        local myPos = hrp.Position; local bestPart, bestDist = nil, math.huge
+
+        local myPos = hrp.Position
+        local bestPart, bestDist = nil, math.huge
         for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= player and isEnemy(p) and p.Character then
-                local eChar = p.Character; local eHum = eChar:FindFirstChildOfClass("Humanoid"); local eHrp = eChar:FindFirstChild("HumanoidRootPart")
-                if eHum and eHum.Health > 0 and eHrp then
-                    local dist = (eHrp.Position - myPos).Magnitude
+            if isValid360Target(p) then
+                local enemyChar = p.Character
+                local enemyHrp = enemyChar.HumanoidRootPart
+                if enemyHrp then
+                    local dist = (enemyHrp.Position - myPos).Magnitude
                     if dist <= state.macro360Fov then
-                        params.FilterDescendantsInstances = {char, eChar}
-                        if not workspace:Raycast(myPos, eHrp.Position - myPos, params) then
-                            for _, part in ipairs(eChar:GetChildren()) do
-                                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-                                    if part.Position:Distance(myPos) < bestDist then bestDist = part.Position:Distance(myPos); bestPart = part end
+                        params.FilterDescendantsInstances = { char, enemyChar }
+                        local checkRay = workspace:Raycast(myPos, enemyHrp.Position - myPos, params)
+                        if not checkRay then
+                            for _, part in ipairs(enemyChar:GetChildren()) do
+                                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" and part.Name ~= "Humanoid" then
+                                    local partDist = (part.Position - myPos).Magnitude
+                                    if partDist < bestDist then
+                                        local partRay = workspace:Raycast(myPos, part.Position - myPos, params)
+                                        if not partRay or partRay.Instance:IsDescendantOf(enemyChar) then
+                                            bestDist = partDist; bestPart = part
+                                        end
+                                    end
                                 end
                             end
                         end
@@ -1028,16 +1105,37 @@ task.spawn(function()
                 end
             end
         end
-        if bestPart then
-            local backpack = player:FindFirstChildOfClass("Backpack"); local tool = char:FindFirstChildOfClass("Tool")
-            if not tool and backpack then for _, item in ipairs(backpack:GetChildren()) do if esPistola(item) then tool = item break end end end
-            if tool and tool.Parent == char then
-                getgenv().NevadaTargetPart = bestPart
-                pcall(function() tool:Activate() end); task.wait(state.macro360Cooldown)
-                pcall(function() tool:Deactivate() end); getgenv().NevadaTargetPart = nil
+
+        local backpack = player:FindFirstChildOfClass("Backpack")
+        local tool, wasEquipped = getGun(char, backpack)
+
+        if not bestPart then
+            if m360.isEquipped then
+                pcall(function() hum:UnequipTools() end)
+                m360.isEquipped = false
             end
+            continue
+        end
+        if not tool then continue end
+
+        if not wasEquipped then
+            if m360.isEquipped then continue end
+            m360.isEquipped = true
+            pcall(function() hum:EquipTool(tool) end)
+            task.wait(0.08)
+            if tool.Parent ~= char then continue end
+        else
+            m360.isEquipped = true
+        end
+
+        if tool.Parent == char then
+            getgenv().NevadaTargetPart = bestPart
+            pcall(function() tool:Activate() end)
+            task.wait(math.max(0.02, tonumber(state.macro360Cooldown) or 0.05))
+            pcall(function() tool:Deactivate() end)
+            getgenv().NevadaTargetPart = nil
         end
     end
 end)
 
-print("[Nevada V33] ✅ Cargado correctamente.")
+print("[Nevada V34] ✅ Cargado correctamente.")
