@@ -1,12 +1,31 @@
--- NEVADA V12.1 | Interfaz Xero (WindUI) - Bug Fixes
-local okWind, WindUI = pcall(function()
-    return loadstring(game:HttpGet("https://raw.githubusercontent.com/OnyxDevv/Onyx-web/refs/heads/main/main%20(3).lua"))()
-end)
-if not okWind or not WindUI then
+-- NEVADA V12.2 | Interfaz Xero (WindUI) con Carga Segura y Fallback
+local urlXero = "https://raw.githubusercontent.com/OnyxDevv/Onyx-web/refs/heads/main/main%20(3).lua"
+local urlSZK  = "https://raw.githubusercontent.com/ONYXHUB-X-SZK/SZKWINDUI/refs/heads/main/szk/lua/libary/wind%20ui/szkhub-libary.lua"
+
+local function intentarCargarUI(url)
+    local exito, resultado = pcall(function()
+        local source = game:HttpGet(url)
+        if not source or #source < 500 then return nil, "Archivo vacío o bloqueado" end
+        local func, err = loadstring(source)
+        if not func then return nil, "Error al compilar: " .. tostring(err) end
+        return func()
+    end)
+    if exito and resultado then return true, resultado end
+    return false, tostring(resultado)
+end
+
+local ok, WindUI = intentarCargarUI(urlXero)
+if not ok then
+    warn("[Nevada] Falló enlace de Xero. Intentando con SZK...")
+    ok, WindUI = intentarCargarUI(urlSZK)
+end
+
+if not ok or not WindUI then
     game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "Error",
-        Text = "No se pudo cargar la interfaz. Revisa tu conexión."
+        Title = "Error Crítico",
+        Text = "No se pudo cargar la interfaz. Revisa tu conexión o usa otro executor."
     })
+    warn("[Nevada] Error final de UI:", WindUI)
     return
 end
 
@@ -430,7 +449,7 @@ if isfolder and not isfolder(CONFIG_FOLDER) then makefolder(CONFIG_FOLDER) end
 
 local function serializeV12()
     return {
-        Version = "V12.1",
+        Version = "V12.2",
         Sonidos = {
             Selected = {
                 Arma = { Name = state.selected.Arma.Name, URL = state.selected.Arma.URL },
@@ -1002,4 +1021,4 @@ task.spawn(function()
     end
 end)
 
-print("[Nevada V12.1] ✅ Cargado · Interfaz WindUI + Todo sin bugs.")
+print("[Nevada V12.2] ✅ Cargado correctamente.")
