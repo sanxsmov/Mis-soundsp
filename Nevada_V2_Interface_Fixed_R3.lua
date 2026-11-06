@@ -1,4 +1,4 @@
--- NEVADA V34 | Script Completo Unificado + Auto-Save Total + ESP 3D
+-- NEVADA V34 | Script Completo Unificado + Auto-Save Perfecto (Carga Asíncrona)
 print("[Nevada] Iniciando script...")
 
 local Players = game:GetService("Players")
@@ -129,7 +129,7 @@ local AnimationPacks = {
 }
 
 -- ==========================================
--- ESTADO Y VARIABLES (CON ESP)
+-- ESTADO Y VARIABLES
 -- ==========================================
 local state = {
   macro = false, equipDelay = 0.05, shootDelay = 0.10,
@@ -140,10 +140,11 @@ local state = {
   enabled = {Arma=true, Saltar=true, Matar=true}, muted = {Arma=false, Saltar=false, Matar=false},
   folder = FOLDERS[1], animEnabled = false, animMode = "pack", selectedAnimPack = "Default",
   customMix = {Idle="Default", Walk="Default", Run="Default", Jump="Default", Fall="Default", Swim="Default", SwimIdle="Default"},
-  espEnabled = false, espColor = {R=1, G=1, B=1} -- ESP 3D
+  espEnabled = false, espColor = {R=1, G=1, B=1}
 }
 local sounds, soundCache, currentSoundCategory = {}, {}, "Arma"
 local UI_Refs = {}
+local isLoading = true -- 🛑 CANDADO PARA NO SOBREESCRIBIR EL ARCHIVO MIENTRAS CARGA
 
 -- ==========================================
 -- SISTEMA DE AUTO-GUARDADO
@@ -153,7 +154,7 @@ if isfolder and not isfolder(CONFIG_FOLDER) then makefolder(CONFIG_FOLDER) end
 local AUTO_SAVE_FILE = CONFIG_FOLDER .. "/autosave.json"
 
 local function SaveAutoConfig()
-    if not writefile then return end
+    if isLoading or not writefile then return end
     local ok, encoded = pcall(function() return HttpService:JSONEncode(state) end)
     if ok then pcall(writefile, AUTO_SAVE_FILE, encoded) end
 end
@@ -269,9 +270,7 @@ local function clearAllAnimations(char)
     if not hum then return end
     local animator = hum:FindFirstChildOfClass("Animator")
     local tracks = animator and animator:GetPlayingAnimationTracks() or hum:GetPlayingAnimationTracks()
-    for _, track in pairs(tracks) do 
-        pcall(function() track:Stop(0) track:Destroy() end) 
-    end
+    for _, track in pairs(tracks) do pcall(function() track:Stop(0) track:Destroy() end) end
 end
 
 local function fastApply(char)
@@ -387,21 +386,14 @@ end
 local function restoreAllOriginal()
     local char = player.Character; if not char then return end
     local animate = char:FindFirstChild("Animate"); if not animate then return end
-    
-    clearAnimationGuards()
-    captureOriginalAnimations(char)
-    clearAllAnimations(char)
-    
-    animate.Disabled = true
-    RunService.Heartbeat:Wait()
+    clearAnimationGuards(); captureOriginalAnimations(char); clearAllAnimations(char)
+    animate.Disabled = true; RunService.Heartbeat:Wait()
 
     if originalAnimations then
         local function setOrig(folderName, animName, origKey)
             local folder = animate:FindFirstChild(folderName); if not folder then return end
             local anim = folder:FindFirstChild(animName)
-            if anim and anim:IsA("Animation") and originalAnimations[origKey] then 
-                anim.AnimationId = originalAnimations[origKey] 
-            end
+            if anim and anim:IsA("Animation") and originalAnimations[origKey] then anim.AnimationId = originalAnimations[origKey] end
         end
         setOrig("idle", "Animation1", "Idle1"); setOrig("idle", "Animation2", "Idle2")
         setOrig("walk", "WalkAnim", "Walk"); setOrig("run", "RunAnim", "Run")
@@ -409,39 +401,25 @@ local function restoreAllOriginal()
         setOrig("swim", "Swim", "Swim"); setOrig("swimidle", "SwimIdle", "SwimIdle")
     end
 
-    RunService.Heartbeat:Wait()
-    animate.Disabled = false
-
+    RunService.Heartbeat:Wait(); animate.Disabled = false
     local hum = char:FindFirstChildOfClass("Humanoid")
-    if hum then
-        pcall(function()
-            hum:ChangeState(Enum.HumanoidStateType.Landed)
-            hum:ChangeState(Enum.HumanoidStateType.Running)
-        end)
-    end
+    if hum then pcall(function() hum:ChangeState(Enum.HumanoidStateType.Landed) hum:ChangeState(Enum.HumanoidStateType.Running) end) end
 end
 
 local function onCharacterAdded(char)
     if not state.animEnabled then return end
-    
     task.spawn(function()
         local animate = char:WaitForChild("Animate", 2)
         if not animate then return end
         char:WaitForChild("Humanoid", 1)
         RunService.Heartbeat:Wait()
-        if char and char.Parent and state.animEnabled then 
-            fastApply(char) 
-        end
+        if char and char.Parent and state.animEnabled then fastApply(char) end
     end)
-    
     if not char:GetAttribute("NevadaAnimHook") then
         char:SetAttribute("NevadaAnimHook", true)
         char.ChildAdded:Connect(function(child)
             if child.Name == "Animate" and state.animEnabled then
-                task.defer(function()
-                    RunService.Heartbeat:Wait()
-                    if char.Parent and state.animEnabled then fastApply(char) end
-                end)
+                task.defer(function() RunService.Heartbeat:Wait() if char.Parent and state.animEnabled then fastApply(char) end end)
             end
         end)
     end
@@ -469,8 +447,7 @@ local function applySkyFromGitHub(skyName)
         pcall(function()
             local sky = Lighting:FindFirstChildOfClass("Sky")
             if not sky then sky = Instance.new("Sky"); sky.Parent = Lighting end
-            sky.SkyboxBk=aBk; sky.SkyboxDn=aDn; sky.SkyboxFt=aFt
-            sky.SkyboxLf=aLf; sky.SkyboxRt=aRt; sky.SkyboxUp=aUp
+            sky.SkyboxBk=aBk; sky.SkyboxDn=aDn; sky.SkyboxFt=aFt; sky.SkyboxLf=aLf; sky.SkyboxRt=aRt; sky.SkyboxUp=aUp
         end)
         return true
     end
@@ -489,10 +466,6 @@ local function getPlayerTeam(p)
             local teamFolder = score:FindFirstChild(teamName)
             if teamFolder then
                 if teamFolder:FindFirstChild(p.Name) then return teamName == "TeamRed" and "Red" or "Blue" end
-                for _, entry in ipairs(teamFolder:GetChildren()) do
-                    local txt = entry:FindFirstChild("PlayerName", true)
-                    if txt and txt:IsA("TextLabel") and string.lower(txt.Text) == string.lower(p.Name) then return teamName == "TeamRed" and "Red" or "Blue" end
-                end
             end
         end
     end
@@ -638,6 +611,9 @@ local function refreshCatalog()
   table.sort(sounds,function(a,b) return a.Name:lower()<b.Name:lower() end); return loaded
 end
 
+local CONFIG_FOLDER = "NevadaV34_Configs"
+if isfolder and not isfolder(CONFIG_FOLDER) then makefolder(CONFIG_FOLDER) end
+
 local function serializeV34()
     return {
         Version = "V34",
@@ -691,36 +667,19 @@ local Window = WindUI:CreateWindow({
     Background = FondoAsset,
     BackgroundImageTransparency = 0.25,
     OpenButton = {
-        Enabled = true,
-        Title = "Abrir NVD",
-        Icon = "rbxassetid://85755059842228",
-        OnlyMobile = false,
-        Draggable = true,
-        Scale = 0.82,
-        StrokeThickness = 1,
-        Color = ColorSequence.new(Color3.fromRGB(118,118,124), Color3.fromRGB(164,164,170))
+        Enabled = true, Title = "Abrir NVD", Icon = "rbxassetid://85755059842228", OnlyMobile = false, Draggable = true, Scale = 0.82, StrokeThickness = 1, Color = ColorSequence.new(Color3.fromRGB(118,118,124), Color3.fromRGB(164,164,170))
     }
 })
 
--- ==========================================
--- BOTÓN FLOTANTE MACRO 360
--- ==========================================
+-- BOTÓN FLOTANTE 360
 local buttonGui = Instance.new("ScreenGui")
 buttonGui.Name = "Nevada360Gui"
 buttonGui.ResetOnSpawn = false
 buttonGui.IgnoreGuiInset = true
 buttonGui.DisplayOrder = 999
 buttonGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-
 local guiParent = playerGui
-pcall(function()
-    if gethui then
-        guiParent = gethui()
-    elseif syn and syn.protect_gui then
-        syn.protect_gui(buttonGui)
-        guiParent = game:GetService("CoreGui")
-    end
-end)
+pcall(function() if gethui then guiParent = gethui() elseif syn and syn.protect_gui then syn.protect_gui(buttonGui); guiParent = game:GetService("CoreGui") end end)
 buttonGui.Parent = guiParent
 
 local floatingBtn360 = Instance.new("TextButton")
@@ -743,7 +702,6 @@ stroke360.Color = Color3.fromRGB(60, 60, 60)
 stroke360.Transparency = 0.2
 
 local title360 = Instance.new("TextLabel", floatingBtn360)
-title360.Name = "ControlTitle"
 title360.BackgroundTransparency = 1
 title360.Position = UDim2.fromOffset(14, 6)
 title360.Size = UDim2.new(1, -42, 0, 20)
@@ -752,10 +710,8 @@ title360.TextSize = 12
 title360.TextColor3 = Color3.fromRGB(240, 240, 240)
 title360.TextXAlignment = Enum.TextXAlignment.Left
 title360.Text = "Macro 360"
-title360.ZIndex = 51
 
 local stateLabel360 = Instance.new("TextLabel", floatingBtn360)
-stateLabel360.Name = "ControlState"
 stateLabel360.BackgroundTransparency = 1
 stateLabel360.Position = UDim2.fromOffset(14, 26)
 stateLabel360.Size = UDim2.new(1, -42, 0, 14)
@@ -764,16 +720,13 @@ stateLabel360.TextSize = 8
 stateLabel360.TextColor3 = Color3.fromRGB(135, 135, 135)
 stateLabel360.TextXAlignment = Enum.TextXAlignment.Left
 stateLabel360.Text = "INACTIVO"
-stateLabel360.ZIndex = 51
 
 local dot360 = Instance.new("Frame", floatingBtn360)
-dot360.Name = "StateDot"
 dot360.AnchorPoint = Vector2.new(1, 0.5)
 dot360.Position = UDim2.new(1, -14, 0.5, 0)
 dot360.Size = UDim2.fromOffset(6, 6)
 dot360.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
 dot360.BorderSizePixel = 0
-dot360.ZIndex = 51
 Instance.new("UICorner", dot360).CornerRadius = UDim.new(1, 0)
 
 local hovered360 = false
@@ -789,54 +742,33 @@ local dragging360, dragInput360, dragStart360, startPos360
 floatingBtn360.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         dragging360 = true; dragStart360 = input.Position; startPos360 = floatingBtn360.Position
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then dragging360 = false end
-        end)
+        input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dragging360 = false end end)
     end
 end)
-floatingBtn360.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-        dragInput360 = input
-    end
-end)
+floatingBtn360.InputChanged:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then dragInput360 = input end end)
 game:GetService("UserInputService").InputChanged:Connect(function(input)
     if dragging360 and input == dragInput360 then
         local delta = input.Position - dragStart360
         floatingBtn360.Position = UDim2.new(startPos360.X.Scale, startPos360.X.Offset + delta.X, startPos360.Y.Scale, startPos360.Y.Offset + delta.Y)
     end
 end)
-
 local dragStartPos360 = nil; local validClick360 = false
-floatingBtn360.InputBegan:Connect(function(input) 
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then 
-        dragStartPos360 = input.Position; validClick360 = true 
-    end 
-end)
-floatingBtn360.InputChanged:Connect(function(input) 
-    if dragStartPos360 and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then 
-        if (input.Position - dragStartPos360).Magnitude > 5 then validClick360 = false end 
-    end 
-end)
-
+floatingBtn360.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragStartPos360 = input.Position; validClick360 = true end end)
+floatingBtn360.InputChanged:Connect(function(input) if dragStartPos360 and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then if (input.Position - dragStartPos360).Magnitude > 5 then validClick360 = false end end end)
 floatingBtn360.MouseButton1Click:Connect(function() 
     if not validClick360 then return end 
     state.macro360Enabled = not state.macro360Enabled
     updateVisual360()
-    if _G.NevadaTogMacro360 then
-        pcall(function() _G.NevadaTogMacro360:Set(state.macro360Enabled) end)
-    end
+    if _G.NevadaTogMacro360 then pcall(function() _G.NevadaTogMacro360:Set(state.macro360Enabled) end) end
     SaveAutoConfig()
 end)
 floatingBtn360.MouseEnter:Connect(function() hovered360 = true; updateVisual360() end)
 floatingBtn360.MouseLeave:Connect(function() hovered360 = false; updateVisual360() end)
 updateVisual360()
 
--- ==========================================
 -- TABS
--- ==========================================
 local MainSection = Window:Section({ Title = "PRINCIPAL", Opened = true })
 local PersonalSection = Window:Section({ Title = "PERSONAL", Opened = true })
-
 local Tabs = {
     Inicio = MainSection:Tab({Title = "Inicio", Icon = "home"}),
     Macro = MainSection:Tab({Title = "Macro", Icon = "crosshair"}),
@@ -849,99 +781,43 @@ local Tabs = {
     Configs = PersonalSection:Tab({Title = "Configs", Icon = "settings"}),
 }
 
+-- SECCIÓN DE UI
 Tabs.Configs:Section({ Title = "Catálogo de Fondos" })
 local bgNames = {}
 for _, bg in ipairs(BG_LIST) do table.insert(bgNames, bg.name) end
 UI_Refs.bgSelect = Tabs.Configs:Dropdown({
     Title = "Selecciona un Fondo", Values = bgNames, Value = "Fondo 1",
     Callback = function(selectedName)
-        for _, bg in ipairs(BG_LIST) do
-            if bg.name == selectedName then
-                local newAsset = CargarFondo(bg.url)
-                if newAsset then
-                    Window:SetBackgroundImage(newAsset)
-                    Window:SetBackgroundImageTransparency(0.25)
-                end
-                break
-            end
-        end
+        for _, bg in ipairs(BG_LIST) do if bg.name == selectedName then local newAsset = CargarFondo(bg.url) if newAsset then Window:SetBackgroundImage(newAsset) Window:SetBackgroundImageTransparency(0.25) end break end end
         SaveAutoConfig()
     end
 })
 
--- MACRO
 UI_Refs.macro = Tabs.Macro:Toggle({ Title = "Activar Macro de Arma", Value = state.macro, Callback = function(v) state.macro = v; SaveAutoConfig() end })
 UI_Refs.equipDelay = Tabs.Macro:Slider({ Title = "Tiempo de Equipar", Step = 0.01, Value = {Min = 0.01, Max = 0.50, Default = state.equipDelay}, Callback = function(v) state.equipDelay = v; SaveAutoConfig() end })
 UI_Refs.shootDelay = Tabs.Macro:Slider({ Title = "Tiempo de Disparo", Step = 0.01, Value = {Min = 0.01, Max = 0.50, Default = state.shootDelay}, Callback = function(v) state.shootDelay = v; SaveAutoConfig() end })
 
--- CUCHILLO
 UI_Refs.knifeMacroEnabled = Tabs.Cuchillo:Toggle({ Title = "Activar Macro Cuchillo (L2)", Value = state.knifeMacroEnabled, Callback = function(v) state.knifeMacroEnabled = v; SaveAutoConfig() end })
 UI_Refs.knifeEquipDelay = Tabs.Cuchillo:Slider({ Title = "Delay al Equipar", Step = 0.01, Value = {Min = 0.01, Max = 0.50, Default = state.knifeEquipDelay}, Callback = function(v) state.knifeEquipDelay = v; SaveAutoConfig() end })
 UI_Refs.knifeThrowDelay = Tabs.Cuchillo:Slider({ Title = "Delay al Lanzar", Step = 0.01, Value = {Min = 0.01, Max = 0.50, Default = state.knifeThrowDelay}, Callback = function(v) state.knifeThrowDelay = v; SaveAutoConfig() end })
 
--- MACRO 360
-_G.NevadaTogMacro360 = Tabs.Macro360:Toggle({ Title = "Activar Auto Shoot / Macro 360", Value = state.macro360Enabled, Callback = function(v) 
-    state.macro360Enabled = v
-    if updateVisual360 then updateVisual360() end
-    SaveAutoConfig()
-end })
+_G.NevadaTogMacro360 = Tabs.Macro360:Toggle({ Title = "Activar Auto Shoot / Macro 360", Value = state.macro360Enabled, Callback = function(v) state.macro360Enabled = v; if updateVisual360 then updateVisual360() end; SaveAutoConfig() end })
 UI_Refs.macro360Fov = Tabs.Macro360:Slider({ Title = "Tamaño del FOV", Step = 10, Value = {Min = 10, Max = 500, Default = state.macro360Fov}, Callback = function(v) state.macro360Fov = v; SaveAutoConfig() end })
 UI_Refs.macro360HitChance = Tabs.Macro360:Slider({ Title = "Probabilidad de acierto (%)", Step = 1, Value = {Min = 1, Max = 100, Default = state.macro360HitChance}, Callback = function(v) state.macro360HitChance = v; SaveAutoConfig() end })
 UI_Refs.macro360Reaction = Tabs.Macro360:Slider({ Title = "Tiempo de reacción (s)", Step = 0.1, Value = {Min = 0, Max = 1, Default = state.macro360Reaction}, Callback = function(v) state.macro360Reaction = v; SaveAutoConfig() end })
 UI_Refs.macro360Cooldown = Tabs.Macro360:Slider({ Title = "Delay entre Disparos (s)", Step = 0.01, Value = {Min = 0.01, Max = 1.0, Default = state.macro360Cooldown}, Callback = function(v) state.macro360Cooldown = v; SaveAutoConfig() end })
+Tabs.Macro360:Toggle({ Title = "Mostrar Botón Flotante", Value = true, Callback = function(v) floatingBtn360.Visible = v end })
 
-Tabs.Macro360:Toggle({ 
-    Title = "Mostrar Botón Flotante", 
-    Value = true, 
-    Callback = function(v) 
-        floatingBtn360.Visible = v 
-    end 
-})
-
--- VISUALES (ESP 3D)
 Tabs.Visuales:Section({Title = "ESP de Jugadores"})
 UI_Refs.espEnabled = Tabs.Visuales:Toggle({ Title = "Activar ESP 3D", Value = state.espEnabled, Callback = function(v) state.espEnabled = v; SaveAutoConfig() end })
-UI_Refs.espColor = Tabs.Visuales:Colorpicker({ Title = "Color del ESP", Default = Color3.new(state.espColor.R, state.espColor.G, state.espColor.B), Callback = function(c) 
-    state.espColor = {R=c.R, G=c.G, B=c.B}
-    SaveAutoConfig() 
-end })
+UI_Refs.espColor = Tabs.Visuales:Colorpicker({ Title = "Color del ESP", Default = Color3.new(state.espColor.R, state.espColor.G, state.espColor.B), Callback = function(c) state.espColor = {R=c.R, G=c.G, B=c.B}; SaveAutoConfig() end })
 
--- ANIMACIONES
-local animToggle
-animToggle = Tabs.Animaciones:Toggle({ Title = "Activar Animaciones Custom", Value = state.animEnabled, Callback = function(v) state.animEnabled = v; SaveAutoConfig(); if v then fastApply(player.Character) else restoreAllOriginal() end end })
-
-Tabs.Animaciones:Section({Title = "Packs Completos"})
+local animToggle = Tabs.Animaciones:Toggle({ Title = "Activar Animaciones Custom", Value = state.animEnabled, Callback = function(v) state.animEnabled = v; SaveAutoConfig(); if v then fastApply(player.Character) else restoreAllOriginal() end end })
 local sortedPacks = {}
 for name in pairs(AnimationPacks) do if name ~= "Default" then table.insert(sortedPacks, name) end end
 table.sort(sortedPacks)
+UI_Refs.animPack = Tabs.Animaciones:Dropdown({ Title = "Selecciona un Pack", Values = sortedPacks, Value = state.selectedAnimPack, Callback = function(packName) state.selectedAnimPack = packName; state.animMode = "pack"; state.animEnabled = true; if animToggle then animToggle:Set(true) end; fastApply(player.Character); SaveAutoConfig() end })
 
-UI_Refs.animPack = Tabs.Animaciones:Dropdown({ Title = "Selecciona un Pack", Values = sortedPacks, Value = state.selectedAnimPack, Callback = function(packName)
-    state.selectedAnimPack = packName; state.animMode = "pack"; state.animEnabled = true
-    if animToggle then animToggle:Set(true) end; fastApply(player.Character); SaveAutoConfig()
-end })
-
-Tabs.Animaciones:Section({Title = "Personalizar (Mixer)"})
-local slotOrder = {"Idle", "Walk", "Run", "Jump", "Fall", "Swim", "SwimIdle"}
-local slotDisplay = {Idle="Reposo", Walk="Caminar", Run="Correr", Jump="Saltar", Fall="Caer", Swim="Nadar", SwimIdle="Nadar (quieto)"}
-local mixerOptions = {"Default"}
-for name in pairs(AnimationPacks) do if name ~= "Default" then table.insert(mixerOptions, name) end end
-table.sort(mixerOptions)
-for i, v in ipairs(mixerOptions) do if v == "Default" then table.remove(mixerOptions, i); break end end
-table.insert(mixerOptions, 1, "Default")
-
-for _, slot in ipairs(slotOrder) do
-    Tabs.Animaciones:Dropdown({ Title = "Mix: " .. slotDisplay[slot], Values = mixerOptions, Value = state.customMix[slot] or "Default", Callback = function(val)
-        state.customMix[slot] = val; state.animMode = "mix"; state.animEnabled = true
-        if animToggle then animToggle:Set(true) end; fastApply(player.Character); SaveAutoConfig()
-    end })
-end
-
-Tabs.Animaciones:Button({ Title = "Restaurar Default", Callback = function()
-    state.animMode = "pack"; state.selectedAnimPack = "Default"; state.animEnabled = false
-    if animToggle then animToggle:Set(false) end; restoreAllOriginal(); SaveAutoConfig()
-end })
-
--- SONIDOS
 local soundDropdown, enableToggle, muteToggle
 local function listSoundNames()
     local names = {}
@@ -949,102 +825,89 @@ local function listSoundNames()
     if #names == 0 then names = {"Cargando..."} end
     return names
 end
-
-UI_Refs.soundCat = Tabs.Sonidos:Dropdown({ Title = "Categoría", Values = {"Arma", "Saltar", "Matar"}, Value = "Arma", Callback = function(v)
-    currentSoundCategory = v
-    if soundDropdown then soundDropdown:Refresh(listSoundNames()) end
-    if enableToggle then enableToggle:Set(state.enabled[currentSoundCategory]) end
-    if muteToggle then muteToggle:Set(state.muted[currentSoundCategory]) end
-    SaveAutoConfig()
-end })
-
-soundDropdown = Tabs.Sonidos:Dropdown({ Title = "Selecciona Sonido", Values = listSoundNames(), Value = "Cargando...", Callback = function(selectedName)
-    for _, s in ipairs(sounds) do if s.Name == selectedName then state.selected[currentSoundCategory] = {Name=s.Name, URL=s.URL} break end end
-    SaveAutoConfig()
-end })
-
+UI_Refs.soundCat = Tabs.Sonidos:Dropdown({ Title = "Categoría", Values = {"Arma", "Saltar", "Matar"}, Value = "Arma", Callback = function(v) currentSoundCategory = v; if soundDropdown then soundDropdown:Refresh(listSoundNames()) end; if enableToggle then enableToggle:Set(state.enabled[currentSoundCategory]) end; if muteToggle then muteToggle:Set(state.muted[currentSoundCategory]) end; SaveAutoConfig() end })
+soundDropdown = Tabs.Sonidos:Dropdown({ Title = "Selecciona Sonido", Values = listSoundNames(), Value = "Cargando...", Callback = function(selectedName) for _, s in ipairs(sounds) do if s.Name == selectedName then state.selected[currentSoundCategory] = {Name=s.Name, URL=s.URL} break end end; SaveAutoConfig() end })
 enableToggle = Tabs.Sonidos:Toggle({ Title = "Activar este sonido", Value = state.enabled[currentSoundCategory], Callback = function(v) state.enabled[currentSoundCategory] = v; SaveAutoConfig() end })
 muteToggle = Tabs.Sonidos:Toggle({ Title = "Silenciar este sonido", Value = state.muted[currentSoundCategory], Callback = function(v) state.muted[currentSoundCategory] = v; SaveAutoConfig() end })
-
 Tabs.Sonidos:Button({ Title = "Actualizar Catálogo (GitHub)", Callback = function() task.spawn(function() if refreshCatalog() and soundDropdown then soundDropdown:Refresh(listSoundNames()) end end) end })
-task.spawn(function() refreshCatalog(); if soundDropdown then soundDropdown:Refresh(listSoundNames()) end end)
 
--- SKYBOX
 UI_Refs.autoSky = Tabs.Skybox:Toggle({ Title = "Auto-Cargar último cielo", Value = state.autoLoadSky, Callback = function(v) state.autoLoadSky = v; SaveAutoConfig(); if v and state.selectedSky ~= "" then applySkyFromGitHub(state.selectedSky) end end })
-Tabs.Skybox:Button({ Title = "Restaurar Cielo Original", Callback = function()
-    if originalSkyProperties then
-        local sky = Lighting:FindFirstChildOfClass("Sky"); if not sky then sky = Instance.new("Sky"); sky.Parent = Lighting end
-        sky.SkyboxBk=originalSkyProperties.SkyboxBk; sky.SkyboxDn=originalSkyProperties.SkyboxDn
-        sky.SkyboxFt=originalSkyProperties.SkyboxFt; sky.SkyboxLf=originalSkyProperties.SkyboxLf
-        sky.SkyboxRt=originalSkyProperties.SkyboxRt; sky.SkyboxUp=originalSkyProperties.SkyboxUp
-    end
-    state.selectedSky = ""; SaveAutoConfig()
-end })
+Tabs.Skybox:Button({ Title = "Restaurar Cielo Original", Callback = function() if originalSkyProperties then local sky = Lighting:FindFirstChildOfClass("Sky"); if not sky then sky = Instance.new("Sky"); sky.Parent = Lighting end sky.SkyboxBk=originalSkyProperties.SkyboxBk; sky.SkyboxDn=originalSkyProperties.SkyboxDn; sky.SkyboxFt=originalSkyProperties.SkyboxFt; sky.SkyboxLf=originalSkyProperties.SkyboxLf; sky.SkyboxRt=originalSkyProperties.SkyboxRt; sky.SkyboxUp=originalSkyProperties.SkyboxUp end state.selectedSky = ""; SaveAutoConfig() end })
 
-task.spawn(function()
-    if not requestFn then return end
-    local ok, res = pcall(function() return requestFn({Url=SKYBOX_API, Method="GET", Headers={["User-Agent"]="NevadaV2"}}) end)
-    if not ok or not res or res.StatusCode ~= 200 then return end
-    local parsedOk, data = pcall(function() return HttpService:JSONDecode(res.Body) end)
-    if not parsedOk or type(data) ~= "table" then return end
-    local skyNames = {}
-    for _, item in ipairs(data) do if item.type == "dir" then table.insert(skyNames, item.name) end end
-    if #skyNames > 0 then Tabs.Skybox:Dropdown({ Title = "Selecciona un Cielo", Values = skyNames, Value = skyNames[1], Callback = function(skyName) state.selectedSky = skyName; applySkyFromGitHub(skyName); SaveAutoConfig() end }) end
-end)
-
--- CONFIGS MANUALES
 local selectedConfigName = "Ninguna"
 local configNameInput = "config1"
-local configDropdown
-configDropdown = Tabs.Configs:Dropdown({ Title = "Configs Guardadas", Values = listV34Configs(), Value = "Ninguna", Callback = function(v) selectedConfigName = v end })
+local configDropdown = Tabs.Configs:Dropdown({ Title = "Configs Guardadas", Values = listV34Configs(), Value = "Ninguna", Callback = function(v) selectedConfigName = v end })
 Tabs.Configs:Input({ Title = "Nombre de la Config", Placeholder = "Ej: aimbot_pro", Callback = function(txt) configNameInput = txt end })
-Tabs.Configs:Button({ Title = "💾 Guardar", Callback = function()
-    if configNameInput == "" or configNameInput == nil then return end
-    local safeName = configNameInput:gsub("[^%w%-_ ]", ""):gsub("%s+", "_"); if safeName == "" then return end
-    local ok, encoded = pcall(function() return HttpService:JSONEncode(serializeV34()) end)
-    if ok then pcall(writefile, CONFIG_FOLDER .. "/" .. safeName .. ".json", encoded); if configDropdown then configDropdown:Refresh(listV34Configs()) end end
-end })
-Tabs.Configs:Button({ Title = "📂 Cargar", Callback = function()
-    if selectedConfigName == "Ninguna" or selectedConfigName == "" then return end
-    local path = CONFIG_FOLDER .. "/" .. selectedConfigName .. ".json"
-    if isfile and isfile(path) then local ok, data = pcall(function() return HttpService:JSONDecode(readfile(path)) end); if ok and type(data) == "table" then applyV34Config(data) end end
-end })
-Tabs.Configs:Button({ Title = "🗑️ Borrar", Callback = function()
-    if selectedConfigName == "Ninguna" then return end
-    local path = CONFIG_FOLDER .. "/" .. selectedConfigName .. ".json"
-    if isfile and isfile(path) and delfile then pcall(delfile, path); if configDropdown then configDropdown:Refresh(listV34Configs()) end end
-end })
-Tabs.Configs:Button({ Title = "🗑️ Borrar Auto-Save", Callback = function()
-    if isfile and isfile(AUTO_SAVE_FILE) then pcall(delfile, AUTO_SAVE_FILE); game:GetService("StarterGui"):SetCore("SendNotification", {Title="Nevada", Text="Auto-Save borrado. Reinicia el script."}) end
-end })
+Tabs.Configs:Button({ Title = "💾 Guardar", Callback = function() if configNameInput == "" then return end; local safeName = configNameInput:gsub("[^%w%-_ ]", ""):gsub("%s+", "_"); if safeName == "" then return end; local ok, encoded = pcall(function() return HttpService:JSONEncode(serializeV34()) end); if ok then pcall(writefile, CONFIG_FOLDER .. "/" .. safeName .. ".json", encoded); if configDropdown then configDropdown:Refresh(listV34Configs()) end end end })
+Tabs.Configs:Button({ Title = "📂 Cargar", Callback = function() if selectedConfigName == "Ninguna" then return end; local path = CONFIG_FOLDER .. "/" .. selectedConfigName .. ".json"; if isfile and isfile(path) then local ok, data = pcall(function() return HttpService:JSONDecode(readfile(path)) end); if ok and type(data) == "table" then applyV34Config(data) end end end })
+Tabs.Configs:Button({ Title = "🗑️ Borrar", Callback = function() if selectedConfigName == "Ninguna" then return end; local path = CONFIG_FOLDER .. "/" .. selectedConfigName .. ".json"; if isfile and isfile(path) and delfile then pcall(delfile, path); if configDropdown then configDropdown:Refresh(listV34Configs()) end end end })
+Tabs.Configs:Button({ Title = "🗑️ Borrar Auto-Save", Callback = function() if isfile and isfile(AUTO_SAVE_FILE) then pcall(delfile, AUTO_SAVE_FILE); game:GetService("StarterGui"):SetCore("SendNotification", {Title="Nevada", Text="Auto-Save borrado. Reinicia el script."}) end end })
 
 -- ==========================================
--- APLICAR DATOS GUARDADOS A LA UI
+-- LÓGICA DE APLICACIÓN ASÍNCRONA (LA SOLUCIÓN AL BUG)
 -- ==========================================
-if hasLoaded then
-    print("[Nevada] Auto-Save cargado. Actualizando UI...")
-    pcall(function() UI_Refs.macro:Set(state.macro) end)
-    pcall(function() UI_Refs.equipDelay:Set(state.equipDelay) end)
-    pcall(function() UI_Refs.shootDelay:Set(state.shootDelay) end)
-    pcall(function() UI_Refs.knifeMacroEnabled:Set(state.knifeMacroEnabled) end)
-    pcall(function() UI_Refs.knifeEquipDelay:Set(state.knifeEquipDelay) end)
-    pcall(function() UI_Refs.knifeThrowDelay:Set(state.knifeThrowDelay) end)
-    pcall(function() UI_Refs.macro360Enabled:Set(state.macro360Enabled) end)
-    pcall(function() UI_Refs.macro360Fov:Set(state.macro360Fov) end)
-    pcall(function() UI_Refs.macro360HitChance:Set(state.macro360HitChance) end)
-    pcall(function() UI_Refs.macro360Reaction:Set(state.macro360Reaction) end)
-    pcall(function() UI_Refs.macro360Cooldown:Set(state.macro360Cooldown) end)
-    pcall(function() UI_Refs.espEnabled:Set(state.espEnabled) end)
-    pcall(function() UI_Refs.espColor:Set(Color3.new(state.espColor.R, state.espColor.G, state.espColor.B)) end)
-    pcall(function() UI_Refs.animPack:Set(state.selectedAnimPack) end)
-    pcall(function() UI_Refs.soundEnabled:Set(state.enabled.Arma) end)
-    pcall(function() UI_Refs.soundMuted:Set(state.muted.Arma) end)
-    pcall(function() UI_Refs.autoSky:Set(state.autoLoadSky) end)
-    
-    if state.animEnabled then task.spawn(function() fastApply(player.Character) end) end
-    if state.autoLoadSky and state.selectedSky ~= "" then task.spawn(function() applySkyFromGitHub(state.selectedSky) end) end
-    if updateVisual360 then updateVisual360() end
-end
+task.spawn(function()
+    -- Esperar al personaje
+    if not player.Character then player.CharacterAdded:Wait() end
+    task.wait(1.5) -- Dar tiempo a que el Animate cargue completamente
+    isLoading = false
+
+    if hasLoaded then
+        print("[Nevada] Aplicando Auto-Save...")
+        
+        -- UI Básica
+        pcall(function() UI_Refs.macro:Set(state.macro) end)
+        pcall(function() UI_Refs.equipDelay:Set(state.equipDelay) end)
+        pcall(function() UI_Refs.shootDelay:Set(state.shootDelay) end)
+        pcall(function() UI_Refs.knifeMacroEnabled:Set(state.knifeMacroEnabled) end)
+        pcall(function() UI_Refs.knifeEquipDelay:Set(state.knifeEquipDelay) end)
+        pcall(function() UI_Refs.knifeThrowDelay:Set(state.knifeThrowDelay) end)
+        pcall(function() UI_Refs.macro360Enabled:Set(state.macro360Enabled) end)
+        pcall(function() UI_Refs.macro360Fov:Set(state.macro360Fov) end)
+        pcall(function() UI_Refs.macro360HitChance:Set(state.macro360HitChance) end)
+        pcall(function() UI_Refs.macro360Reaction:Set(state.macro360Reaction) end)
+        pcall(function() UI_Refs.macro360Cooldown:Set(state.macro360Cooldown) end)
+        pcall(function() UI_Refs.espEnabled:Set(state.espEnabled) end)
+        pcall(function() UI_Refs.espColor:Set(Color3.new(state.espColor.R, state.espColor.G, state.espColor.B)) end)
+        pcall(function() UI_Refs.animPack:Set(state.selectedAnimPack) end)
+        pcall(function() UI_Refs.autoSky:Set(state.autoLoadSky) end)
+        if state.animEnabled then task.spawn(function() fastApply(player.Character) end) end
+        if updateVisual360 then updateVisual360() end
+
+        -- Sonidos (Esperar a que carguen)
+        refreshCatalog()
+        if soundDropdown then 
+            soundDropdown:Refresh(listSoundNames())
+            task.wait(0.1)
+            local snd = state.selected[currentSoundCategory]
+            if snd and snd.Name ~= "Ninguno" then
+                pcall(function() soundDropdown:Set(snd.Name) end)
+            end
+            pcall(function() enableToggle:Set(state.enabled[currentSoundCategory]) end)
+            pcall(function() muteToggle:Set(state.muted[currentSoundCategory]) end)
+        end
+
+        -- Skybox (Esperar a que la API responda)
+        if requestFn then
+            local ok, res = pcall(function() return requestFn({Url=SKYBOX_API, Method="GET", Headers={["User-Agent"]="NevadaV2"}}) end)
+            if ok and res and res.StatusCode == 200 then
+                local parsedOk, data = pcall(function() return HttpService:JSONDecode(res.Body) end)
+                if parsedOk and type(data) == "table" then
+                    local skyNames = {}
+                    for _, item in ipairs(data) do if item.type == "dir" then table.insert(skyNames, item.name) end end
+                    if #skyNames > 0 then 
+                        local skyDropdown = Tabs.Skybox:Dropdown({ Title = "Selecciona un Cielo", Values = skyNames, Value = "Ninguno", Callback = function(skyName) state.selectedSky = skyName; applySkyFromGitHub(skyName); SaveAutoConfig() end })
+                        task.wait(0.1)
+                        if state.selectedSky ~= "" then
+                            pcall(function() skyDropdown:Set(state.selectedSky) end)
+                            applySkyFromGitHub(state.selectedSky)
+                        end
+                    end
+                end
+            end
+        end
+    end
+end)
 
 -- ==========================================
 -- MACRO DE GUN (ARRECLADA)
@@ -1052,60 +915,28 @@ end
 local macroBusy=false; local lastMacro=0
 local function runMacro()
   if not state.macro or macroBusy then return end
-  if estaEnLobby() then
-      local char = player.Character
-      local hum = char and char:FindFirstChildOfClass("Humanoid")
-      if hum and char:FindFirstChildOfClass("Tool") then pcall(function() hum:UnequipTools() end) end
-      return
-  end
-
+  if estaEnLobby() then local char = player.Character; local hum = char and char:FindFirstChildOfClass("Humanoid"); if hum and char:FindFirstChildOfClass("Tool") then pcall(function() hum:UnequipTools() end) end; return end
   local char=player.Character; if not char then return end
   local hum=char:FindFirstChildOfClass("Humanoid"); if not hum or hum.Health<=0 then return end
   local backpack=player:FindFirstChildOfClass("Backpack"); if not backpack then return end
   local tool=char:FindFirstChildOfClass("Tool")
-  
-  if not tool then 
-      for _,item in ipairs(backpack:GetChildren()) do 
-          if item:IsA("Tool") and (item.name:lower():find("pistol") or item.name:lower():find("gun") or item.name:lower():find("sheriff") or item.name:lower():find("revolver")) then 
-              tool=item; break 
-          end 
-      end 
-  end
+  if not tool then for _,item in ipairs(backpack:GetChildren()) do if item:IsA("Tool") and (item.name:lower():find("pistol") or item.name:lower():find("gun") or item.name:lower():find("sheriff") or item.name:lower():find("revolver")) then tool=item; break end end end
   if not tool then return end
-
   local now=os.clock(); if now-lastMacro< (tonumber(state.shootDelay) or 0.10) then return end
   macroBusy=true; lastMacro=now
-  
   task.spawn(function()
     local wasEquipped = (tool.Parent == char)
-    if not wasEquipped and not estaEnLobby() then 
-        hum:EquipTool(tool)
-        task.wait(math.max(0.01, tonumber(state.equipDelay) or 0.05))
-    end
-    
-    if state.macro and player.Character==char and hum.Health>0 and tool.Parent==char and not estaEnLobby() then
-        pcall(function() 
-            tool:Activate() 
-            task.delay(0.02, function() if tool.Parent == char then tool:Deactivate() end end)
-        end)
-    end
-    
-    if not wasEquipped and player.Character==char and hum.Parent==char then 
-        task.wait(math.max(0.01, tonumber(state.shootDelay) or 0.10))
-        pcall(function() hum:UnequipTools() end) 
-    end
+    if not wasEquipped and not estaEnLobby() then hum:EquipTool(tool); task.wait(math.max(0.01, tonumber(state.equipDelay) or 0.05)) end
+    if state.macro and player.Character==char and hum.Health>0 and tool.Parent==char and not estaEnLobby() then pcall(function() tool:Activate() task.delay(0.02, function() if tool.Parent == char then tool:Deactivate() end end) end) end
+    if not wasEquipped and player.Character==char and hum.Parent==char then task.wait(math.max(0.01, tonumber(state.shootDelay) or 0.10)); pcall(function() hum:UnequipTools() end) end
     macroBusy=false
   end)
 end
 
--- ==========================================
--- MACRO DE CUCHILLO
--- ==========================================
 local knifeBusy = false
 local function runKnifeMacro()
   if not state.knifeMacroEnabled or knifeBusy then return end
   if estaEnLobby() then return end
-
   local character = player.Character; local humanoid = character and character:FindFirstChildOfClass("Humanoid")
   local knife = nil
   for _, item in ipairs(character:GetChildren()) do if item:IsA("Tool") and item:FindFirstChild("Throw") then knife = item break end end
@@ -1137,97 +968,50 @@ UserInputService.TouchEnded:Connect(function(input,processed)
 end)
 
 -- ==========================================
--- MACRO 360 (ROBUSTA CON M360 STATE)
+-- MACRO 360 (ROBUSTA)
 -- ==========================================
 local m360 = {wasInLobby = true, gameTicks = 0, isEquipped = false}
-
 local function isInLobbyRobust()
-    local char = player.Character
-    if not char then return true end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum or hum.Health <= 0 then return true end
+    local char = player.Character; if not char then return true end
+    local hum = char:FindFirstChildOfClass("Humanoid"); if not hum or hum.Health <= 0 then return true end
     if char:FindFirstChildOfClass("ForceField") then return true end
-    if player.Team then
-        local t = player.Team.Name:lower()
-        if t:find("lobby") or t:find("spectat") or t:find("menu") or t:find("waiting") or t:find("afk") then return true end
-    end
-    local gui = player:FindFirstChild("PlayerGui")
-    local main = gui and gui:FindFirstChild("Main")
-    local frame = main and main:FindFirstChild("MainGameFrame")
+    if player.Team then local t = player.Team.Name:lower() if t:find("lobby") or t:find("spectat") or t:find("menu") or t:find("waiting") or t:find("afk") then return true end end
+    local gui = player:FindFirstChild("PlayerGui"); local main = gui and gui:FindFirstChild("Main"); local frame = main and main:FindFirstChild("MainGameFrame")
     if not frame then return true end
-    local score = frame:FindFirstChild("IngameScore")
-    if not score then return true end
+    local score = frame:FindFirstChild("IngameScore"); if not score then return true end
     if score:IsA("GuiObject") and not score.Visible then return true end
     local anyInGame = false
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= player and p.Character then
-            local pHum = p.Character:FindFirstChildOfClass("Humanoid")
-            if pHum and pHum.Health > 0 and not p.Character:FindFirstChildOfClass("ForceField") then
-                anyInGame = true; break
-            end
-        end
-    end
+    for _, p in ipairs(Players:GetPlayers()) do if p ~= player and p.Character then local pHum = p.Character:FindFirstChildOfClass("Humanoid") if pHum and pHum.Health > 0 and not p.Character:FindFirstChildOfClass("ForceField") then anyInGame = true; break end end end
     if not anyInGame then return true end
     return false
 end
-
 local function isValid360Target(p)
     if not p or p == player then return false end
-    local char = p.Character
-    if not char then return false end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum or hum.Health <= 0 then return false end
+    local char = p.Character; if not char then return false end
+    local hum = char:FindFirstChildOfClass("Humanoid"); if not hum or hum.Health <= 0 then return false end
     if char:FindFirstChildOfClass("ForceField") then return false end
     if not isEnemy(p) then return false end
     return true
 end
-
 local function getGun(char, backpack)
-    local tool = char:FindFirstChildOfClass("Tool")
-    if tool and esPistola(tool) then return tool, true end
-    if backpack then
-        for _, item in ipairs(backpack:GetChildren()) do
-            if item:IsA("Tool") and esPistola(item) then return item, false end
-        end
-    end
+    local tool = char:FindFirstChildOfClass("Tool"); if tool and esPistola(tool) then return tool, true end
+    if backpack then for _, item in ipairs(backpack:GetChildren()) do if item:IsA("Tool") and esPistola(item) then return item, false end end end
     return nil, false
 end
-
 task.spawn(function()
-    local params = RaycastParams.new()
-    params.FilterType = Enum.RaycastFilterType.Exclude
+    local params = RaycastParams.new(); params.FilterType = Enum.RaycastFilterType.Exclude
     while task.wait(0.05) do
-        if not state.macro360Enabled then
-            m360.wasInLobby = true; m360.gameTicks = 0; m360.isEquipped = false
-            continue
-        end
-        if isInLobbyRobust() then
-            m360.gameTicks = 0; m360.wasInLobby = true
-            if m360.isEquipped then
-                local c = player.Character
-                local h = c and c:FindFirstChildOfClass("Humanoid")
-                if h then pcall(function() h:UnequipTools() end) end
-                m360.isEquipped = false
-            end
-            continue
-        else
-            m360.gameTicks = m360.gameTicks + 1
-        end
+        if not state.macro360Enabled then m360.wasInLobby = true; m360.gameTicks = 0; m360.isEquipped = false; continue end
+        if isInLobbyRobust() then m360.gameTicks = 0; m360.wasInLobby = true; if m360.isEquipped then local c = player.Character; local h = c and c:FindFirstChildOfClass("Humanoid"); if h then pcall(function() h:UnequipTools() end) end; m360.isEquipped = false end; continue
+        else m360.gameTicks = m360.gameTicks + 1 end
         if m360.gameTicks < 2 then continue end
         m360.wasInLobby = false
-
-        local char = player.Character
-        if not char then continue end
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        local hrp = char:FindFirstChild("HumanoidRootPart")
-        if not hum or hum.Health <= 0 or not hrp then continue end
-
-        local myPos = hrp.Position
-        local bestPart, bestDist = nil, math.huge
+        local char = player.Character; if not char then continue end
+        local hum = char:FindFirstChildOfClass("Humanoid"); local hrp = char:FindFirstChild("HumanoidRootPart"); if not hum or hum.Health <= 0 or not hrp then continue end
+        local myPos = hrp.Position; local bestPart, bestDist = nil, math.huge
         for _, p in ipairs(Players:GetPlayers()) do
             if isValid360Target(p) then
-                local enemyChar = p.Character
-                local enemyHrp = enemyChar.HumanoidRootPart
+                local enemyChar = p.Character; local enemyHrp = enemyChar.HumanoidRootPart
                 if enemyHrp then
                     local dist = (enemyHrp.Position - myPos).Magnitude
                     if dist <= state.macro360Fov then
@@ -1239,9 +1023,7 @@ task.spawn(function()
                                     local partDist = (part.Position - myPos).Magnitude
                                     if partDist < bestDist then
                                         local partRay = workspace:Raycast(myPos, part.Position - myPos, params)
-                                        if not partRay or partRay.Instance:IsDescendantOf(enemyChar) then
-                                            bestDist = partDist; bestPart = part
-                                        end
+                                        if not partRay or partRay.Instance:IsDescendantOf(enemyChar) then bestDist = partDist; bestPart = part end
                                     end
                                 end
                             end
@@ -1250,37 +1032,17 @@ task.spawn(function()
                 end
             end
         end
-
-        local backpack = player:FindFirstChildOfClass("Backpack")
-        local tool, wasEquipped = getGun(char, backpack)
-
-        if not bestPart then
-            if m360.isEquipped then
-                pcall(function() hum:UnequipTools() end)
-                m360.isEquipped = false
-            end
-            continue
-        end
+        local backpack = player:FindFirstChildOfClass("Backpack"); local tool, wasEquipped = getGun(char, backpack)
+        if not bestPart then if m360.isEquipped then pcall(function() hum:UnequipTools() end); m360.isEquipped = false end; continue end
         if not tool then continue end
-
-        if not wasEquipped then
-            if m360.isEquipped then continue end
-            m360.isEquipped = true
-            pcall(function() hum:EquipTool(tool) end)
-            task.wait(0.08)
-            if tool.Parent ~= char then continue end
-        else
-            m360.isEquipped = true
-        end
-
+        if not wasEquipped then if m360.isEquipped then continue end; m360.isEquipped = true; pcall(function() hum:EquipTool(tool) end); task.wait(0.08); if tool.Parent ~= char then continue end
+        else m360.isEquipped = true end
         if tool.Parent == char then
             getgenv().NevadaTargetPart = bestPart
-            pcall(function() tool:Activate() end)
-            task.wait(math.max(0.02, tonumber(state.macro360Cooldown) or 0.05))
-            pcall(function() tool:Deactivate() end)
-            getgenv().NevadaTargetPart = nil
+            pcall(function() tool:Activate() end); task.wait(math.max(0.02, tonumber(state.macro360Cooldown) or 0.05))
+            pcall(function() tool:Deactivate() end); getgenv().NevadaTargetPart = nil
         end
     end
 end)
 
-print("[Nevada V34] ✅ Cargado correctamente con Auto-Save y ESP 3D.")
+print("[Nevada V34] ✅ Cargado correctamente. Auto-Save Asíncrono Listo.")
