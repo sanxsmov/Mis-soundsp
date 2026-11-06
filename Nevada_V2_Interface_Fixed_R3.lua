@@ -1,4 +1,4 @@
--- NEVADA V34 | Script Completo Unificado + Auto-Save Perfecto (Carga Asíncrona)
+-- NEVADA V34 | Auto-Save PERFECTO (Fondo + Skybox) + Todo lo demas
 print("[Nevada] Iniciando script...")
 
 local Players = game:GetService("Players")
@@ -46,7 +46,6 @@ if hookmetamethod and getnamecallmethod and checkcaller then
         return oldNamecall(self, ...)
     end)
 end
-print("[Nevada] Hook instalado correctamente.")
 
 -- ==========================================
 -- CARGA DE WINDUI
@@ -69,7 +68,7 @@ if not WindUI then
 end
 
 -- ==========================================
--- CATÁLOGO DE FONDOS Y FUNCIÓN CACHÉ
+-- CATÁLOGO DE FONDOS
 -- ==========================================
 local BG_LIST = {
     { name = "Fondo 1", url = "https://raw.githubusercontent.com/sanxsmov/Mis-soundsp/main/images/1.jpg" },
@@ -97,10 +96,8 @@ local function CargarFondo(url)
     return nil
 end
 
-local FondoAsset = CargarFondo(BG_LIST[1].url)
-
 -- ==========================================
--- ANIMACIONES (CON IDLE2)
+-- ANIMACIONES
 -- ==========================================
 local AnimationPacks = {
     ["Default"]     = {Idle="507766666", Idle2="507766951", Walk="507777826", Run="507767714", Jump="507765000", Fall="507767968", Swim="507784897", SwimIdle="507785072"},
@@ -129,13 +126,14 @@ local AnimationPacks = {
 }
 
 -- ==========================================
--- ESTADO Y VARIABLES
+-- ESTADO Y VARIABLES (AQUI ESTA LA MAGIA)
 -- ==========================================
 local state = {
   macro = false, equipDelay = 0.05, shootDelay = 0.10,
   knifeMacroEnabled = false, knifeEquipDelay = 0.10, knifeThrowDelay = 0.10,
   macro360Enabled = false, macro360Fov = 120, macro360HitChance = 100, macro360Reaction = 0, macro360Cooldown = 0.05, 
   autoLoadSky = false, selectedSky = "",
+  selectedBg = "Fondo 1", -- ✅ NUEVO: Guarda el fondo
   selected = {Arma={Name="Ninguno",URL=""}, Saltar={Name="Ninguno",URL=""}, Matar={Name="Ninguno",URL=""}},
   enabled = {Arma=true, Saltar=true, Matar=true}, muted = {Arma=false, Saltar=false, Matar=false},
   folder = FOLDERS[1], animEnabled = false, animMode = "pack", selectedAnimPack = "Default",
@@ -144,10 +142,10 @@ local state = {
 }
 local sounds, soundCache, currentSoundCategory = {}, {}, "Arma"
 local UI_Refs = {}
-local isLoading = true -- 🛑 CANDADO PARA NO SOBREESCRIBIR EL ARCHIVO MIENTRAS CARGA
+local isLoading = true
 
 -- ==========================================
--- SISTEMA DE AUTO-GUARDADO
+-- AUTO-GUARDADO
 -- ==========================================
 local CONFIG_FOLDER = "NevadaV34_Configs"
 if isfolder and not isfolder(CONFIG_FOLDER) then makefolder(CONFIG_FOLDER) end
@@ -163,7 +161,6 @@ local function LoadAutoConfig()
     if not isfile or not isfile(AUTO_SAVE_FILE) then return false end
     local ok, data = pcall(function() return HttpService:JSONDecode(readfile(AUTO_SAVE_FILE)) end)
     if not ok or type(data) ~= "table" then return false end
-    
     for k, v in pairs(data) do
         if type(v) == "table" and type(state[k]) == "table" then
             for subK, subV in pairs(v) do 
@@ -464,9 +461,7 @@ local function getPlayerTeam(p)
     if score then
         for _, teamName in ipairs({"TeamRed", "TeamBlue"}) do
             local teamFolder = score:FindFirstChild(teamName)
-            if teamFolder then
-                if teamFolder:FindFirstChild(p.Name) then return teamName == "TeamRed" and "Red" or "Blue" end
-            end
+            if teamFolder and teamFolder:FindFirstChild(p.Name) then return teamName == "TeamRed" and "Red" or "Blue" end
         end
     end
     return nil
@@ -485,7 +480,7 @@ local function esPistola(tool)
 end
 
 -- ==========================================
--- ESP 3D (COMO XERO)
+-- ESP 3D
 -- ==========================================
 local espFolder = Instance.new("Folder")
 espFolder.Name = "NevadaESP"
@@ -505,22 +500,17 @@ local function update3DESP()
             if not activeHighlights[p] or not activeHighlights[p].Parent then
                 local hl = Instance.new("Highlight")
                 hl.Name = p.Name .. "_ESP"
-                hl.FillColor = color
-                hl.OutlineColor = color
-                hl.FillTransparency = 0.5
-                hl.OutlineTransparency = 1
+                hl.FillColor = color; hl.OutlineColor = color
+                hl.FillTransparency = 0.5; hl.OutlineTransparency = 1
                 hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-                hl.Adornee = char
-                hl.Parent = espFolder
+                hl.Adornee = char; hl.Parent = espFolder
                 activeHighlights[p] = hl
             else
                 activeHighlights[p].Adornee = char
-                activeHighlights[p].FillColor = color
-                activeHighlights[p].OutlineColor = color
+                activeHighlights[p].FillColor = color; activeHighlights[p].OutlineColor = color
             end
         elseif activeHighlights[p] then
-            activeHighlights[p]:Destroy()
-            activeHighlights[p] = nil
+            activeHighlights[p]:Destroy(); activeHighlights[p] = nil
         end
     end
 end
@@ -611,14 +601,12 @@ local function refreshCatalog()
   table.sort(sounds,function(a,b) return a.Name:lower()<b.Name:lower() end); return loaded
 end
 
-local CONFIG_FOLDER = "NevadaV34_Configs"
-if isfolder and not isfolder(CONFIG_FOLDER) then makefolder(CONFIG_FOLDER) end
-
 local function serializeV34()
     return {
         Version = "V34",
         Sonidos = { Selected = { Arma = state.selected.Arma, Saltar = state.selected.Saltar, Matar = state.selected.Matar }, Enabled = state.enabled, Muted = state.muted },
         Skybox = { Selected = state.selectedSky, AutoLoad = state.autoLoadSky },
+        Fondo = state.selectedBg,
         Animaciones = { Enabled = state.animEnabled, Mode = state.animMode, SelectedPack = state.selectedAnimPack, CustomMix = state.customMix },
         Macros = { Weapon = state.macro, WeaponEquipDelay = state.equipDelay, WeaponShootDelay = state.shootDelay, Knife = state.knifeMacroEnabled, KnifeEquipDelay = state.knifeEquipDelay, KnifeThrowDelay = state.knifeThrowDelay, Macro360 = state.macro360Enabled, Macro360Fov = state.macro360Fov, Macro360HitChance = state.macro360HitChance, Macro360Reaction = state.macro360Reaction, Macro360Cooldown = state.macro360Cooldown },
     }
@@ -632,6 +620,7 @@ local function applyV34Config(data)
         if data.Sonidos.Muted then for cat in pairs(state.muted) do if data.Sonidos.Muted[cat] ~= nil then state.muted[cat] = data.Sonidos.Muted[cat] end end end
     end
     if data.Skybox then state.selectedSky = data.Skybox.Selected or ""; state.autoLoadSky = data.Skybox.AutoLoad == true end
+    if data.Fondo then state.selectedBg = data.Fondo end
     if data.Animaciones then
         state.animMode = data.Animaciones.Mode or "pack"; state.selectedAnimPack = data.Animaciones.SelectedPack or "Default"
         if data.Animaciones.CustomMix then for slot, pack in pairs(data.Animaciones.CustomMix) do if state.customMix[slot] ~= nil then state.customMix[slot] = pack end end end
@@ -654,21 +643,14 @@ end
 -- ==========================================
 -- INTERFAZ WINDUI
 -- ==========================================
+local FondoAsset = CargarFondo(BG_LIST[1].url)
+
 local Window = WindUI:CreateWindow({
-    Title = "Nevada | DUELS",
-    Author = "by Ti",
-    Theme = "Dark",
-    Size = UDim2.fromOffset(620, 350),
-    MinSize = Vector2.new(330, 270),
-    Resizable = true,
-    Transparent = false,
-    Acrylic = false,
-    ElementsRadius = 12,
-    Background = FondoAsset,
-    BackgroundImageTransparency = 0.25,
-    OpenButton = {
-        Enabled = true, Title = "Abrir NVD", Icon = "rbxassetid://85755059842228", OnlyMobile = false, Draggable = true, Scale = 0.82, StrokeThickness = 1, Color = ColorSequence.new(Color3.fromRGB(118,118,124), Color3.fromRGB(164,164,170))
-    }
+    Title = "Nevada | DUELS", Author = "by Ti", Theme = "Dark",
+    Size = UDim2.fromOffset(620, 350), MinSize = Vector2.new(330, 270),
+    Resizable = true, Transparent = false, Acrylic = false, ElementsRadius = 12,
+    Background = FondoAsset, BackgroundImageTransparency = 0.25,
+    OpenButton = { Enabled = true, Title = "Abrir NVD", Icon = "rbxassetid://85755059842228", OnlyMobile = false, Draggable = true, Scale = 0.82, StrokeThickness = 1, Color = ColorSequence.new(Color3.fromRGB(118,118,124), Color3.fromRGB(164,164,170)) }
 })
 
 -- BOTÓN FLOTANTE 360
@@ -781,13 +763,14 @@ local Tabs = {
     Configs = PersonalSection:Tab({Title = "Configs", Icon = "settings"}),
 }
 
--- SECCIÓN DE UI
+-- SECCIONES
 Tabs.Configs:Section({ Title = "Catálogo de Fondos" })
 local bgNames = {}
 for _, bg in ipairs(BG_LIST) do table.insert(bgNames, bg.name) end
 UI_Refs.bgSelect = Tabs.Configs:Dropdown({
-    Title = "Selecciona un Fondo", Values = bgNames, Value = "Fondo 1",
+    Title = "Selecciona un Fondo", Values = bgNames, Value = state.selectedBg or "Fondo 1",
     Callback = function(selectedName)
+        state.selectedBg = selectedName
         for _, bg in ipairs(BG_LIST) do if bg.name == selectedName then local newAsset = CargarFondo(bg.url) if newAsset then Window:SetBackgroundImage(newAsset) Window:SetBackgroundImageTransparency(0.25) end break end end
         SaveAutoConfig()
     end
@@ -812,12 +795,37 @@ Tabs.Visuales:Section({Title = "ESP de Jugadores"})
 UI_Refs.espEnabled = Tabs.Visuales:Toggle({ Title = "Activar ESP 3D", Value = state.espEnabled, Callback = function(v) state.espEnabled = v; SaveAutoConfig() end })
 UI_Refs.espColor = Tabs.Visuales:Colorpicker({ Title = "Color del ESP", Default = Color3.new(state.espColor.R, state.espColor.G, state.espColor.B), Callback = function(c) state.espColor = {R=c.R, G=c.G, B=c.B}; SaveAutoConfig() end })
 
+-- ANIMACIONES
 local animToggle = Tabs.Animaciones:Toggle({ Title = "Activar Animaciones Custom", Value = state.animEnabled, Callback = function(v) state.animEnabled = v; SaveAutoConfig(); if v then fastApply(player.Character) else restoreAllOriginal() end end })
+Tabs.Animaciones:Section({Title = "Packs Completos"})
 local sortedPacks = {}
 for name in pairs(AnimationPacks) do if name ~= "Default" then table.insert(sortedPacks, name) end end
 table.sort(sortedPacks)
 UI_Refs.animPack = Tabs.Animaciones:Dropdown({ Title = "Selecciona un Pack", Values = sortedPacks, Value = state.selectedAnimPack, Callback = function(packName) state.selectedAnimPack = packName; state.animMode = "pack"; state.animEnabled = true; if animToggle then animToggle:Set(true) end; fastApply(player.Character); SaveAutoConfig() end })
 
+-- MIXER
+Tabs.Animaciones:Section({Title = "Personalizar (Mixer)"})
+local slotOrder = {"Idle", "Walk", "Run", "Jump", "Fall", "Swim", "SwimIdle"}
+local slotDisplay = {Idle="Reposo", Walk="Caminar", Run="Correr", Jump="Saltar", Fall="Caer", Swim="Nadar", SwimIdle="Nadar (quieto)"}
+local mixerOptions = {"Default"}
+for name in pairs(AnimationPacks) do if name ~= "Default" then table.insert(mixerOptions, name) end end
+table.sort(mixerOptions)
+for i, v in ipairs(mixerOptions) do if v == "Default" then table.remove(mixerOptions, i); break end end
+table.insert(mixerOptions, 1, "Default")
+
+for _, slot in ipairs(slotOrder) do
+    UI_Refs["mix_"..slot] = Tabs.Animaciones:Dropdown({ Title = "Mix: " .. slotDisplay[slot], Values = mixerOptions, Value = state.customMix[slot] or "Default", Callback = function(val)
+        state.customMix[slot] = val; state.animMode = "mix"; state.animEnabled = true
+        if animToggle then animToggle:Set(true) end; fastApply(player.Character); SaveAutoConfig()
+    end })
+end
+
+Tabs.Animaciones:Button({ Title = "Restaurar Default", Callback = function()
+    state.animMode = "pack"; state.selectedAnimPack = "Default"; state.animEnabled = false
+    if animToggle then animToggle:Set(false) end; restoreAllOriginal(); SaveAutoConfig()
+end })
+
+-- SONIDOS
 local soundDropdown, enableToggle, muteToggle
 local function listSoundNames()
     local names = {}
@@ -831,6 +839,7 @@ enableToggle = Tabs.Sonidos:Toggle({ Title = "Activar este sonido", Value = stat
 muteToggle = Tabs.Sonidos:Toggle({ Title = "Silenciar este sonido", Value = state.muted[currentSoundCategory], Callback = function(v) state.muted[currentSoundCategory] = v; SaveAutoConfig() end })
 Tabs.Sonidos:Button({ Title = "Actualizar Catálogo (GitHub)", Callback = function() task.spawn(function() if refreshCatalog() and soundDropdown then soundDropdown:Refresh(listSoundNames()) end end) end })
 
+-- SKYBOX
 UI_Refs.autoSky = Tabs.Skybox:Toggle({ Title = "Auto-Cargar último cielo", Value = state.autoLoadSky, Callback = function(v) state.autoLoadSky = v; SaveAutoConfig(); if v and state.selectedSky ~= "" then applySkyFromGitHub(state.selectedSky) end end })
 Tabs.Skybox:Button({ Title = "Restaurar Cielo Original", Callback = function() if originalSkyProperties then local sky = Lighting:FindFirstChildOfClass("Sky"); if not sky then sky = Instance.new("Sky"); sky.Parent = Lighting end sky.SkyboxBk=originalSkyProperties.SkyboxBk; sky.SkyboxDn=originalSkyProperties.SkyboxDn; sky.SkyboxFt=originalSkyProperties.SkyboxFt; sky.SkyboxLf=originalSkyProperties.SkyboxLf; sky.SkyboxRt=originalSkyProperties.SkyboxRt; sky.SkyboxUp=originalSkyProperties.SkyboxUp end state.selectedSky = ""; SaveAutoConfig() end })
 
@@ -844,18 +853,32 @@ Tabs.Configs:Button({ Title = "🗑️ Borrar", Callback = function() if selecte
 Tabs.Configs:Button({ Title = "🗑️ Borrar Auto-Save", Callback = function() if isfile and isfile(AUTO_SAVE_FILE) then pcall(delfile, AUTO_SAVE_FILE); game:GetService("StarterGui"):SetCore("SendNotification", {Title="Nevada", Text="Auto-Save borrado. Reinicia el script."}) end end })
 
 -- ==========================================
--- LÓGICA DE APLICACIÓN ASÍNCRONA (LA SOLUCIÓN AL BUG)
+-- APLICACIÓN ASÍNCRONA (AQUI SE ARREGLA TODO)
 -- ==========================================
 task.spawn(function()
-    -- Esperar al personaje
     if not player.Character then player.CharacterAdded:Wait() end
-    task.wait(1.5) -- Dar tiempo a que el Animate cargue completamente
+    task.wait(1.5)
     isLoading = false
 
     if hasLoaded then
         print("[Nevada] Aplicando Auto-Save...")
-        
-        -- UI Básica
+
+        -- 1. Cargar Fondo
+        if state.selectedBg then
+            for _, bg in ipairs(BG_LIST) do
+                if bg.name == state.selectedBg then
+                    local newAsset = CargarFondo(bg.url)
+                    if newAsset then
+                        Window:SetBackgroundImage(newAsset)
+                        Window:SetBackgroundImageTransparency(0.25)
+                    end
+                    break
+                end
+            end
+            pcall(function() UI_Refs.bgSelect:Set(state.selectedBg) end)
+        end
+
+        -- 2. Cargar UI Básica
         pcall(function() UI_Refs.macro:Set(state.macro) end)
         pcall(function() UI_Refs.equipDelay:Set(state.equipDelay) end)
         pcall(function() UI_Refs.shootDelay:Set(state.shootDelay) end)
@@ -871,10 +894,15 @@ task.spawn(function()
         pcall(function() UI_Refs.espColor:Set(Color3.new(state.espColor.R, state.espColor.G, state.espColor.B)) end)
         pcall(function() UI_Refs.animPack:Set(state.selectedAnimPack) end)
         pcall(function() UI_Refs.autoSky:Set(state.autoLoadSky) end)
+
+        -- 3. Cargar Animaciones Mixer
+        for _, slot in ipairs(slotOrder) do
+            pcall(function() UI_Refs["mix_"..slot]:Set(state.customMix[slot]) end)
+        end
         if state.animEnabled then task.spawn(function() fastApply(player.Character) end) end
         if updateVisual360 then updateVisual360() end
 
-        -- Sonidos (Esperar a que carguen)
+        -- 4. Cargar Sonidos (esperando a GitHub)
         refreshCatalog()
         if soundDropdown then 
             soundDropdown:Refresh(listSoundNames())
@@ -887,7 +915,7 @@ task.spawn(function()
             pcall(function() muteToggle:Set(state.muted[currentSoundCategory]) end)
         end
 
-        -- Skybox (Esperar a que la API responda)
+        -- 5. Cargar Skybox (esperando a GitHub)
         if requestFn then
             local ok, res = pcall(function() return requestFn({Url=SKYBOX_API, Method="GET", Headers={["User-Agent"]="NevadaV2"}}) end)
             if ok and res and res.StatusCode == 200 then
@@ -896,10 +924,10 @@ task.spawn(function()
                     local skyNames = {}
                     for _, item in ipairs(data) do if item.type == "dir" then table.insert(skyNames, item.name) end end
                     if #skyNames > 0 then 
-                        local skyDropdown = Tabs.Skybox:Dropdown({ Title = "Selecciona un Cielo", Values = skyNames, Value = "Ninguno", Callback = function(skyName) state.selectedSky = skyName; applySkyFromGitHub(skyName); SaveAutoConfig() end })
+                        UI_Refs.skyDropdown = Tabs.Skybox:Dropdown({ Title = "Selecciona un Cielo", Values = skyNames, Value = "Ninguno", Callback = function(skyName) state.selectedSky = skyName; applySkyFromGitHub(skyName); SaveAutoConfig() end })
                         task.wait(0.1)
                         if state.selectedSky ~= "" then
-                            pcall(function() skyDropdown:Set(state.selectedSky) end)
+                            pcall(function() UI_Refs.skyDropdown:Set(state.selectedSky) end)
                             applySkyFromGitHub(state.selectedSky)
                         end
                     end
@@ -910,7 +938,7 @@ task.spawn(function()
 end)
 
 -- ==========================================
--- MACRO DE GUN (ARRECLADA)
+-- MACROS
 -- ==========================================
 local macroBusy=false; local lastMacro=0
 local function runMacro()
@@ -968,7 +996,7 @@ UserInputService.TouchEnded:Connect(function(input,processed)
 end)
 
 -- ==========================================
--- MACRO 360 (ROBUSTA)
+-- MACRO 360
 -- ==========================================
 local m360 = {wasInLobby = true, gameTicks = 0, isEquipped = false}
 local function isInLobbyRobust()
@@ -1045,4 +1073,4 @@ task.spawn(function()
     end
 end)
 
-print("[Nevada V34] ✅ Cargado correctamente. Auto-Save Asíncrono Listo.")
+print("[Nevada V34] ✅ Cargado correctamente. Auto-Save de Fondo y Skybox listo.")
